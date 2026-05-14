@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
-import * as agentManager from "./agent-manager";
-import * as profileStore from "./profile-store";
-import { bus, EVENTS } from "./event-bus";
+import * as agentManager from "../agents/manager";
+import * as profileStore from "../agents/profile-store";
+import { bus, EVENTS } from "../events/bus";
 
 const plans = new Map();
 const actionRegistry = new Map();

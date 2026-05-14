@@ -12,7 +12,7 @@ function notifyChange() {
   const snapshot = listSubHives();
   for (const cb of changeListeners) {
     try { cb(snapshot); } catch (err) {
-      console.warn("[hivemind-spawner] listener callback error:", err.message || err);
+      console.warn("[swarm-spawner] listener callback error:", err.message || err);
     }
   }
 }
@@ -26,11 +26,11 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
 
   const env = {
     ...process.env,
-    HIVE_MASTER_PORT: String(masterPort),
-    HIVE_MASTER_ID: masterHiveId || "",
-    HIVE_ROLE: "sub",
+    ZANA_MASTER_PORT: String(masterPort),
+    ZANA_MASTER_ID: masterHiveId || "",
+    ZANA_ROLE: "sub",
   };
-  if (prompt) env.HIVE_TEAM_PROMPT = prompt;
+  if (prompt) env.ZANA_TEAM_PROMPT = prompt;
 
   const child = spawn(process.execPath, args, {
     stdio: ["pipe", "pipe", "pipe"],
@@ -127,7 +127,7 @@ export async function instructSubHive(hiveId, message) {
   if (!entry) return { ok: false, error: "sub-hive not found" };
   if (!entry.record.apiPort) return { ok: false, error: "sub-hive not ready (no port yet)" };
 
-  const result = await postToSubHive(entry.record.apiPort, "/hivemind/instruct", { message });
+  const result = await postToSubHive(entry.record.apiPort, "/swarm/instruct", { message });
   return result;
 }
 

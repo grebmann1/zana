@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import { execFile } from "node:child_process";
-import * as schedulerStore from "./scheduler-store";
+import * as schedulerStore from "./store";
 
 const timers = new Map();
 
@@ -81,8 +81,8 @@ async function executeAction(action) {
   const type = action.type;
 
   if (type === "prompt") {
-    const agentManager = require("./agent-manager");
-    const profileStore = require("./profile-store");
+    const agentManager = require("../agents/manager");
+    const profileStore = require("../agents/profile-store");
     const profile = profileStore.getProfile(action.profileId);
     if (!profile) {
       return { status: "error", error: `profile not found: ${action.profileId}` };
@@ -95,7 +95,7 @@ async function executeAction(action) {
   }
 
   if (type === "team") {
-    const teamManager = require("./team-manager");
+    const teamManager = require("../teams/manager");
     const result = teamManager.startTeam(action.teamId, { prompt: action.prompt });
     if (!result.ok) {
       return { status: "error", error: result.error };

@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import * as store from "./store.ts";
+import * as store from "./store.js";
 
 export function buildResumeContext(checkpoint, pendingAgent) {
   const contextParts = [];

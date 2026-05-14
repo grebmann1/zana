@@ -13,10 +13,10 @@ import * as crypto from "node:crypto";
 // ─── Path resolution ─────────────────────────────────────────────────────────
 
 function getPlansDir() {
-  const ctx = require("./workspace-context");
+  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().plansDir;
-  const { HIVE_DIR } = require("./config");
-  return path.join(HIVE_DIR, "plans");
+  const { ZANA_DIR } = require("../config");
+  return path.join(ZANA_DIR, "plans");
 }
 
 function ensureDir() {
@@ -126,7 +126,7 @@ export function createPlan({ title, content, createdBy, linkedTickets, tags }) {
     id,
     title: title || "Untitled Plan",
     status: "draft",
-    createdBy: createdBy || process.env.HIVE_ID || "orchestrator",
+    createdBy: createdBy || process.env.ZANA_ID || "orchestrator",
     createdAt: now,
     updatedAt: now,
     linkedTickets: linkedTickets || [],

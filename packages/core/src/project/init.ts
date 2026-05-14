@@ -1,10 +1,10 @@
 // Creates the .zana/ directory structure for a project
-// Called on first run or via `hive init`
+// Called on first run or via `zana init`
 
 import * as fs from "fs";
 import * as path from "path";
 
-export const HIVE_DIR = ".zana";
+export const PROJECT_DIR = ".zana";
 
 const SUBDIRS = [
   "tickets",
@@ -56,7 +56,7 @@ function buildDefaultConfig(workspaceRoot) {
     version: 1,
     name: deriveProjectName(workspaceRoot),
     createdAt: new Date().toISOString(),
-    createdBy: "hive-init",
+    createdBy: "zana-init",
     settings: {
       maxConcurrentAgents: 10,
       hookPort: 47400,
@@ -71,28 +71,28 @@ function buildDefaultConfig(workspaceRoot) {
  *
  * @param {string} workspaceRoot - Absolute path to the project root.
  * @param {{ force?: boolean, silent?: boolean }} [options]
- * @returns {{ created: boolean, hivePath: string }}
+ * @returns {{ created: boolean, projectPath: string }}
  */
-export function initHiveDir(workspaceRoot, options = {}) {
+export function initProjectDir(workspaceRoot, options = {}) {
   const { force = false, silent = false } = options;
-  const hivePath = path.join(workspaceRoot, HIVE_DIR);
-  const configPath = path.join(hivePath, "config.json");
+  const projectPath = path.join(workspaceRoot, PROJECT_DIR);
+  const configPath = path.join(projectPath, "config.json");
 
   // Create .zana/ root
-  if (!fs.existsSync(hivePath)) {
-    fs.mkdirSync(hivePath, { recursive: true });
+  if (!fs.existsSync(projectPath)) {
+    fs.mkdirSync(projectPath, { recursive: true });
   }
 
   // Create subdirectories
   for (const sub of SUBDIRS) {
-    const dirPath = path.join(hivePath, sub);
+    const dirPath = path.join(projectPath, sub);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
   }
 
   // Write .gitignore (always overwrite — it's declarative)
-  fs.writeFileSync(path.join(hivePath, ".gitignore"), GITIGNORE_CONTENT, "utf8");
+  fs.writeFileSync(path.join(projectPath, ".gitignore"), GITIGNORE_CONTENT, "utf8");
 
   // Write config.json (only if missing or force)
   if (!fs.existsSync(configPath) || force) {
@@ -101,10 +101,10 @@ export function initHiveDir(workspaceRoot, options = {}) {
   }
 
   if (!silent) {
-    console.log(`\x1b[36mhive\x1b[0m Initialized .zana/ in ${workspaceRoot}`);
+    console.log(`\x1b[36mzana\x1b[0m Initialized .zana/ in ${workspaceRoot}`);
   }
 
-  return { created: true, hivePath };
+  return { created: true, projectPath };
 }
 
 /**
@@ -113,17 +113,17 @@ export function initHiveDir(workspaceRoot, options = {}) {
  * @param {string} workspaceRoot
  * @returns {boolean}
  */
-export function isHiveInitialized(workspaceRoot) {
-  const hivePath = path.join(workspaceRoot, HIVE_DIR);
-  const configPath = path.join(hivePath, "config.json");
+export function isProjectInitialized(workspaceRoot) {
+  const projectPath = path.join(workspaceRoot, PROJECT_DIR);
+  const configPath = path.join(projectPath, "config.json");
 
-  if (!fs.existsSync(hivePath) || !fs.existsSync(configPath)) {
+  if (!fs.existsSync(projectPath) || !fs.existsSync(configPath)) {
     return false;
   }
 
   // Verify all required subdirectories exist
   for (const sub of SUBDIRS) {
-    if (!fs.existsSync(path.join(hivePath, sub))) {
+    if (!fs.existsSync(path.join(projectPath, sub))) {
       return false;
     }
   }
@@ -137,8 +137,8 @@ export function isHiveInitialized(workspaceRoot) {
  * @param {string} workspaceRoot
  * @returns {object|null} Parsed config or null if not found.
  */
-export function getHiveManifest(workspaceRoot) {
-  const configPath = path.join(workspaceRoot, HIVE_DIR, "config.json");
+export function getProjectManifest(workspaceRoot) {
+  const configPath = path.join(workspaceRoot, PROJECT_DIR, "config.json");
   try {
     const raw = fs.readFileSync(configPath, "utf8");
     return JSON.parse(raw);

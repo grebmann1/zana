@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import { bus } from "./event-bus";
+import { bus } from "../events/bus";
 
 const connections = new Map();
 

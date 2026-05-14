@@ -6,11 +6,11 @@ const fs = require('fs');
 const path = require('path');
 
 const WATCH_DIRS = {
-  tickets: 'hive:tickets-changed',
-  sprints: 'hive:sprints-changed',
-  artifacts: 'hive:artifacts-changed',
-  plans: 'hive:plans-changed',
-  audit: 'hive:audit-changed',
+  tickets: 'project:tickets-changed',
+  sprints: 'project:sprints-changed',
+  artifacts: 'project:artifacts-changed',
+  plans: 'project:plans-changed',
+  audit: 'project:audit-changed',
 };
 
 const DEBOUNCE_MS = 80;

@@ -33,7 +33,7 @@ export function spawnTerminal({ terminalId, cwd, shell, cols, rows, env }) {
   const resolvedEnv = {
     ...process.env,
     ...(env || {}),
-    HIVE_TERMINAL_ID: terminalId,
+    ZANA_TERMINAL_ID: terminalId,
     TERM: "xterm-256color",
     COLORTERM: "truecolor",
   };

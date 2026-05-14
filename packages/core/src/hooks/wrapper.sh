@@ -8,16 +8,16 @@
 set -u
 
 INPUT=$(cat)
-TERMINAL_ID="${HIVE_TERMINAL_ID:-}"
+TERMINAL_ID="${ZANA_TERMINAL_ID:-}"
 
 if [ -n "$TERMINAL_ID" ]; then
   INPUT=$(printf '%s' "$INPUT" | sed "s#^{#{\"hive_terminal_id\":\"$TERMINAL_ID\",#")
 fi
 
-HIVE_DIR="$HOME/.zana/hives"
+ZANA_DIR="$HOME/.zana/hives"
 
-if [ -d "$HIVE_DIR" ]; then
-  for f in "$HIVE_DIR"/*.json; do
+if [ -d "$ZANA_DIR" ]; then
+  for f in "$ZANA_DIR"/*.json; do
     [ -f "$f" ] || continue
     PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$f" | head -1 | grep -o '[0-9]*$')
     [ -n "$PORT" ] || continue

@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import * as ticketStoreFallback from "./ticket-store";
-import * as configMod from "./config";
-import * as workspaceContext from "./workspace-context";
+import * as ticketStoreFallback from "./store";
+import * as configMod from "../config";
+import * as workspaceContext from "../project/workspace-context";
 
 let Database: any;
 try { Database = require("better-sqlite3"); } catch { Database = null; }
@@ -15,9 +15,9 @@ function getDbPath() {
     fs.mkdirSync(hiveDir, { recursive: true });
     return path.join(hiveDir, "tickets.db");
   }
-  const HIVE_DIR = (configMod as any).HIVE_DIR;
-  fs.mkdirSync(HIVE_DIR, { recursive: true });
-  return path.join(HIVE_DIR, "tickets.db");
+  const ZANA_DIR = (configMod as any).ZANA_DIR;
+  fs.mkdirSync(ZANA_DIR, { recursive: true });
+  return path.join(ZANA_DIR, "tickets.db");
 }
 
 function getDb() {
@@ -70,7 +70,7 @@ function getDb() {
     );
   `);
 
-  const migration = require("./ticket-migration");
+  const migration = require("./migration");
   migration.migrateIfNeeded(_db);
 
   return _db;

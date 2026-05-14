@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import { PROFILES_DIR } from "./config";
+import { PROFILES_DIR } from "../config";
 
 export function profilesDir() {
   return PROFILES_DIR;
@@ -52,7 +52,7 @@ export function listProfiles() {
 
   // Plugin-contributed profiles
   try {
-    const pluginLoader = require("./plugin-loader");
+    const pluginLoader = require("../plugins/loader");
     const pluginFiles = pluginLoader.getContributions("profiles");
     for (const filePath of pluginFiles) {
       if (!filePath.endsWith(".json") || !fs.existsSync(filePath)) continue;

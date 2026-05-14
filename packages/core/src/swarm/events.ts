@@ -20,7 +20,7 @@ export function addEvent(event) {
 
   for (const cb of changeListeners) {
     try { cb(event); } catch (err) {
-      console.warn("[hivemind-events] listener callback error:", err.message || err);
+      console.warn("[swarm-events] listener callback error:", err.message || err);
     }
   }
 }

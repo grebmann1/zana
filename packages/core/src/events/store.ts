@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as configMod from "./config";
+import * as configMod from "../config";
 
 const EVENTS_DIR = (configMod as any).EVENTS_DIR;
 const EVENTS_FILE = path.join(EVENTS_DIR, "bus-events.ndjson");

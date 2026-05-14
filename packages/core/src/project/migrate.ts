@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-const GLOBAL_HIVE_DIR = path.join(os.homedir(), ".zana");
+const GLOBAL_ZANA_DIR = path.join(os.homedir(), ".zana");
 
 const MIGRATE_DIRS = ["tickets", "sprints", "artifacts"];
 
@@ -20,7 +20,7 @@ export function dryRun(workspaceRoot) {
   const files = [];
 
   for (const dir of MIGRATE_DIRS) {
-    const sourceDir = path.join(GLOBAL_HIVE_DIR, dir);
+    const sourceDir = path.join(GLOBAL_ZANA_DIR, dir);
     if (!fs.existsSync(sourceDir)) continue;
 
     const entries = fs.readdirSync(sourceDir).filter(
@@ -35,7 +35,7 @@ export function dryRun(workspaceRoot) {
     }
   }
 
-  return { files, globalDir: GLOBAL_HIVE_DIR };
+  return { files, globalDir: GLOBAL_ZANA_DIR };
 }
 
 /**
@@ -51,13 +51,13 @@ export function migrate(workspaceRoot, options = {}) {
   const summary = { copied: 0, skipped: 0, errors: [] };
 
   // 1. Verify ~/.zana/ exists and has data
-  if (!fs.existsSync(GLOBAL_HIVE_DIR)) {
-    summary.errors.push(`Global hive directory not found: ${GLOBAL_HIVE_DIR}`);
+  if (!fs.existsSync(GLOBAL_ZANA_DIR)) {
+    summary.errors.push(`Global zana directory not found: ${GLOBAL_ZANA_DIR}`);
     return summary;
   }
 
   const hasData = MIGRATE_DIRS.some((dir) => {
-    const dirPath = path.join(GLOBAL_HIVE_DIR, dir);
+    const dirPath = path.join(GLOBAL_ZANA_DIR, dir);
     if (!fs.existsSync(dirPath)) return false;
     const files = fs.readdirSync(dirPath).filter(
       (f) => f.endsWith(".json") && f !== "_index.json"
@@ -71,7 +71,7 @@ export function migrate(workspaceRoot, options = {}) {
   }
 
   // 2. Verify .zana/ exists in workspaceRoot (or create it)
-  const { isHiveInitialized, initHiveDir } = require("./hive-init");
+  const { isHiveInitialized, initHiveDir } = require("./init");
   if (!isHiveInitialized(workspaceRoot)) {
     if (isDryRun) {
       if (verbose) {
@@ -89,7 +89,7 @@ export function migrate(workspaceRoot, options = {}) {
 
   // 3. Copy files from global to local
   for (const dir of MIGRATE_DIRS) {
-    const sourceDir = path.join(GLOBAL_HIVE_DIR, dir);
+    const sourceDir = path.join(GLOBAL_ZANA_DIR, dir);
     if (!fs.existsSync(sourceDir)) continue;
 
     const targetDir = path.join(hivePath, dir);

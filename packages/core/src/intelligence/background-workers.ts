@@ -4,13 +4,13 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { HIVE_DIR } from "./config";
-import * as eventBus from "./event-bus-service";
-import * as agentManager from "./agent-manager";
-import * as workspaceContext from "./workspace-context";
-import * as profileStore from "./profile-store";
+import { ZANA_DIR } from "../config";
+import * as eventBus from "../events/service";
+import * as agentManager from "../agents/manager";
+import * as workspaceContext from "../project/workspace-context";
+import * as profileStore from "../agents/profile-store";
 
-const WORKERS_PATH = path.join(HIVE_DIR, "workers.json");
+const WORKERS_PATH = path.join(ZANA_DIR, "workers.json");
 const MAX_GLOBAL_CONCURRENT = 3;
 const MAX_HISTORY = 50;
 const CRON_INTERVAL = 60000;

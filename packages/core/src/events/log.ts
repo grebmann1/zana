@@ -6,17 +6,17 @@ let sessionDir = null;
 let globalStream = null;
 
 function getSessionsDir() {
-  const ctx = require("./workspace-context");
+  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().sessionsDir;
-  const { SESSIONS_DIR } = require("./config");
+  const { SESSIONS_DIR } = require("../config");
   return SESSIONS_DIR;
 }
 
 function getAuditDir() {
-  const ctx = require("./workspace-context");
+  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().auditDir;
-  const { HIVE_DIR } = require("./config");
-  return path.join(HIVE_DIR, "audit");
+  const { ZANA_DIR } = require("../config");
+  return path.join(ZANA_DIR, "audit");
 }
 
 export function init(workspace) {

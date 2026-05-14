@@ -2,17 +2,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 function getTicketsDir() {
-  const ctx = require("./workspace-context");
+  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
-  const { HIVE_DIR } = require("./config");
-  return path.join(HIVE_DIR, "tickets");
+  const { ZANA_DIR } = require("../config");
+  return path.join(ZANA_DIR, "tickets");
 }
 
 function getSprintsDir() {
-  const ctx = require("./workspace-context");
+  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
-  const { HIVE_DIR } = require("./config");
-  return path.join(HIVE_DIR, "sprints");
+  const { ZANA_DIR } = require("../config");
+  return path.join(ZANA_DIR, "sprints");
 }
 
 function loadJsonTickets() {

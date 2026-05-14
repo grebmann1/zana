@@ -1,4 +1,4 @@
-import { bus } from "./event-bus";
+import { bus } from "../events/bus";
 
 export const STALE_AGENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 export const MEMORY_THRESHOLD_MB = 512;

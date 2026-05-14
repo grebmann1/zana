@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { PLUGINS_DIR, HIVE_DIR, SETTINGS_PATH } from "./config";
-import * as eventBusService from "./event-bus-service";
+import { PLUGINS_DIR, ZANA_DIR, SETTINGS_PATH } from "../config";
+import * as eventBusService from "../events/service";
 
 const plugins = new Map();
 const disabledSet = new Set();
@@ -29,7 +29,7 @@ function createPluginLogger(pluginId) {
     info: (msg) => process.stderr.write(`[plugin:${pluginId}] ${msg}\n`),
     warn: (msg) => process.stderr.write(`[plugin:${pluginId}] WARN ${msg}\n`),
     error: (msg) => process.stderr.write(`[plugin:${pluginId}] ERROR ${msg}\n`),
-    debug: (msg) => { if (process.env.HIVE_DEBUG) process.stderr.write(`[plugin:${pluginId}] DEBUG ${msg}\n`); },
+    debug: (msg) => { if (process.env.ZANA_DEBUG) process.stderr.write(`[plugin:${pluginId}] DEBUG ${msg}\n`); },
   };
 }
 
@@ -101,8 +101,8 @@ function withTimeout(fn, ms) {
 }
 
 function buildContext(pluginId, pluginDir) {
-  const agentManager = require("./agent-manager");
-  const ticketService = require("./ticket-service");
+  const agentManager = require("../agents/manager");
+  const ticketService = require("../tickets/service");
 
   return {
     pluginId,

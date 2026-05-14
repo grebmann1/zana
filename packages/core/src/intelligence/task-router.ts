@@ -1,14 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { HIVE_DIR } from "./config";
-import * as eventBus from "./event-bus-service";
-import * as profileStore from "./profile-store";
+import { ZANA_DIR } from "../config";
+import * as eventBus from "../events/service";
+import * as profileStore from "../agents/profile-store";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const WEIGHTS = { label: 0.35, keyword: 0.25, successRate: 0.25, recency: 0.15 };
 const HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const HISTORY_PATH = path.join(HIVE_DIR, "routing-history.json");
+const HISTORY_PATH = path.join(ZANA_DIR, "routing-history.json");
 
 const STOPWORDS = new Set([
   "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
@@ -30,8 +30,8 @@ let initialized = false;
 function initSqlite() {
   try {
     const Database = require("better-sqlite3");
-    const dbPath = path.join(HIVE_DIR, "routing.db");
-    fs.mkdirSync(HIVE_DIR, { recursive: true });
+    const dbPath = path.join(ZANA_DIR, "routing.db");
+    fs.mkdirSync(ZANA_DIR, { recursive: true });
     db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
     db.exec(`
@@ -87,7 +87,7 @@ function persistOutcome(outcome) {
       outcome.createdAt
     );
   } else {
-    fs.mkdirSync(HIVE_DIR, { recursive: true });
+    fs.mkdirSync(ZANA_DIR, { recursive: true });
     fs.writeFileSync(HISTORY_PATH, JSON.stringify(outcomes, null, 2), "utf8");
   }
 }

@@ -3,10 +3,10 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 
 function getArtifactsDir() {
-  const ctx = require("./workspace-context");
+  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().artifactsDir;
-  const { HIVE_DIR } = require("./config");
-  return path.join(HIVE_DIR, "artifacts");
+  const { ZANA_DIR } = require("../config");
+  return path.join(ZANA_DIR, "artifacts");
 }
 
 function ensureDir() {
@@ -71,7 +71,7 @@ export function createArtifact(artifact) {
     type: artifact.type || "custom",
     content: artifact.content || "",
     tags: artifact.tags || [],
-    createdBy: artifact.createdBy || process.env.HIVE_ID || "unknown",
+    createdBy: artifact.createdBy || process.env.ZANA_ID || "unknown",
     linkedTickets: artifact.linkedTickets || [],
     createdAt: now,
     updatedAt: now,

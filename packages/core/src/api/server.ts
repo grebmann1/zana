@@ -2,9 +2,9 @@ import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as sseBroadcaster from "./sse-broadcaster";
-import * as connectionRegistry from "./connection-registry";
+import * as connectionRegistry from "../daemon/connection-registry";
 import * as healthMonitor from "./health-monitor";
-import * as terminalRelay from "./terminal-relay";
+import * as terminalRelay from "../agents/terminal-relay";
 import * as authMiddleware from "./auth-middleware";
 
 let server = null;
@@ -78,7 +78,7 @@ async function handleRequest(req, res) {
     const agents = hive.agentManager.listAgents();
     const running = hive.teamManager ? hive.teamManager.listRunningTeams() : [];
     json(res, {
-      hiveId: hive.hiveId,
+      hiveId: hive.daemonId,
       workspace: hive.workspace,
       uptime: process.uptime(),
       agents: agents.map((a) => ({ id: a.id, profile: a.profileName, state: a.state, mode: a.mode })),
@@ -91,7 +91,7 @@ async function handleRequest(req, res) {
 
   // --- Events (history query) ---
   if (method === "GET" && pathname === "/events") {
-    const eventBusService = require("./event-bus-service");
+    const eventBusService = require("../events/service");
     const filter = {};
     const typesParam = url.searchParams.get("types");
     if (typesParam) filter.types = typesParam.split(",");
@@ -116,7 +116,7 @@ async function handleRequest(req, res) {
       "Connection": "keep-alive",
       "Access-Control-Allow-Origin": "*",
     });
-    res.write(`event: connected\ndata: ${JSON.stringify({ hiveId: hive.hiveId })}\n\n`);
+    res.write(`event: connected\ndata: ${JSON.stringify({ hiveId: hive.daemonId })}\n\n`);
     sseBroadcaster.addClient(res, filterTypes);
     return;
   }
@@ -254,7 +254,7 @@ async function handleRequest(req, res) {
 
   // --- Tickets ---
   if (method === "GET" && pathname === "/tickets") {
-    const ticketService = require("./ticket-service");
+    const ticketService = require("../tickets/service");
     const status = url.searchParams.get("status");
     const label = url.searchParams.get("label");
     json(res, ticketService.listTickets({ status, label }));
@@ -271,7 +271,7 @@ async function handleRequest(req, res) {
   }
   const ticketMatch = pathname.match(/^\/tickets\/([^/]+)$/);
   if (ticketMatch) {
-    const ticketService = require("./ticket-service");
+    const ticketService = require("../tickets/service");
     if (method === "GET") {
       const t = ticketService.getTicket(ticketMatch[1]);
       if (!t) { json(res, { error: "not found" }, 404); return; }
@@ -311,7 +311,7 @@ async function handleRequest(req, res) {
   }
   const ticketCommentMatch = pathname.match(/^\/tickets\/([^/]+)\/comment$/);
   if (method === "POST" && ticketCommentMatch) {
-    const ticketService = require("./ticket-service");
+    const ticketService = require("../tickets/service");
     const body = await readBody(req);
     ticketService.addComment(ticketCommentMatch[1], body.agentId || "api", body.agentName || "API", body.content);
     json(res, { ok: true });
@@ -382,25 +382,25 @@ async function handleRequest(req, res) {
 
   // --- Skills ---
   if (method === "GET" && pathname === "/skills") {
-    json(res, hive.hiveSkillStore.listHiveSkills());
+    json(res, hive.skillStore.listSkills());
     return;
   }
   if (method === "POST" && pathname === "/skills") {
     const body = await readBody(req);
-    const saved = hive.hiveSkillStore.saveHiveSkill(body);
+    const saved = hive.skillStore.saveSkill(body);
     json(res, saved, 201);
     return;
   }
   const skillMatch = pathname.match(/^\/skills\/([^/]+)$/);
   if (skillMatch) {
     if (method === "GET") {
-      const s = hive.hiveSkillStore.getHiveSkill(skillMatch[1]);
+      const s = hive.skillStore.getSkill(skillMatch[1]);
       if (!s) { json(res, { error: "not found" }, 404); return; }
       json(res, s);
       return;
     }
     if (method === "DELETE") {
-      const ok = hive.hiveSkillStore.deleteHiveSkill(skillMatch[1]);
+      const ok = hive.skillStore.deleteSkill(skillMatch[1]);
       json(res, { ok });
       return;
     }
@@ -408,21 +408,21 @@ async function handleRequest(req, res) {
 
   // --- Settings ---
   if (method === "GET" && pathname === "/settings") {
-    const hiveSettingsStore = require("./hive-settings-store");
-    json(res, hiveSettingsStore.getSettings());
+    const settingsStore = require("../settings/store");
+    json(res, settingsStore.getSettings());
     return;
   }
   if (method === "POST" && pathname === "/settings") {
-    const hiveSettingsStore = require("./hive-settings-store");
+    const settingsStore = require("../settings/store");
     const body = await readBody(req);
-    hiveSettingsStore.updateSettings(body);
-    json(res, hiveSettingsStore.getSettings());
+    settingsStore.updateSettings(body);
+    json(res, settingsStore.getSettings());
     return;
   }
 
   // --- Workspace ---
   if (method === "GET" && pathname === "/workspace") {
-    const workspaceContext = require("./workspace-context");
+    const workspaceContext = require("../project/workspace-context");
     json(res, {
       root: workspaceContext.getWorkspaceRoot(),
       paths: workspaceContext.getProjectPaths(),
@@ -456,15 +456,15 @@ async function handleRequest(req, res) {
     if (!agentId) { json(res, { error: "agentId required" }, 400); return; }
     const drain = url.searchParams.get("drain") === "true";
     const messages = drain
-      ? hive.hivemindRouter.drainInbox(agentId)
-      : hive.hivemindRouter.peekInbox(agentId);
+      ? hive.swarmRouter.drainInbox(agentId)
+      : hive.swarmRouter.peekInbox(agentId);
     json(res, messages);
     return;
   }
   if (method === "POST" && pathname === "/hivemind/inbox") {
     const body = await readBody(req);
     if (body.toAgentId) {
-      hive.hivemindRouter.deliverLocal(body.toAgentId, body);
+      hive.swarmRouter.deliverLocal(body.toAgentId, body);
     }
     json(res, { ok: true });
     return;
@@ -481,14 +481,14 @@ async function handleRequest(req, res) {
   }
   if (method === "POST" && pathname === "/hivemind/events") {
     const body = await readBody(req);
-    hive.hivemindEvents.pushEvent(body);
+    hive.swarmEvents.pushEvent(body);
     json(res, { ok: true });
     return;
   }
 
   // --- Terminals ---
   if (method === "GET" && pathname === "/terminals") {
-    const ptyHost = require("./pty-host");
+    const ptyHost = require("../agents/pty-host");
     json(res, ptyHost.listTerminals());
     return;
   }
@@ -575,7 +575,7 @@ async function handleRequest(req, res) {
   const planExecMatch = pathname.match(/^\/plans\/([^/]+)\/execute$/);
   if (method === "POST" && planExecMatch) {
     hive.goapPlanner.executePlan(planExecMatch[1]).then((result) => {
-      require("./event-bus-service").emit("plan:execution-done", { planId: planExecMatch[1], ...result });
+      require("../events/service").emit("plan:execution-done", { planId: planExecMatch[1], ...result });
     });
     json(res, { ok: true, message: "execution started" });
     return;
@@ -645,7 +645,7 @@ async function handleRequest(req, res) {
   }
   const moduleConfigMatch = pathname.match(/^\/api\/modules\/([^/]+)\/config$/);
   if (moduleConfigMatch) {
-    const workspaceContext = require("./workspace-context");
+    const workspaceContext = require("../project/workspace-context");
     const root = workspaceContext.getWorkspaceRoot();
     const configPath = path.join(root, ".zana", "config.json");
     if (method === "GET") {
@@ -677,12 +677,12 @@ async function handleRequest(req, res) {
 
   // --- Schedules ---
   if (method === "GET" && pathname === "/api/schedules") {
-    const schedulerService = require("./scheduler-service");
+    const schedulerService = require("../scheduling/service");
     json(res, schedulerService.listSchedules());
     return;
   }
   if (method === "POST" && pathname === "/api/schedules") {
-    const schedulerService = require("./scheduler-service");
+    const schedulerService = require("../scheduling/service");
     const body = await readBody(req);
     const schedule = schedulerService.createSchedule(body);
     json(res, schedule, 201);
@@ -690,7 +690,7 @@ async function handleRequest(req, res) {
   }
   const scheduleMatch = pathname.match(/^\/api\/schedules\/([^/]+)$/);
   if (scheduleMatch) {
-    const schedulerService = require("./scheduler-service");
+    const schedulerService = require("../scheduling/service");
     const id = scheduleMatch[1];
     if (method === "GET") {
       const s = schedulerService.getSchedule(id);
@@ -713,7 +713,7 @@ async function handleRequest(req, res) {
   }
   const scheduleEnableMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/enable$/);
   if (method === "POST" && scheduleEnableMatch) {
-    const schedulerService = require("./scheduler-service");
+    const schedulerService = require("../scheduling/service");
     const result = schedulerService.enableSchedule(scheduleEnableMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -721,7 +721,7 @@ async function handleRequest(req, res) {
   }
   const scheduleDisableMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/disable$/);
   if (method === "POST" && scheduleDisableMatch) {
-    const schedulerService = require("./scheduler-service");
+    const schedulerService = require("../scheduling/service");
     const result = schedulerService.disableSchedule(scheduleDisableMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -729,7 +729,7 @@ async function handleRequest(req, res) {
   }
   const scheduleTriggerMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/trigger$/);
   if (method === "POST" && scheduleTriggerMatch) {
-    const schedulerService = require("./scheduler-service");
+    const schedulerService = require("../scheduling/service");
     const result = await schedulerService.triggerSchedule(scheduleTriggerMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -738,7 +738,7 @@ async function handleRequest(req, res) {
 
   // --- Checkpoints ---
   if (method === "GET" && pathname === "/api/checkpoints") {
-    const checkpointStore = require("./checkpoint/store");
+    const checkpointStore = require("../runs/checkpoint/store");
     const filter = {};
     const teamId = url.searchParams.get("teamId");
     if (teamId) filter.teamId = teamId;
@@ -750,7 +750,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "POST" && pathname === "/api/checkpoints") {
-    const checkpointStore = require("./checkpoint/store");
+    const checkpointStore = require("../runs/checkpoint/store");
     const body = await readBody(req);
     const checkpoint = checkpointStore.save(body);
     json(res, checkpoint, 201);
@@ -758,7 +758,7 @@ async function handleRequest(req, res) {
   }
   const checkpointMatch = pathname.match(/^\/api\/checkpoints\/([^/]+)$/);
   if (checkpointMatch) {
-    const checkpointStore = require("./checkpoint/store");
+    const checkpointStore = require("../runs/checkpoint/store");
     const id = checkpointMatch[1];
     if (method === "GET") {
       const cp = checkpointStore.load(id);
@@ -769,7 +769,7 @@ async function handleRequest(req, res) {
   }
   const checkpointResumeMatch = pathname.match(/^\/api\/checkpoints\/([^/]+)\/resume$/);
   if (method === "POST" && checkpointResumeMatch) {
-    const checkpointResume = require("./checkpoint/resume");
+    const checkpointResume = require("../runs/checkpoint/resume");
     const result = await checkpointResume.resume(
       checkpointResumeMatch[1],
       hive.agentManager,
@@ -782,7 +782,7 @@ async function handleRequest(req, res) {
 
   // --- Workflows ---
   if (method === "POST" && pathname === "/api/workflows/run") {
-    const workflowEngine = require("./workflow-engine");
+    const workflowEngine = require("../scheduling/workflow-engine");
     const body = await readBody(req);
     if (!body.skill && !body.steps) { json(res, { error: "skill or steps required" }, 400); return; }
     const skill = body.skill || { id: body.id || "inline", name: body.name || "inline", steps: body.steps };
@@ -792,7 +792,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "GET" && pathname === "/api/workflows/runs") {
-    const workflowEngine = require("./workflow-engine");
+    const workflowEngine = require("../scheduling/workflow-engine");
     const filter = {};
     const status = url.searchParams.get("status");
     if (status) filter.status = status;
@@ -801,7 +801,7 @@ async function handleRequest(req, res) {
   }
   const workflowRunMatch = pathname.match(/^\/api\/workflows\/runs\/([^/]+)$/);
   if (method === "GET" && workflowRunMatch) {
-    const workflowEngine = require("./workflow-engine");
+    const workflowEngine = require("../scheduling/workflow-engine");
     const run = workflowEngine.loadRun(workflowRunMatch[1]);
     if (!run) { json(res, { error: "not found" }, 404); return; }
     json(res, run);
@@ -852,7 +852,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  const pluginLoader = require("./plugin-loader");
+  const pluginLoader = require("../plugins/loader");
   if (pathname.startsWith("/x/") && pluginLoader.handlePluginRoute(pathname, req, res)) {
     return;
   }

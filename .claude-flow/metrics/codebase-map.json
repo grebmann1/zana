@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-14T14:16:33.546Z",
+  "timestamp": "2026-05-14T14:27:15.326Z",
   "projectRoot": "/Users/grebmann/Documents/claude-workspace/zana",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1778768193546
+  "scannedAt": 1778768835326
 }

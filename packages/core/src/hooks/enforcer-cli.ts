@@ -3,12 +3,12 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { enforcePreToolUse } from "./hook-enforcer";
+import { enforcePreToolUse } from "./enforcer";
 
 function main() {
-  const profilePath = process.env.HIVE_PROFILE_PATH;
+  const profilePath = process.env.ZANA_PROFILE_PATH;
   if (!profilePath) {
-    process.stderr.write("HIVE_PROFILE_PATH env var is required\n");
+    process.stderr.write("ZANA_PROFILE_PATH env var is required\n");
     process.exit(1);
   }
 

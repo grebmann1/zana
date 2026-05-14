@@ -1,4 +1,4 @@
-import { buildInteractiveCommand, spawnHeadless } from "./agent-spawner";
+import { buildInteractiveCommand, spawnHeadless } from "./spawner";
 import { selectModel } from "./model-router";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
@@ -18,18 +18,18 @@ function getPtyHost() {
   return _ptyHost;
 }
 import * as profileStore from "./profile-store";
-import * as hiveSkillStore from "./hive-skill-store";
-import * as hivemindRouter from "./hivemind-router";
-import * as hivemindEvents from "./hivemind-events";
-import * as hivemindSpawner from "./hivemind-spawner";
-import * as persistence from "./persistence";
-import { bus, EVENTS } from "./event-bus";
-import { MAX_CONCURRENT_AGENTS } from "./config";
-import * as moduleConfig from "./module-config";
+import * as skillStore from "../settings/skill-store";
+import * as swarmRouter from "../swarm/router";
+import * as swarmEvents from "../swarm/events";
+import * as swarmSpawner from "../swarm/spawner";
+import * as persistence from "../persistence";
+import { bus, EVENTS } from "../events/bus";
+import { MAX_CONCURRENT_AGENTS } from "../config";
+import * as moduleConfig from "../modules/config";
 
 function getMaxConcurrentAgents() {
   const cfg = moduleConfig.get();
-  return Number(process.env.HIVE_MAX_WORKERS) || cfg?.system?.maxConcurrentAgents || MAX_CONCURRENT_AGENTS;
+  return Number(process.env.ZANA_MAX_WORKERS) || cfg?.system?.maxConcurrentAgents || MAX_CONCURRENT_AGENTS;
 }
 
 function checkSystemResources() {
@@ -312,7 +312,7 @@ export function spawnHeadlessAgent(profile, options = {}) {
     agent.lastAction = `Spawn error: ${err.message}`;
     notifyChange();
     bus.emit(EVENTS.AGENT_TERMINATED, { agentId, profileId: profile.id, reason: "spawn-error", error: err.message });
-    const resilienceMod = require("./module-loader").getModule?.("resilience");
+    const resilienceMod = require("../modules/loader").getModule?.("resilience");
     resilienceMod?.api?.recordFailure?.("agent-spawn");
   });
 
@@ -323,7 +323,7 @@ export function spawnHeadlessAgent(profile, options = {}) {
     notifyChange();
     bus.emit(EVENTS.AGENT_TERMINATED, { agentId, profileId: profile.id, reason: code === 0 ? "completed" : "errored", exitCode: code, output: agent.result || null });
     if (code === 0) {
-      const resilienceMod = require("./module-loader").getModule?.("resilience");
+      const resilienceMod = require("../modules/loader").getModule?.("resilience");
       resilienceMod?.api?.recordSuccess?.("agent-spawn");
     }
   });
@@ -336,7 +336,7 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
 
   switch (action) {
     case "spawn_agent": {
-      const resilienceMod = require("./module-loader").getModule?.("resilience");
+      const resilienceMod = require("../modules/loader").getModule?.("resilience");
       if (resilienceMod?.api?.isOpen?.("agent-spawn")) {
         return { error: "Circuit breaker open: too many recent spawn failures. Try again later." };
       }
@@ -372,7 +372,7 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };
       const cwd = getWorkspaceFn ? getWorkspaceFn() : process.env.HOME;
-      const guardrails = require("./guardrails/index");
+      const guardrails = require("../guardrails/index");
       const result = await guardrails.spawnValidatedAgent(
         { spawnHeadlessAgent, getAgent },
         profile,
@@ -446,57 +446,57 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return { ok };
     }
     case "list_skills": {
-      return hiveSkillStore.listHiveSkills();
+      return skillStore.listSkills();
     }
     case "get_skill": {
-      const skill = hiveSkillStore.getHiveSkill(params.skillId);
+      const skill = skillStore.getSkill(params.skillId);
       if (!skill) return { error: `skill not found: ${params.skillId}` };
       return skill;
     }
     case "save_skill": {
-      const saved = hiveSkillStore.saveHiveSkill(params.skill);
+      const saved = skillStore.saveSkill(params.skill);
       return { ok: true, id: saved.id, name: saved.name };
     }
     case "delete_skill": {
-      const ok = hiveSkillStore.deleteHiveSkill(params.skillId);
+      const ok = skillStore.deleteSkill(params.skillId);
       return { ok };
     }
     case "toggle_skill": {
-      const ok = hiveSkillStore.toggleHiveSkill(params.skillId, params.enabled);
+      const ok = skillStore.toggleSkill(params.skillId, params.enabled);
       return { ok };
     }
 
     // --- Ticketing ---
     case "ticket_create": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.createTicket(params);
     }
     case "ticket_list": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.listTickets(params);
     }
     case "ticket_get": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.getTicket(params.ticketId);
     }
     case "ticket_claim": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.claimTicket(params.ticketId, params.agentId, params.agentName, params.profileId);
     }
     case "ticket_update_status": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.updateStatus(params.ticketId, params.status, params.updatedBy);
     }
     case "ticket_comment": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.addComment(params.ticketId, params.authorId, params.authorName, params.body);
     }
     case "ticket_complete": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.completeTicket(params.ticketId, params.resultSummary, params.completedBy);
     }
     case "ticket_edit": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       const { ticketId, updatedBy, ...fields } = params;
       // Remove undefined values
       const cleanFields = Object.fromEntries(
@@ -505,15 +505,15 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return ticketService.updateTicket(ticketId, cleanFields, updatedBy);
     }
     case "ticket_add_to_sprint": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.addTicketToSprint(params.ticketId, params.sprintId);
     }
     case "ticket_update": {
-      const ticketService = require("./ticket-service");
-      const ticketStore = require("./ticket-store");
+      const ticketService = require("../tickets/service");
+      const ticketStore = require("../tickets/store");
       const fs = require("node:fs");
       const path = require("node:path");
-      const workspaceContext = require("./workspace-context");
+      const workspaceContext = require("../project/workspace-context");
 
       const ticket = ticketService.getTicket(params.ticketId);
       if (!ticket) return { error: "ticket not found" };
@@ -558,98 +558,98 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return { ok: true, ticketId: params.ticketId };
     }
     case "sprint_list": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.listSprints(params);
     }
     case "sprint_board": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.getSprintBoard(params.sprintId);
     }
     case "sprint_create": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.createSprint(params);
     }
     case "sprint_start": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.startSprint(params.sprintId);
     }
     case "sprint_end": {
-      const ticketService = require("./ticket-service");
+      const ticketService = require("../tickets/service");
       return ticketService.endSprint(params.sprintId);
     }
 
     // --- Artifacts ---
     case "artifact_create": {
-      const artifactStore = require("./artifact-store");
+      const artifactStore = require("../runs/artifact-store");
       return artifactStore.createArtifact(params);
     }
     case "artifact_list": {
-      const artifactStore = require("./artifact-store");
+      const artifactStore = require("../runs/artifact-store");
       return artifactStore.listArtifacts(params);
     }
     case "artifact_read": {
-      const artifactStore = require("./artifact-store");
+      const artifactStore = require("../runs/artifact-store");
       const artifact = artifactStore.getArtifact(params.artifactId);
       if (!artifact) return { error: `artifact not found: ${params.artifactId}` };
       return artifact;
     }
     case "artifact_update": {
-      const artifactStore = require("./artifact-store");
+      const artifactStore = require("../runs/artifact-store");
       const { artifactId, ...fields } = params;
       const updated = artifactStore.updateArtifact(artifactId, fields);
       if (!updated) return { error: `artifact not found: ${artifactId}` };
       return updated;
     }
     case "artifact_delete": {
-      const artifactStore = require("./artifact-store");
+      const artifactStore = require("../runs/artifact-store");
       return { ok: artifactStore.deleteArtifact(params.artifactId) };
     }
 
     // --- Scheduler ---
     case "schedule_create": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       return schedulerService.createSchedule(params);
     }
     case "schedule_list": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       return schedulerService.listSchedules();
     }
     case "schedule_get": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       const schedule = schedulerService.getSchedule(params.scheduleId);
       const history = schedulerService.getRunHistory(params.scheduleId);
       return { schedule, history };
     }
     case "schedule_update": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       const { id, ...fields } = params;
       return schedulerService.updateSchedule(id, fields);
     }
     case "schedule_delete": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       return { ok: schedulerService.deleteSchedule(params.id) };
     }
     case "schedule_enable": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       return schedulerService.enableSchedule(params.id);
     }
     case "schedule_disable": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       return schedulerService.disableSchedule(params.id);
     }
     case "schedule_trigger": {
-      const schedulerService = require("./scheduler-service");
+      const schedulerService = require("../scheduling/service");
       return schedulerService.triggerSchedule(params.id);
     }
 
     // --- Event Bus ---
     case "event_emit": {
-      const eventBusService = require("./event-bus-service");
+      const eventBusService = require("../events/service");
       eventBusService.emit(params.type, params.payload, params.tags);
       return { ok: true };
     }
     case "event_query": {
-      const eventBusService = require("./event-bus-service");
+      const eventBusService = require("../events/service");
       const filter = {};
       if (params.types) filter.types = params.types;
       if (params.source) filter.source = params.source;
@@ -659,39 +659,39 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
 
     // --- Checkpoint ---
     case "checkpoint_save": {
-      const checkpointStore = require("./checkpoint/store");
+      const checkpointStore = require("../runs/checkpoint/store");
       const cp = checkpointStore.save(params);
       return { ok: true, checkpointId: cp.id };
     }
     case "checkpoint_list": {
-      const checkpointStore = require("./checkpoint/store");
+      const checkpointStore = require("../runs/checkpoint/store");
       return checkpointStore.list(params);
     }
     case "checkpoint_get": {
-      const checkpointStore = require("./checkpoint/store");
+      const checkpointStore = require("../runs/checkpoint/store");
       const cp = checkpointStore.load(params.checkpointId);
       if (!cp) return { error: "checkpoint not found" };
       return cp;
     }
     case "checkpoint_resume": {
-      const checkpointResume = require("./checkpoint/resume");
+      const checkpointResume = require("../runs/checkpoint/resume");
       return await checkpointResume.resume(params.checkpointId, { spawnHeadlessAgent, getAgent }, profileStore);
     }
 
     // --- Hive Mind P2P ---
     case "discover_agents": {
       const localAgents = listAgents();
-      const subHivePorts = hivemindSpawner.getSubHivePorts();
-      const all = await hivemindRouter.refreshRoutingTable(localAgents, subHivePorts);
+      const subHivePorts = swarmSpawner.getSubHivePorts();
+      const all = await swarmRouter.refreshRoutingTable(localAgents, subHivePorts);
       if (params.query) {
-        return hivemindRouter.discoverAgents(params.query);
+        return swarmRouter.discoverAgents(params.query);
       }
       return all;
     }
     case "ask_agent": {
       const msg = {
         fromAgentId: params.fromAgentId || params.fromTerminalId || "unknown",
-        fromHiveId: process.env.HIVE_ID || "local",
+        fromHiveId: process.env.ZANA_ID || "local",
         fromAgentName: params.fromAgentName || "Agent",
         toAgentId: params.toAgentId,
         type: "question",
@@ -699,21 +699,21 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
         replyTo: params.replyTo || undefined,
       };
       const localAgents = listAgents();
-      const subHivePorts = hivemindSpawner.getSubHivePorts();
-      return await hivemindRouter.routeMessage(msg, localAgents, subHivePorts);
+      const subHivePorts = swarmSpawner.getSubHivePorts();
+      return await swarmRouter.routeMessage(msg, localAgents, subHivePorts);
     }
     case "check_inbox": {
       const agentId = params.agentId || params.terminalId;
-      return hivemindRouter.drainInbox(agentId);
+      return swarmRouter.drainInbox(agentId);
     }
 
     // --- Typed messaging + channels ---
     case "send_message": {
       const msg = {
-        id: hivemindRouter.generateMessageId(),
+        id: swarmRouter.generateMessageId(),
         sentAt: Date.now(),
         fromAgentId: params.fromAgentId,
-        fromHiveId: process.env.HIVE_ID || "local",
+        fromHiveId: process.env.ZANA_ID || "local",
         fromAgentName: params.fromAgentName || "Agent",
         toAgentId: params.toAgentId,
         type: params.type,
@@ -722,72 +722,72 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
         replyTo: params.replyTo || undefined,
         requiresAck: params.requiresAck || false,
       };
-      if (msg.requiresAck) hivemindRouter.requestAck(msg.id);
-      const subHivePorts = hivemindSpawner.listSubHives()
+      if (msg.requiresAck) swarmRouter.requestAck(msg.id);
+      const subHivePorts = swarmSpawner.listSubHives()
         .filter((h) => h.status === "running" && h.port)
         .map((h) => h.port);
-      const result = await hivemindRouter.routeMessage(msg, listAgents(), subHivePorts);
+      const result = await swarmRouter.routeMessage(msg, listAgents(), subHivePorts);
       return { ...result, messageId: msg.id };
     }
     case "publish_channel": {
       const msg = {
         fromAgentId: params.fromAgentId,
-        fromHiveId: process.env.HIVE_ID || "local",
+        fromHiveId: process.env.ZANA_ID || "local",
         fromAgentName: params.fromAgentName || "Agent",
         type: params.type,
         payload: params.payload,
       };
-      return hivemindRouter.publishToChannel(params.channel, msg);
+      return swarmRouter.publishToChannel(params.channel, msg);
     }
     case "subscribe_channel": {
-      return hivemindRouter.subscribeChannel(params.channel, params.agentId);
+      return swarmRouter.subscribeChannel(params.channel, params.agentId);
     }
     case "list_channels": {
-      return hivemindRouter.listChannels();
+      return swarmRouter.listChannels();
     }
     case "channel_history": {
-      return hivemindRouter.getChannelHistory(params.channel, { limit: params.limit });
+      return swarmRouter.getChannelHistory(params.channel, { limit: params.limit });
     }
     case "send_ack": {
-      return hivemindRouter.sendAck(params.messageId, params.agentId, params.status, params.response);
+      return swarmRouter.sendAck(params.messageId, params.agentId, params.status, params.response);
     }
 
     // --- Hive Mind Master ---
     case "mind_spawn_hive": {
-      const masterPort = process.env.HIVE_HOOK_PORT || "47400";
-      const result = hivemindSpawner.spawnSubHive({
+      const masterPort = process.env.ZANA_HOOK_PORT || "47400";
+      const result = swarmSpawner.spawnSubHive({
         teamId: params.teamId,
         workspace: params.workspace || getWorkspaceFn(),
         prompt: params.prompt,
         masterPort,
-        masterHiveId: process.env.HIVE_ID || "master",
+        masterHiveId: process.env.ZANA_ID || "master",
       });
       return result;
     }
     case "mind_list_hives": {
-      return hivemindSpawner.listSubHives();
+      return swarmSpawner.listSubHives();
     }
     case "mind_instruct_hive": {
-      return await hivemindSpawner.instructSubHive(params.hiveId, params.message);
+      return await swarmSpawner.instructSubHive(params.hiveId, params.message);
     }
     case "mind_stop_hive": {
-      return hivemindSpawner.stopSubHive(params.hiveId);
+      return swarmSpawner.stopSubHive(params.hiveId);
     }
     case "mind_broadcast": {
-      const hives = hivemindSpawner.listSubHives().filter((h) => h.status === "running");
+      const hives = swarmSpawner.listSubHives().filter((h) => h.status === "running");
       const results = [];
       for (const h of hives) {
-        const r = await hivemindSpawner.instructSubHive(h.hiveId, params.message);
+        const r = await swarmSpawner.instructSubHive(h.hiveId, params.message);
         results.push({ hiveId: h.hiveId, ...r });
       }
       return { ok: true, results };
     }
     case "mind_poll_events": {
-      return hivemindEvents.pending(params.since || 0);
+      return swarmEvents.pending(params.since || 0);
     }
 
     case "spawn_oneshot": {
-      const { spawnOneShot } = require("./agent-spawner");
+      const { spawnOneShot } = require("./spawner");
       const { profileId, prompt } = params;
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };

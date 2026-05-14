@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
-import * as ticketStore from "./ticket-db";
-import * as eventBus from "./event-bus";
+import * as ticketStore from "./db";
+import * as eventBus from "../events/bus";
 
 const bus = (eventBus as any).bus;
 

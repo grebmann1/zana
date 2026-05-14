@@ -3,17 +3,17 @@
 // Config: "statusLine": { "type": "command", "command": "node <path>/statusline.js" }
 const fs = require("node:fs"), path = require("node:path");
 const http = require("node:http"), os = require("node:os");
-const HIVES_DIR = path.join(os.homedir(), ".zana", "hives");
+const DAEMONS_DIR = path.join(os.homedir(), ".zana", "hives");
 const STALE_MS = 30_000, HTTP_TIMEOUT = 500;
 
 function listAliveHives() {
   let files;
-  try { files = fs.readdirSync(HIVES_DIR).filter(f => f.endsWith(".json")); }
+  try { files = fs.readdirSync(DAEMONS_DIR).filter(f => f.endsWith(".json")); }
   catch { return []; }
   const alive = [];
   for (const f of files) {
     try {
-      const entry = JSON.parse(fs.readFileSync(path.join(HIVES_DIR, f), "utf8"));
+      const entry = JSON.parse(fs.readFileSync(path.join(DAEMONS_DIR, f), "utf8"));
       const age = Date.now() - new Date(entry.lastHeartbeat || 0).getTime();
       if (age < STALE_MS) { alive.push(entry); continue; }
       try { process.kill(entry.pid, 0); alive.push(entry); } catch {}

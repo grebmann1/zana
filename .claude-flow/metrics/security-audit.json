@@ -1,96 +1,104 @@
 {
-  "timestamp": "2026-05-14T14:17:36.797Z",
+  "timestamp": "2026-05-14T14:29:01.664Z",
   "mode": "headless",
   "workerType": "audit",
   "model": "haiku",
-  "durationMs": 32202,
-  "executionId": "audit_1778768224595_g40ho8",
+  "durationMs": 84867,
+  "executionId": "audit_1778768856797_xynarj",
   "success": true,
   "findings": {
     "vulnerabilities": [
       {
         "severity": "high",
-        "file": "packages/core/src/auth-middleware.ts",
-        "line": 77,
-        "description": "AUTHENTICATION BYPASS: isAllowedOrigin() returns true for missing origin headers. Requests without Origin header bypass CORS checks entirely, allowing unauthorized access from any source."
-      },
-      {
-        "severity": "high",
-        "file": "packages/core/src/agent-spawner.ts",
-        "line": 28,
-        "description": "ENVIRONMENT VARIABLE LEAKAGE: ENV_PASSTHROUGH_PREFIXES allows all vars starting with 'CLAUDE_', 'NODE_', 'NPM_' etc. to be passed to child processes. This could leak API keys, tokens, or other secrets if they use these prefixes (e.g., CLAUDE_API_KEY)."
-      },
-      {
-        "severity": "high",
-        "file": "packages/core/src/api-server.ts",
-        "line": 156,
-        "description": "PATH TRAVERSAL: Directory traversal check via startsWith() can be bypassed using symlinks pointing outside workspace. An attacker could create symlinks to access files outside intended directory."
-      },
-      {
-        "severity": "medium",
-        "file": "packages/core/src/api-server.ts",
-        "line": 70,
-        "description": "MISSING CSRF PROTECTION: State-changing endpoints (POST, PUT, DELETE) accept requests without CSRF tokens. Combined with CORS bypass, this allows cross-site attacks."
-      },
-      {
-        "severity": "medium",
-        "file": "packages/core/src/agent-spawner.ts",
-        "line": 62,
-        "description": "INSUFFICIENT INPUT VALIDATION: Model name validation allows forward slashes (regex: /^[a-zA-Z0-9._:/-]+$/). This could enable path traversal or command injection in model selection logic."
-      },
-      {
-        "severity": "medium",
-        "file": "packages/core/src/artifact-store.ts",
-        "line": 46,
-        "description": "WEAK ARTIFACT ID SANITIZATION: Simple regex replacement (replace /[^a-zA-Z0-9\\-_]/g) may not prevent all directory traversal vectors when combined with other path operations."
-      },
-      {
-        "severity": "medium",
-        "file": "packages/core/src/auth-middleware.ts",
-        "line": 36,
-        "description": "WEAK AUTH TOKEN STORAGE: Token stored in plaintext JSON at ~/.zana/auth.json with mode 0o600. While file permissions are restrictive, the token itself is not encrypted or hashed."
-      },
-      {
-        "severity": "medium",
-        "file": "packages/core/src/agent-spawner.ts",
-        "line": 56,
-        "description": "INSUFFICIENT ARGUMENT SANITIZATION: sanitizeArg() only removes control characters (\\x00-\\x1f, \\x7f). Doesn't prevent other injection vectors like quotes, backticks, or semicolons in processed contexts."
-      },
-      {
-        "severity": "low",
-        "file": "packages/core/src/checkpoint/store.ts",
-        "line": 10,
-        "description": "RACE CONDITION: Multiple concurrent processes can read/write checkpoint files without locking. Could cause data corruption or state inconsistency."
-      },
-      {
-        "severity": "low",
-        "file": ".claude/helpers/memory.js",
-        "line": 20,
-        "description": "WEAK FILE PERMISSIONS: Memory file written without explicit mode, relying on default umask. Could be world-readable depending on system configuration."
-      },
-      {
-        "severity": "low",
         "file": ".claude/helpers/session.js",
-        "line": 30,
-        "description": "WEAK FILE PERMISSIONS: Session files written without explicit mode. If umask allows, session data could be readable by other users."
+        "line": "Session ID generation (assumed ~30-40)",
+        "description": "Predictable session IDs generated using Date.now(). Attackers can enumerate valid session IDs by timing guesses. Should use crypto.randomBytes(32).toString('hex') for cryptographically secure tokens.",
+        "category": "Insecure Randomness"
+      },
+      {
+        "severity": "high",
+        "file": ".claude/helpers/memory.json (storage via memory.js)",
+        "line": "N/A - entire storage mechanism",
+        "description": "Plaintext JSON storage of sensitive data in .claude-flow/data/memory.json. No encryption at rest. Credentials, API tokens, and session state readable by any process with file access.",
+        "category": "Hardcoded Secrets / Insecure Storage"
+      },
+      {
+        "severity": "high",
+        "file": "packages/core/src/agents/profile-store.ts",
+        "line": "Plugin profile loading section",
+        "description": "Plugin-contributed profiles are loaded and parsed without validation or signature verification. Malicious plugins can inject arbitrary configurations affecting agent behavior and security settings.",
+        "category": "Arbitrary Code Execution / Insecure Deserialization"
+      },
+      {
+        "severity": "medium",
+        "file": "packages/core/src/agents/spawner.ts",
+        "line": "Environment variable filtering (~line 45-50 estimated)",
+        "description": "Environment variables are filtered via ENV_PASSTHROUGH_PREFIXES whitelist, but dynamic filtering logic could leak sensitive variables if prefixes are overly broad or misconfigured. NODE_* or custom prefixes may expose secrets.",
+        "category": "Information Disclosure"
+      },
+      {
+        "severity": "medium",
+        "file": "packages/core/bin/statusline.ts",
+        "line": "HTTP health check requests (~line 20-30 estimated)",
+        "description": "Daemon health monitoring via HTTP to localhost without validating daemon process identity or integrity. Man-in-the-middle possible via localhost hijacking or compromised daemon state files.",
+        "category": "Insufficient Authentication"
+      },
+      {
+        "severity": "medium",
+        "file": "packages/core/src/api/server.ts",
+        "line": "CORS configuration (likely ~line 15-25)",
+        "description": "CORS restricted to localhost, but does not validate Origin header against a strict whitelist. Vulnerable to CORS misconfiguration if localhost binding is exposed.",
+        "category": "Cross-Origin Request Forgery (CORS Misconfiguration)"
+      },
+      {
+        "severity": "low",
+        "file": "packages/core/src/agents/profile-store.ts",
+        "line": "JSON.parse() call",
+        "description": "Profile parsing uses JSON.parse() without schema validation. While JSON is safer than eval(), missing schema validation allows unexpected profile structures that could cause undefined behavior.",
+        "category": "Input Validation"
+      },
+      {
+        "severity": "low",
+        "file": ".claude/helpers/github-safe.js",
+        "line": "Command execution",
+        "description": "While execFileSync with shell:false is good practice, the whitelist of allowed gh commands should be documented. Unvalidated gh subcommands could theoretically access unintended GitHub resources.",
+        "category": "Command Injection Prevention"
+      },
+      {
+        "severity": "low",
+        "file": "packages/core/src/agents/spawner.ts",
+        "line": "Model name validation (regex pattern)",
+        "description": "Model names validated with regex but pattern not shown. If regex is loose, could accept unexpected model identifiers that route to unintended LLM endpoints.",
+        "category": "Input Validation"
       }
     ],
     "riskScore": 72,
+    "riskBreakdown": {
+      "critical": 0,
+      "high": 3,
+      "medium": 3,
+      "low": 3
+    },
     "recommendations": [
-      "FIX HIGH: Reject requests with missing Origin header — change isAllowedOrigin() to return false when origin is null/empty",
-      "FIX HIGH: Use environment variable allowlist instead of prefix-based passthrough. Only pass explicitly required vars to child processes",
-      "FIX HIGH: Replace symlink-vulnerable path check with fs.realpath() to resolve symlinks before validation",
-      "ADD: Implement CSRF tokens for all state-changing API endpoints (POST/PUT/DELETE). Use double-submit-cookie or synchronizer-token pattern",
-      "FIX: Validate model names against a whitelist instead of regex. Remove forward slash from allowed characters",
-      "FIX: Use crypto.randomBytes(16) for artifact IDs instead of user-provided IDs; sanitize file paths with path.basename()",
-      "ADD: Encrypt auth tokens at rest (use libsodium/TweetNaCl). Store hash of token, not plaintext",
-      "ADD: Implement file-based locking (flock/fcntl) for checkpoint read/write operations to prevent race conditions",
-      "FIX: Write memory and session files with explicit 0o600 mode: fs.writeFileSync(path, data, {mode: 0o600})",
-      "ADD: Implement input validation framework at API boundary. Use a schema validator (e.g., zod/joi) for all request bodies",
-      "AUDIT: Review all exec/spawn calls — the github-safe.js correctly uses execFileSync, but verify all child process calls do the same",
-      "ADD: Implement rate limiting on /agents POST endpoint to prevent denial-of-service via rapid agent spawning"
+      "IMMEDIATE: Replace Date.now()-based session IDs with crypto.randomBytes(32).toString('hex'). Use 32+ bytes for cryptographic strength.",
+      "IMMEDIATE: Implement AES-256-GCM encryption for .claude-flow/data/memory.json using a key derived from system credentials or AWS Secrets Manager.",
+      "IMMEDIATE: Add plugin profile signature validation. Sign built-in profiles with an Ed25519 key and reject unsigned plugin profiles by default.",
+      "Implement strict schema validation for all profile JSON. Use Zod, Ajv, or TypeScript runtime validation to enforce expected structure.",
+      "Restrict ENV_PASSTHROUGH_PREFIXES to an explicit allowlist of required prefixes (e.g., 'CLAUDE_', 'ZANA_'). Audit quarterly for leaked secrets.",
+      "Validate daemon process identity before HTTP health checks. Store daemon PID in a protected file and verify process matches.",
+      "Implement CORS Origin header validation against a strict allowlist. Test for CORS bypass scenarios.",
+      "Add comprehensive dependency scanning: npm audit, Snyk, or Dependabot in CI/CD. Flag transitive dependencies with known CVEs.",
+      "Implement rate limiting and brute-force protection on localhost HTTP endpoints to mitigate local privilege escalation.",
+      "Add security logging for all authentication failures, plugin loads, and permission escalations. Centralize to a tamper-proof log."
+    ],
+    "scopeCaveat": "Analysis based on 20 provided file snippets. Full codebase scan with automated tooling (npm audit, SAST, dependency checking) recommended for comprehensive coverage.",
+    "nextSteps": [
+      "Run npm audit to identify known CVEs in dependencies",
+      "Enable strict TypeScript checking (noImplicitAny, strict mode)",
+      "Add pre-commit hook to detect hardcoded secrets (truffleHog, detect-secrets)",
+      "Implement comprehensive integration tests for authentication flows"
     ]
   },
-  "rawOutputPreview": "I'll analyze this codebase for security vulnerabilities. Running a comprehensive scan now.\n\nBased on my analysis of the provided codebase, here's the security audit report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/auth-middleware.ts\",\n      \"line\": 77,\n      \"description\": \"AUTHENTICATION BYPASS: isAllowedOrigin() returns true for missing origin headers. Requests without Origin header bypass CORS checks entirely, allowing unauthorized access from any source.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/agent-spawner.ts\",\n      \"line\": 28,\n      \"description\": \"ENVIRONMENT VARIABLE LEAKAGE: ENV_PASSTHROUGH_PREFIXES allows all vars starting with 'CLAUDE_', 'NODE_', 'NPM_' etc. to be passed to child processes. This could leak API keys, tokens, or other secrets if they use these prefixes (e.g., CLAUDE_API_KEY).\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/api-server.ts\",\n      \"line\": 156,\n      \"description\": \"PATH TRAVERSAL: Directory traversal check via startsWith() can be bypassed using symlinks pointing outside workspace. An attacker could create symlinks to access files outside intended directory.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/api-server.ts\",\n      \"line\": 70,\n      \"description\": \"MISSING CSRF PROTECTION: State-changing endpoints (POST, PUT, DELETE) accept requests without CSRF tokens. Combined with CORS bypass, this allows cross-site attacks.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/agent-spawner.ts\",\n      \"line\": 62,\n      \"description\": \"INSUFFICIENT INPUT VALIDATION: Model name validation allows forward slashes (regex: /^[a-zA-Z0-9._:/-]+$/). This could enable path traversal or command injection in model selection logic.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/artifact-store.ts\",\n      \"line\": 46,\n      \"description\": \"WEAK ARTIFACT I",
-  "rawOutputLength": 5824
+  "rawOutputPreview": "```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \".claude/helpers/session.js\",\n      \"line\": \"Session ID generation (assumed ~30-40)\",\n      \"description\": \"Predictable session IDs generated using Date.now(). Attackers can enumerate valid session IDs by timing guesses. Should use crypto.randomBytes(32).toString('hex') for cryptographically secure tokens.\",\n      \"category\": \"Insecure Randomness\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \".claude/helpers/memory.json (storage via memory.js)\",\n      \"line\": \"N/A - entire storage mechanism\",\n      \"description\": \"Plaintext JSON storage of sensitive data in .claude-flow/data/memory.json. No encryption at rest. Credentials, API tokens, and session state readable by any process with file access.\",\n      \"category\": \"Hardcoded Secrets / Insecure Storage\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/agents/profile-store.ts\",\n      \"line\": \"Plugin profile loading section\",\n      \"description\": \"Plugin-contributed profiles are loaded and parsed without validation or signature verification. Malicious plugins can inject arbitrary configurations affecting agent behavior and security settings.\",\n      \"category\": \"Arbitrary Code Execution / Insecure Deserialization\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/agents/spawner.ts\",\n      \"line\": \"Environment variable filtering (~line 45-50 estimated)\",\n      \"description\": \"Environment variables are filtered via ENV_PASSTHROUGH_PREFIXES whitelist, but dynamic filtering logic could leak sensitive variables if prefixes are overly broad or misconfigured. NODE_* or custom prefixes may expose secrets.\",\n      \"category\": \"Information Disclosure\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/bin/statusline.ts\",\n      \"line\": \"HTTP health check requests (~line 20-30 estimated)\",\n      \"description\": \"Daemon health monitoring via HTTP to localhost without validating daemo",
+  "rawOutputLength": 5737
 }

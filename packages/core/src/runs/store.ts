@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { RUNS_DIR } from "./config";
+import { RUNS_DIR } from "../config";
 
 function ensureDir() {
   fs.mkdirSync(RUNS_DIR, { recursive: true });

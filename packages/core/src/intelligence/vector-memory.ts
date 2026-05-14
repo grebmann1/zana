@@ -1,12 +1,12 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { HIVE_DIR } from "./config";
-import * as eventBus from "./event-bus-service";
+import { ZANA_DIR } from "../config";
+import * as eventBus from "../events/service";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MEMORY_DIR = path.join(HIVE_DIR, "memory");
+const MEMORY_DIR = path.join(ZANA_DIR, "memory");
 const VECTORS_PATH = path.join(MEMORY_DIR, "vectors.json");
 const VOCAB_PATH = path.join(MEMORY_DIR, "vocabulary.json");
 
@@ -261,4 +261,4 @@ export function shutdown() {
   flushToDisk();
 }
 
-export const delete = del;
+export { del as delete };

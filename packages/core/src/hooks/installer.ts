@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { BIN_DIR, CLAUDE_SETTINGS_BACKUP } from "./config";
+import { BIN_DIR, CLAUDE_SETTINGS_BACKUP } from "../config";
 
 export const HOOK_EVENTS = [
   "SessionStart",
@@ -64,7 +64,7 @@ export function installHooks(port) {
     throw new Error("installHooks: invalid port");
   }
   const scriptContents = fs.readFileSync(
-    path.join(__dirname, "hook-wrapper.sh"),
+    path.join(__dirname, "wrapper.sh"),
     "utf8",
   );
   const scriptPath = wrapperPath();
@@ -161,10 +161,10 @@ function ourEntry() {
 }
 
 export function installMcpServer(port) {
-  if (process.env.HIVE_SKIP_MCP_INSTALL === "1") return { ok: true, skipped: true };
+  if (process.env.ZANA_SKIP_MCP_INSTALL === "1") return { ok: true, skipped: true };
   if (!Number.isFinite(port)) return { ok: false, error: "invalid port" };
 
-  const mcpServerPath = path.join(__dirname, "orchestrator-mcp.js");
+  const mcpServerPath = path.join(__dirname, "..", "api", "orchestrator-mcp.js");
   backupIfNeeded();
   const settings = readSettings();
 
@@ -172,12 +172,12 @@ export function installMcpServer(port) {
     settings.mcpServers = {};
   }
 
-  settings.mcpServers["hive"] = {
+  settings.mcpServers["zana"] = {
     command: "node",
     args: [mcpServerPath],
     env: {
-      HIVE_PORT: String(port),
-      HIVE_ID: process.env.HIVE_ID || "default",
+      ZANA_PORT: String(port),
+      ZANA_ID: process.env.ZANA_ID || "default",
     },
   };
 

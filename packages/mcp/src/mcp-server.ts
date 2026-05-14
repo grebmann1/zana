@@ -23,9 +23,9 @@ console.log = (...args) => {
 
 const MCP_MAX_BUFFER_BYTES = 10 * 1024 * 1024; // 10 MB stdin buffer cap
 
-const HIVE_MASTER_MODE = process.env.HIVE_MASTER_MODE === "true";
-const HIVE_ID = process.env.HIVE_ID || "mcp";
-const SCRATCHPAD_PATH = path.join(SCRATCHPAD_DIR, `${HIVE_ID}.md`);
+const ZANA_MASTER_MODE = process.env.ZANA_MASTER_MODE === "true";
+const ZANA_ID = process.env.ZANA_ID || "mcp";
+const SCRATCHPAD_PATH = path.join(SCRATCHPAD_DIR, `${ZANA_ID}.md`);
 
 // --- In-process core (always boots — no daemon needed) ---
 let localHive = null;
@@ -45,7 +45,7 @@ async function ensureHiveRunning() {
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
-    const workspace = process.env.HIVE_WORKSPACE || require("path").resolve(__dirname, "..", "..", "..", "..");
+    const workspace = process.env.ZANA_WORKSPACE || require("path").resolve(__dirname, "..", "..", "..", "..");
     process.stderr.write(`[hive-mcp] booting core in-process for: ${workspace}\n`);
 
     const autoInitDisabled = process.env.ZANA_AUTO_INIT === "0";
@@ -57,7 +57,7 @@ async function ensureHiveRunning() {
       }
     }
 
-    process.env.HIVE_SKIP_MCP_INSTALL = "1";
+    process.env.ZANA_SKIP_MCP_INSTALL = "1";
     const { init: coreInit } = require("@zana/core");
     localHive = await coreInit({
       workspace,
@@ -993,7 +993,7 @@ const ARTIFACT_TOOLS = [
 ];
 
 // --- Master-only tools (spawn/control sub-hives) ---
-const MASTER_TOOLS = HIVE_MASTER_MODE ? [
+const MASTER_TOOLS = ZANA_MASTER_MODE ? [
   {
     name: "hive_mind_spawn_hive",
     description: "Spawn a new sub-hive (headless team). The sub-hive runs as a child process and can be controlled via instructions.",
@@ -1161,7 +1161,7 @@ function sendNotification(method, params) {
 }
 
 function drainLocalInbox() {
-  const agentId = process.env.HIVE_TERMINAL_ID;
+  const agentId = process.env.ZANA_TERMINAL_ID;
   if (!agentId || !localHive?.hivemindRouter) return [];
   try {
     return localHive.hivemindRouter.drainInbox(agentId) || [];
@@ -1247,23 +1247,23 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Ticket tools
     case "hive_ticket_create":
-      return await callCore("ticket_create", { title: args.title, description: args.description, priority: args.priority, labels: args.labels, blockedBy: args.blockedBy, sprintId: args.sprintId, createdBy: process.env.HIVE_TERMINAL_ID || "agent" });
+      return await callCore("ticket_create", { title: args.title, description: args.description, priority: args.priority, labels: args.labels, blockedBy: args.blockedBy, sprintId: args.sprintId, createdBy: process.env.ZANA_TERMINAL_ID || "agent" });
     case "hive_ticket_list":
       return await callCore("ticket_list", { status: args.status, sprintId: args.sprintId, assigneeId: args.assigneeId, label: args.label });
     case "hive_ticket_get":
       return await callCore("ticket_get", { ticketId: args.ticketId });
     case "hive_ticket_claim":
-      return await callCore("ticket_claim", { ticketId: args.ticketId, agentId: process.env.HIVE_TERMINAL_ID || "agent", agentName: process.env.HIVE_AGENT_NAME || "Agent", profileId: process.env.HIVE_PROFILE_ID || null });
+      return await callCore("ticket_claim", { ticketId: args.ticketId, agentId: process.env.ZANA_TERMINAL_ID || "agent", agentName: process.env.ZANA_AGENT_NAME || "Agent", profileId: process.env.ZANA_PROFILE_ID || null });
     case "hive_ticket_update":
-      return await callCore("ticket_update", { ticketId: args.ticketId, status: args.status, reviewPhase: args.reviewPhase, progress: args.progress, planification: args.planification, resultSummary: args.resultSummary, filesChanged: args.filesChanged, agentId: process.env.HIVE_TERMINAL_ID || "agent", agentName: process.env.HIVE_AGENT_NAME || "Agent" });
+      return await callCore("ticket_update", { ticketId: args.ticketId, status: args.status, reviewPhase: args.reviewPhase, progress: args.progress, planification: args.planification, resultSummary: args.resultSummary, filesChanged: args.filesChanged, agentId: process.env.ZANA_TERMINAL_ID || "agent", agentName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "hive_ticket_update_status":
-      return await callCore("ticket_update_status", { ticketId: args.ticketId, status: args.status, updatedBy: process.env.HIVE_TERMINAL_ID || "agent" });
+      return await callCore("ticket_update_status", { ticketId: args.ticketId, status: args.status, updatedBy: process.env.ZANA_TERMINAL_ID || "agent" });
     case "hive_ticket_comment":
-      return await callCore("ticket_comment", { ticketId: args.ticketId, body: args.body, authorId: process.env.HIVE_TERMINAL_ID || "agent", authorName: process.env.HIVE_AGENT_NAME || "Agent" });
+      return await callCore("ticket_comment", { ticketId: args.ticketId, body: args.body, authorId: process.env.ZANA_TERMINAL_ID || "agent", authorName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "hive_ticket_complete":
-      return await callCore("ticket_complete", { ticketId: args.ticketId, resultSummary: args.resultSummary, completedBy: process.env.HIVE_TERMINAL_ID || "agent" });
+      return await callCore("ticket_complete", { ticketId: args.ticketId, resultSummary: args.resultSummary, completedBy: process.env.ZANA_TERMINAL_ID || "agent" });
     case "hive_ticket_edit":
-      return await callCore("ticket_edit", { ticketId: args.ticketId, title: args.title, description: args.description, priority: args.priority, labels: args.labels, type: args.type, sprintId: args.sprintId, updatedBy: process.env.HIVE_TERMINAL_ID || "agent" });
+      return await callCore("ticket_edit", { ticketId: args.ticketId, title: args.title, description: args.description, priority: args.priority, labels: args.labels, type: args.type, sprintId: args.sprintId, updatedBy: process.env.ZANA_TERMINAL_ID || "agent" });
     case "hive_ticket_add_to_sprint":
       return await callCore("ticket_add_to_sprint", { ticketId: args.ticketId, sprintId: args.sprintId });
     case "hive_sprint_list":
@@ -1279,7 +1279,7 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Scheduler tools
     case "hive_schedule_create":
-      return await callCore("schedule_create", { name: args.name, description: args.description, cron: args.cron, intervalMs: args.intervalMs, action: args.action, enabled: args.enabled, ownerId: process.env.HIVE_TERMINAL_ID || "agent", ownerName: process.env.HIVE_AGENT_NAME || "Agent" });
+      return await callCore("schedule_create", { name: args.name, description: args.description, cron: args.cron, intervalMs: args.intervalMs, action: args.action, enabled: args.enabled, ownerId: process.env.ZANA_TERMINAL_ID || "agent", ownerName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "hive_schedule_list":
       return await callCore("schedule_list");
     case "hive_schedule_get":
@@ -1297,7 +1297,7 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Event Bus tools
     case "hive_event_emit":
-      return await callCore("event_emit", { type: args.type, payload: args.payload, tags: args.tags, source: process.env.HIVE_TERMINAL_ID || "agent" });
+      return await callCore("event_emit", { type: args.type, payload: args.payload, tags: args.tags, source: process.env.ZANA_TERMINAL_ID || "agent" });
     case "hive_event_query":
       return await callCore("event_query", { types: args.types, source: args.source, since: args.since, limit: args.limit || 50 });
 
@@ -1305,15 +1305,15 @@ async function handleToolCall(name, args, callerAgentId) {
     case "hive_discover_agents":
       return await callCore("discover_agents", { query: args.query });
     case "hive_ask_agent":
-      return await callCore("ask_agent", { toAgentId: args.toAgentId, question: args.question, replyTo: args.replyTo, fromTerminalId: process.env.HIVE_TERMINAL_ID, fromAgentName: process.env.HIVE_AGENT_NAME || "Agent" });
+      return await callCore("ask_agent", { toAgentId: args.toAgentId, question: args.question, replyTo: args.replyTo, fromTerminalId: process.env.ZANA_TERMINAL_ID, fromAgentName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "hive_check_inbox":
-      return await callCore("check_inbox", { terminalId: process.env.HIVE_TERMINAL_ID });
+      return await callCore("check_inbox", { terminalId: process.env.ZANA_TERMINAL_ID });
 
     // Typed messaging + channels
     case "hive_send_message":
-      return await callCore("send_message", { toAgentId: args.toAgentId, type: args.type, payload: args.payload, priority: args.priority || "normal", replyTo: args.replyTo, requiresAck: args.requiresAck || false, fromAgentId: callerAgentId, fromAgentName: process.env.HIVE_AGENT_NAME || "Agent" });
+      return await callCore("send_message", { toAgentId: args.toAgentId, type: args.type, payload: args.payload, priority: args.priority || "normal", replyTo: args.replyTo, requiresAck: args.requiresAck || false, fromAgentId: callerAgentId, fromAgentName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "hive_publish_channel":
-      return await callCore("publish_channel", { channel: args.channel, type: args.type, payload: args.payload, fromAgentId: callerAgentId, fromAgentName: process.env.HIVE_AGENT_NAME || "Agent" });
+      return await callCore("publish_channel", { channel: args.channel, type: args.type, payload: args.payload, fromAgentId: callerAgentId, fromAgentName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "hive_subscribe_channel":
       return await callCore("subscribe_channel", { channel: args.channel, agentId: callerAgentId });
     case "hive_list_channels":
@@ -1337,7 +1337,7 @@ async function handleToolCall(name, args, callerAgentId) {
     case "hive_workflow_run": {
       const workflowEngine = require("@zana/core").workflowEngine;
       const hiveSkillStoreWf = require("@zana/core").hiveSkillStore;
-      const skill = hiveSkillStoreWf.getHiveSkill(args.skillId);
+      const skill = hiveSkillStoreWf.getSkill(args.skillId);
       if (!skill || skill.type !== "workflow") return { error: "workflow skill not found" };
       let context: any = {};
       if (args.ticketId) {
@@ -1359,7 +1359,7 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Artifact tools
     case "hive_artifact_create":
-      return await callCore("artifact_create", { title: args.title, type: args.type, content: args.content, tags: args.tags, linkedTickets: args.linkedTickets, createdBy: process.env.HIVE_TERMINAL_ID || "agent" });
+      return await callCore("artifact_create", { title: args.title, type: args.type, content: args.content, tags: args.tags, linkedTickets: args.linkedTickets, createdBy: process.env.ZANA_TERMINAL_ID || "agent" });
     case "hive_artifact_list":
       return await callCore("artifact_list", { type: args.type, tag: args.tag });
     case "hive_artifact_read":
@@ -1433,7 +1433,7 @@ async function handleMessage(msg) {
       if (!initialized) { sendError(id, -32002, "Server not yet initialized"); break; }
       const { name, arguments: args } = params;
       try {
-        const parentId = process.env.HIVE_TERMINAL_ID || null;
+        const parentId = process.env.ZANA_TERMINAL_ID || null;
         const result = await handleToolCall(name, args || {}, parentId);
         const content = [{ type: "text", text: JSON.stringify(result, null, 2) }];
 

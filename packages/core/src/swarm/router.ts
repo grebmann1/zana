@@ -3,7 +3,7 @@
 
 import * as http from "node:http";
 import * as crypto from "node:crypto";
-import * as persistence from "./persistence";
+import * as persistence from "../persistence";
 
 // agentId → { hiveId, hivePort, agentName, profileName, profileIcon }
 const routingTable = new Map();
@@ -98,13 +98,13 @@ export async function routeMessage(msg, localAgents, subHivePorts) {
   // Check routing table for sub-hive target
   const route = routingTable.get(toAgentId);
   if (route) {
-    const delivered = await postToHive(route.hivePort, "/hivemind/inbox", msg);
+    const delivered = await postToHive(route.hivePort, "/swarm/inbox", msg);
     return { ok: delivered, delivered: delivered ? "remote" : "failed" };
   }
 
   // Try each sub-hive's inbox endpoint
   for (const port of subHivePorts) {
-    const delivered = await postToHive(port, "/hivemind/inbox", msg);
+    const delivered = await postToHive(port, "/swarm/inbox", msg);
     if (delivered) return { ok: true, delivered: "remote" };
   }
 
@@ -140,7 +140,7 @@ export async function refreshRoutingTable(localAgents, subHivePorts, force = fal
   // Query each sub-hive for their agents
   for (const port of subHivePorts) {
     try {
-      const agents = await getFromHive(port, "/hivemind/agents");
+      const agents = await getFromHive(port, "/swarm/agents");
       if (Array.isArray(agents)) {
         for (const agent of agents) {
           routingTable.set(agent.id, {
@@ -162,7 +162,7 @@ export async function refreshRoutingTable(localAgents, subHivePorts, force = fal
         }
       }
     } catch (err) {
-      console.warn(`[hivemind-router] failed to query sub-hive on port ${port}:`, err.message || err);
+      console.warn(`[swarm-router] failed to query sub-hive on port ${port}:`, err.message || err);
     }
   }
 

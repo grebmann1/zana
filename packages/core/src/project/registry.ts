@@ -9,13 +9,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 
-import * as config from "./config";
-import { initHiveDir, isHiveInitialized } from "./hive-init";
+import * as config from "../config";
+import { initHiveDir, isHiveInitialized } from "./init";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-const REGISTRY_PATH = path.join(config.HIVE_DIR, "projects.json");
-const REGISTRY_TMP_PATH = path.join(config.HIVE_DIR, ".projects.json.tmp");
+const REGISTRY_PATH = path.join(config.ZANA_DIR, "projects.json");
+const REGISTRY_TMP_PATH = path.join(config.ZANA_DIR, ".projects.json.tmp");
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -31,9 +31,9 @@ function generateId() {
  * On first load, migrates from recent-workspaces.json if available.
  */
 function readRegistry() {
-  // Ensure HIVE_DIR exists
-  if (!fs.existsSync(config.HIVE_DIR)) {
-    fs.mkdirSync(config.HIVE_DIR, { recursive: true });
+  // Ensure ZANA_DIR exists
+  if (!fs.existsSync(config.ZANA_DIR)) {
+    fs.mkdirSync(config.ZANA_DIR, { recursive: true });
   }
 
   if (fs.existsSync(REGISTRY_PATH)) {
@@ -64,8 +64,8 @@ function readRegistry() {
  * Atomically write the registry to disk.
  */
 function writeRegistry(data) {
-  if (!fs.existsSync(config.HIVE_DIR)) {
-    fs.mkdirSync(config.HIVE_DIR, { recursive: true });
+  if (!fs.existsSync(config.ZANA_DIR)) {
+    fs.mkdirSync(config.ZANA_DIR, { recursive: true });
   }
   const content = JSON.stringify(data, null, 2) + "\n";
   fs.writeFileSync(REGISTRY_TMP_PATH, content, "utf8");

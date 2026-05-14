@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
-import { bus, EVENTS } from "./event-bus";
-import * as runStore from "./run-store";
-import * as statsEngine from "./stats-engine";
+import { bus, EVENTS } from "../events/bus";
+import * as runStore from "./store";
+import * as statsEngine from "../events/stats-engine";
 
 let currentRun = null;
 let runEvents = [];
@@ -28,8 +28,8 @@ export function init() {
       startRun({
         teamId: payload.teamId,
         teamName: payload.teamName,
-        workspace: process.env.HIVE_WORKSPACE || process.cwd(),
-        hiveId: process.env.HIVE_ID || "default",
+        workspace: process.env.ZANA_WORKSPACE || process.cwd(),
+        hiveId: process.env.ZANA_ID || "default",
       });
     }
   });

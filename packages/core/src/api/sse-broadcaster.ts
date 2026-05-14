@@ -1,4 +1,4 @@
-import { bus } from "./event-bus";
+import { bus } from "../events/bus";
 
 const clients = new Set();
 let eventCounter = 0;
@@ -23,8 +23,8 @@ export const STREAM_EVENTS = [
   "workflow:completed",
   "workflow:halted",
   "workflow:failed",
-  "hive:ready",
-  "hive:shutdown",
+  "zana:ready",
+  "zana:shutdown",
 ];
 
 // Ring buffer for Last-Event-ID reconnection support

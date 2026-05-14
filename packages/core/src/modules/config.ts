@@ -19,7 +19,7 @@ export function setConfigPath(p) {
 
 function getConfigPath() {
   if (!configPath) {
-    const workspace = require("./workspace-context");
+    const workspace = require("../project/workspace-context");
     configPath = path.join(workspace.getHiveDir(), "config.json");
   }
   return configPath;

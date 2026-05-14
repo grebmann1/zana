@@ -1,11 +1,11 @@
 import * as http from "node:http";
 import * as url from "node:url";
-import * as configMod from "./config";
-import * as workspaceContext from "./workspace-context";
-import { appendAudit } from "./event-log";
-import * as ticketService from "./ticket-service";
-import * as schedulerService from "./scheduler-service";
-import * as eventBusService from "./event-bus-service";
+import * as configMod from "../config";
+import * as workspaceContext from "../project/workspace-context";
+import { appendAudit } from "../events/log";
+import * as ticketService from "../tickets/service";
+import * as schedulerService from "../scheduling/service";
+import * as eventBusService from "../events/service";
 
 const DEFAULT_HOOK_PORT_VALUE = (configMod as any).DEFAULT_HOOK_PORT;
 
@@ -302,8 +302,8 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({
       ok: true,
-      hiveId: process.env.HIVE_ID || null,
-      workspace: process.env.HIVE_WORKSPACE || null,
+      hiveId: process.env.ZANA_ID || null,
+      workspace: process.env.ZANA_WORKSPACE || null,
       pid: process.pid,
     }));
   });
@@ -370,8 +370,8 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     }
   });
 
-  // POST /hivemind/inbox — deliver message to agent inbox
-  registerRoute("POST", "/hivemind/inbox", (_req, res, data) => {
+  // POST /swarm/inbox — deliver message to agent inbox
+  registerRoute("POST", "/swarm/inbox", (_req, res, data) => {
     if (!hivemindRouter) {
       res.statusCode = 503;
       res.setHeader("Content-Type", "application/json");
@@ -391,8 +391,8 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     res.end(JSON.stringify({ ok: true }));
   });
 
-  // POST /hivemind/events — receive events from sub-hives
-  registerRoute("POST", "/hivemind/events", (_req, res, data) => {
+  // POST /swarm/events — receive events from sub-hives
+  registerRoute("POST", "/swarm/events", (_req, res, data) => {
     if (!hivemindEvents) {
       res.statusCode = 503;
       res.setHeader("Content-Type", "application/json");
@@ -405,8 +405,8 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     res.end(JSON.stringify({ ok: true }));
   });
 
-  // GET /hivemind/inbox — drain/peek agent inbox
-  registerRoute("GET", "/hivemind/inbox", (_req, res, parsed) => {
+  // GET /swarm/inbox — drain/peek agent inbox
+  registerRoute("GET", "/swarm/inbox", (_req, res, parsed) => {
     if (!hivemindRouter) {
       res.statusCode = 503;
       res.end(JSON.stringify({ error: "hivemind not initialized" }));
@@ -432,8 +432,8 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     res.end(JSON.stringify(messages));
   });
 
-  // GET /hivemind/agents — list active agents
-  registerRoute("GET", "/hivemind/agents", (_req, res) => {
+  // GET /swarm/agents — list active agents
+  registerRoute("GET", "/swarm/agents", (_req, res) => {
     const agents = agentListFn ? agentListFn() : [];
     const mapped = agents
       .filter((a) => a.state !== "terminated")
@@ -444,7 +444,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
         profileIcon: a.profileIcon,
         state: a.state,
         mode: a.mode,
-        hiveId: process.env.HIVE_ID || "unknown",
+        hiveId: process.env.ZANA_ID || "unknown",
       }));
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");

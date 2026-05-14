@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
-import * as eventBusMod from "./event-bus";
-import * as eventBusStore from "./event-bus-store";
+import * as eventBusMod from "./bus";
+import * as eventBusStore from "./store";
 
 const bus = (eventBusMod as any).bus;
 

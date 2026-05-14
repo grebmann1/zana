@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as configMod from "./config";
+import * as configMod from "../config";
 
 const MAX_HISTORY = 10;
 

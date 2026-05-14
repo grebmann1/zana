@@ -2,9 +2,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { execSync } from "node:child_process";
-import { SKILLS_DIR } from "./config";
-import * as profileStoreMod from "./profile-store";
-import * as workspaceCtxMod from "./workspace-context";
+import { SKILLS_DIR } from "../config";
+import * as profileStoreMod from "../agents/profile-store";
+import * as workspaceCtxMod from "../project/workspace-context";
 
 const ALLOWED_DYNAMIC_COMMANDS = /^(git|node|cat|ls|find|grep|wc|date|pwd|echo|head|tail)\b/;
 const SHELL_METACHARACTERS = /&&|\|\||;|\||`|\$\(|>|</;
@@ -45,7 +45,7 @@ function loadSkillsFromDir(dir, opts = {}) {
   return skills;
 }
 
-export function listHiveSkills() {
+export function listSkills() {
   ensureDir();
   const builtIn = loadSkillsFromDir(BUILT_IN_SKILLS_DIR, { builtIn: true });
   const user = loadSkillsFromDir(SKILLS_DIR);
@@ -58,7 +58,7 @@ export function listHiveSkills() {
   return merged;
 }
 
-export function getHiveSkill(id) {
+export function getSkill(id) {
   if (!id) return null;
   ensureDir();
   const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, "");
@@ -75,14 +75,14 @@ export function getHiveSkill(id) {
     return skill;
   } catch {}
   // Try matching by _dirName across all skills
-  const skills = listHiveSkills();
+  const skills = listSkills();
   return skills.find((s) => s.id === id) || null;
 }
 
 const MAX_SUPPORTING_FILES = 10;
 const MAX_SUPPORTING_FILE_SIZE = 50 * 1024;
 
-export function saveHiveSkill(skill) {
+export function saveSkill(skill) {
   ensureDir();
   const now = new Date().toISOString();
   if (!skill.id) {
@@ -120,7 +120,7 @@ export function saveHiveSkill(skill) {
   return skill;
 }
 
-export function deleteHiveSkill(id) {
+export function deleteSkill(id) {
   if (!id) return false;
   const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, "");
   // Try flat file
@@ -132,11 +132,11 @@ export function deleteHiveSkill(id) {
   return false;
 }
 
-export function toggleHiveSkill(id, enabled) {
-  const skill = getHiveSkill(id);
+export function toggleSkill(id, enabled) {
+  const skill = getSkill(id);
   if (!skill) return false;
   skill.enabled = enabled;
-  saveHiveSkill(skill);
+  saveSkill(skill);
   return true;
 }
 
@@ -163,18 +163,18 @@ export function resolveSkillContent(skill) {
     let contextBlocks = "";
     for (const { cmd, label } of skill.dynamicContext) {
       if (!ALLOWED_DYNAMIC_COMMANDS.test(cmd)) {
-        process.stderr.write(`[hive-skill-store] Warning: dynamicContext cmd blocked (not in allowlist) for skill "${skill.name}" (${label}): ${cmd}\n`);
+        process.stderr.write(`[skills] Warning: dynamicContext cmd blocked (not in allowlist) for skill "${skill.name}" (${label}): ${cmd}\n`);
         continue;
       }
       if (SHELL_METACHARACTERS.test(cmd)) {
-        process.stderr.write(`[hive-skill-store] Warning: dynamicContext cmd blocked (shell metacharacters) for skill "${skill.name}" (${label}): ${cmd}\n`);
+        process.stderr.write(`[skills] Warning: dynamicContext cmd blocked (shell metacharacters) for skill "${skill.name}" (${label}): ${cmd}\n`);
         continue;
       }
       try {
         const output = execSync(cmd, { timeout: 5000, cwd, encoding: "utf8" });
         contextBlocks += `## ${label}\n\`\`\`\n${output}\`\`\`\n\n`;
       } catch (err) {
-        process.stderr.write(`[hive-skill-store] Warning: dynamicContext cmd failed for skill "${skill.name}" (${label}): ${err.message}\n`);
+        process.stderr.write(`[skills] Warning: dynamicContext cmd failed for skill "${skill.name}" (${label}): ${err.message}\n`);
       }
     }
     if (contextBlocks) {
@@ -190,7 +190,7 @@ export function resolveSkillContent(skill) {
 }
 
 export function getEnabledInstructions() {
-  const skills = listHiveSkills();
+  const skills = listSkills();
   return skills
     .filter((s) => s.type === "instruction" && s.enabled && s.content)
     .map((s) => `[${s.name}]: ${resolveSkillContent(s)}`);
@@ -199,7 +199,7 @@ export function getEnabledInstructions() {
 export function getInstructionsForProfile(profileId) {
   const profileStore: any = profileStoreMod;
   const profile = profileStore.getProfile(profileId);
-  const skills = listHiveSkills();
+  const skills = listSkills();
 
   const globalInstructions = skills
     .filter((s) => s.type === "instruction" && s.enabled && s.content && s.global !== false)
@@ -214,7 +214,7 @@ export function getInstructionsForProfile(profileId) {
 }
 
 export function getEnabledToolSkills() {
-  const skills = listHiveSkills();
+  const skills = listSkills();
   return skills.filter((s) => s.type === "tool" && s.enabled && s.toolSchema);
 }
 

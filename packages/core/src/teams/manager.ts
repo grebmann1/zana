@@ -1,9 +1,9 @@
-import * as teamStore from "./team-store";
-import * as agentManager from "./agent-manager";
-import * as profileStore from "./profile-store";
-import { bus, EVENTS } from "./event-bus";
-import * as checkpointStore from "./checkpoint/store";
-import * as checkpointResume from "./checkpoint/resume";
+import * as teamStore from "./store";
+import * as agentManager from "../agents/manager";
+import * as profileStore from "../agents/profile-store";
+import { bus, EVENTS } from "../events/bus";
+import * as checkpointStore from "../runs/checkpoint/store";
+import * as checkpointResume from "../runs/checkpoint/resume";
 
 const runningTeams = new Map();
 let changeListeners = [];
@@ -202,7 +202,7 @@ export function startTeam(teamId, options = {}) {
   };
 
   const cwd = options.cwd || process.env.HOME;
-  const headless = options.headless || !!process.env.HIVE_HEADLESS;
+  const headless = options.headless || !!process.env.ZANA_HEADLESS;
   const kickoffMessage = options.prompt || team.initialPrompt || "Begin working on the task described in your instructions.";
 
   let result;
@@ -217,7 +217,7 @@ export function startTeam(teamId, options = {}) {
   } else {
     result = agentManager.spawnInteractive(augmentedProfile, { cwd, cols: options.cols, rows: options.rows });
     setTimeout(() => {
-      const ptyHost = require("./pty-host");
+      const ptyHost = require("../agents/pty-host");
       ptyHost.writeTerminal(result.terminalId, kickoffMessage + "\n");
     }, 20000);
   }

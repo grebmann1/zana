@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { SETTINGS_PATH } from "./config";
+import { SETTINGS_PATH } from "../config";
 
 function ensureDir() {
   const dir = path.dirname(SETTINGS_PATH);
@@ -13,7 +13,7 @@ export function read() {
   try {
     return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
   } catch (err) {
-    if (err.code !== "ENOENT") console.warn("[hive-settings-store] read error:", err.message);
+    if (err.code !== "ENOENT") console.warn("[settings] read error:", err.message);
     return {};
   }
 }

@@ -2,10 +2,10 @@ import { spawn } from "node:child_process";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as fs from "node:fs";
-import * as configMod from "./config";
-import * as workspaceContext from "./workspace-context";
-import * as hiveSkillStore from "./hive-skill-store";
-import * as hiveSettingsStore from "./hive-settings-store";
+import * as configMod from "../config";
+import * as workspaceContext from "../project/workspace-context";
+import * as skillStore from "../settings/skill-store";
+import * as settingsStore from "../settings/store";
 
 export function findClaude() {
   const localBin = path.join(os.homedir(), ".local", "bin", "claude");
@@ -84,7 +84,7 @@ export function buildClaudeArgs(profile, options = {}) {
   }
 
   if (profile.appendSystemPrompt) {
-    const instructions = hiveSkillStore.getInstructionsForProfile(profile.id);
+    const instructions = skillStore.getInstructionsForProfile(profile.id);
     if (instructions.length > 0) {
       const hiveBlock = "\n\n--- HIVE SKILLS ---\n" + instructions.join("\n\n");
       args.push("--append-system-prompt", profile.appendSystemPrompt + hiveBlock);
@@ -92,7 +92,7 @@ export function buildClaudeArgs(profile, options = {}) {
       args.push("--append-system-prompt", profile.appendSystemPrompt);
     }
   } else {
-    const instructions = hiveSkillStore.getInstructionsForProfile(profile.id);
+    const instructions = skillStore.getInstructionsForProfile(profile.id);
     if (instructions.length > 0) {
       args.push("--append-system-prompt", "--- HIVE SKILLS ---\n" + instructions.join("\n\n"));
     }
@@ -149,7 +149,7 @@ function writeTempMcpConfig(profile, options = {}) {
 
   // Resolve placeholders in MCP config
   const resolved = JSON.parse(JSON.stringify(profile.mcpConfig));
-  const orchestratorMcpPath = path.join(__dirname, "orchestrator-mcp.js");
+  const orchestratorMcpPath = path.join(__dirname, "..", "api", "orchestrator-mcp.js");
   for (const [, server] of Object.entries(resolved)) {
     if (server.args) {
       server.args = server.args.map((arg) =>
@@ -158,23 +158,23 @@ function writeTempMcpConfig(profile, options = {}) {
     }
     if (!server.env) server.env = {};
     if (server.args?.includes(orchestratorMcpPath)) {
-      server.env.HIVE_PORT = String(process.env.HIVE_HOOK_PORT || 47400);
-      server.env.HIVE_ID = process.env.HIVE_ID || "default";
+      server.env.ZANA_PORT = String(process.env.ZANA_HOOK_PORT || 47400);
+      server.env.ZANA_ID = process.env.ZANA_ID || "default";
       if (options.terminalId) {
-        server.env.HIVE_TERMINAL_ID = options.terminalId;
+        server.env.ZANA_TERMINAL_ID = options.terminalId;
       }
       if (options.agentName) {
-        server.env.HIVE_AGENT_NAME = options.agentName;
+        server.env.ZANA_AGENT_NAME = options.agentName;
       }
       if (options.profileId) {
-        server.env.HIVE_PROFILE_ID = options.profileId;
+        server.env.ZANA_PROFILE_ID = options.profileId;
       }
-      if (process.env.HIVE_MASTER_PORT) {
-        server.env.HIVE_MASTER_PORT = process.env.HIVE_MASTER_PORT;
+      if (process.env.ZANA_MASTER_PORT) {
+        server.env.ZANA_MASTER_PORT = process.env.ZANA_MASTER_PORT;
       }
       // Only master hive's agents get master mode tools
-      if (!process.env.HIVE_ROLE || process.env.HIVE_ROLE !== "sub") {
-        server.env.HIVE_MASTER_MODE = "true";
+      if (!process.env.ZANA_ROLE || process.env.ZANA_ROLE !== "sub") {
+        server.env.ZANA_MASTER_MODE = "true";
       }
     }
   }
@@ -220,16 +220,16 @@ export function spawnHeadless(profile, options = {}) {
 
   const cwd = options.cwd || profile.defaultCwd || os.homedir();
 
-  const resolvedProvider = hiveSettingsStore.providerFromModel(profile.model) || hiveSettingsStore.getDefaultProvider();
-  let llmEnv = hiveSettingsStore.getEnvForProvider(resolvedProvider);
-  if (Object.keys(llmEnv).length === 0 && resolvedProvider !== hiveSettingsStore.getDefaultProvider()) {
-    llmEnv = hiveSettingsStore.getEnvForProvider(hiveSettingsStore.getDefaultProvider());
+  const resolvedProvider = settingsStore.providerFromModel(profile.model) || settingsStore.getDefaultProvider();
+  let llmEnv = settingsStore.getEnvForProvider(resolvedProvider);
+  if (Object.keys(llmEnv).length === 0 && resolvedProvider !== settingsStore.getDefaultProvider()) {
+    llmEnv = settingsStore.getEnvForProvider(settingsStore.getDefaultProvider());
   }
 
   const workspaceEnv = {};
   if (workspaceContext.isInitialized()) {
-    workspaceEnv.HIVE_WORKSPACE = workspaceContext.getWorkspaceRoot();
-    workspaceEnv.HIVE_DIR = workspaceContext.getHiveDir();
+    workspaceEnv.ZANA_WORKSPACE = workspaceContext.getWorkspaceRoot();
+    workspaceEnv.ZANA_DIR = workspaceContext.getHiveDir();
   }
 
   const child = spawn(claudePath, args, {
@@ -238,7 +238,7 @@ export function spawnHeadless(profile, options = {}) {
       ...filterEnvForChild(process.env),
       ...llmEnv,
       ...workspaceEnv,
-      HIVE_TERMINAL_ID: options.terminalId || "",
+      ZANA_TERMINAL_ID: options.terminalId || "",
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -257,16 +257,16 @@ export function spawnOneShot(profile, prompt, options = {}) {
   const cwd = options.cwd || profile.defaultCwd || os.homedir();
   const timeout = options.timeout || 60000;
 
-  const resolvedProvider = hiveSettingsStore.providerFromModel(profile.model) || hiveSettingsStore.getDefaultProvider();
-  let llmEnv = hiveSettingsStore.getEnvForProvider(resolvedProvider);
-  if (Object.keys(llmEnv).length === 0 && resolvedProvider !== hiveSettingsStore.getDefaultProvider()) {
-    llmEnv = hiveSettingsStore.getEnvForProvider(hiveSettingsStore.getDefaultProvider());
+  const resolvedProvider = settingsStore.providerFromModel(profile.model) || settingsStore.getDefaultProvider();
+  let llmEnv = settingsStore.getEnvForProvider(resolvedProvider);
+  if (Object.keys(llmEnv).length === 0 && resolvedProvider !== settingsStore.getDefaultProvider()) {
+    llmEnv = settingsStore.getEnvForProvider(settingsStore.getDefaultProvider());
   }
 
   const workspaceEnv = {};
   if (workspaceContext.isInitialized()) {
-    workspaceEnv.HIVE_WORKSPACE = workspaceContext.getWorkspaceRoot();
-    workspaceEnv.HIVE_DIR = workspaceContext.getHiveDir();
+    workspaceEnv.ZANA_WORKSPACE = workspaceContext.getWorkspaceRoot();
+    workspaceEnv.ZANA_DIR = workspaceContext.getHiveDir();
   }
 
   return new Promise((resolve) => {

@@ -197,9 +197,9 @@ function executeAutomation(rule, ticket) {
 function executeWorkflowAction(rule, ticket) {
   activeAutomations++;
   log(`Running workflow skill ${rule.action.skillId} for ticket ${ticket.id}`);
-  const hiveSkillStore = require("./hive-skill-store");
-  const workflowEngine = require("./workflow-engine");
-  const skill = hiveSkillStore.getHiveSkill(rule.action.skillId);
+  const skillStore = require("../settings/skill-store");
+  const workflowEngine = require("../scheduling/workflow-engine");
+  const skill = skillStore.getSkill(rule.action.skillId);
   if (!skill || skill.type !== "workflow") {
     log(`Workflow skill not found or wrong type: ${rule.action.skillId}`);
     activeAutomations--;
@@ -218,7 +218,7 @@ function executeWorkflowAction(rule, ticket) {
 
 function markBlocked(ticket) {
   try {
-    const ticketService = require("./ticket-service");
+    const ticketService = require("./service");
     ticketService.updateStatus(ticket.id, "blocked", "ticket-watcher");
     ticketService.addComment(
       ticket.id,
@@ -226,7 +226,7 @@ function markBlocked(ticket) {
       "Automation",
       `⚠️ BLOCKED: This ticket has failed review ${ticket.reworkCount} times. Automatic rework cycles exhausted. Human intervention required.\n\nPlease review the comment history, identify the root issue, and either:\n- Provide guidance and move back to "in-progress" manually\n- Reassign to a different agent profile\n- Break into smaller tickets`
     );
-    const { bus } = require("./event-bus");
+    const { bus } = require("../events/bus");
     bus.emit("ticket:blocked", { ticketId: ticket.id, reason: "max_rework_cycles", reworkCount: ticket.reworkCount });
     log(`Ticket ${ticket.id} marked as blocked — human intervention required`);
   } catch (err) {

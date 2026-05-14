@@ -195,7 +195,7 @@ if (configIdx !== -1) {
   }
 
   const workspaceContext = require("../src/workspace-context.js");
-  workspaceContext.init(process.env.HIVE_WORKSPACE || process.cwd());
+  workspaceContext.init(process.env.ZANA_WORKSPACE || process.cwd());
   const moduleConfig = require("../src/module-config.js");
   const MODULES_DIR = path.resolve(__dirname, "..", "modules");
 
@@ -307,9 +307,9 @@ if (configIdx !== -1) {
   process.exit(0);
 }
 
-let workspace = process.env.HIVE_WORKSPACE || process.cwd();
+let workspace = process.env.ZANA_WORKSPACE || process.cwd();
 let teamId: string | null = null;
-let apiPort = parseInt(process.env.HIVE_PORT || "47402", 10);
+let apiPort = parseInt(process.env.ZANA_PORT || "47402", 10);
 let background = false;
 let pidFile = path.join(os.homedir(), ".zana", "daemon.pid");
 let token: string | null = null;
@@ -356,7 +356,7 @@ if (background) {
   const child = spawn(process.execPath, [__filename, ...fwdArgs], {
     detached: true,
     stdio: "ignore",
-    env: { ...process.env, HIVE_DAEMON_FORKED: "1" },
+    env: { ...process.env, ZANA_DAEMON_FORKED: "1" },
   });
   child.unref();
   console.log(`hive-daemon: forked to background (pid ${child.pid})`);
@@ -395,7 +395,7 @@ async function main() {
 
   if (teamId) {
     console.log(`\x1b[36m[hive-daemon]\x1b[0m starting team: ${teamId}`);
-    const teamPrompt = process.env.HIVE_TEAM_PROMPT || undefined;
+    const teamPrompt = process.env.ZANA_TEAM_PROMPT || undefined;
     const result = await hive.teamManager.startTeam(teamId, { cwd: workspace, prompt: teamPrompt });
     if (result.ok) {
       console.log(`\x1b[32m[hive-daemon]\x1b[0m team started: ${result.orchestratorAgentId}`);

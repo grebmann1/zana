@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as moduleConfig from "./module-config";
+import * as moduleConfig from "./config";
 
 const MODULES_DIR = path.resolve(__dirname, "..", "modules");
 const INIT_TIMEOUT = 10000;
@@ -20,7 +20,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
 
 function getLockPath() {
   if (lockPath) return lockPath;
-  const workspace = require("./workspace-context");
+  const workspace = require("../project/workspace-context");
   lockPath = path.join(workspace.getHiveDir(), "modules.lock");
   return lockPath;
 }
@@ -119,12 +119,12 @@ function topoSort(discovered) {
 }
 
 function buildContext(moduleId, manifest) {
-  const eventBusService = require("./event-bus-service");
-  const workspace = require("./workspace-context");
-  const { HIVE_DIR } = require("./config");
+  const eventBusService = require("../events/service");
+  const workspace = require("../project/workspace-context");
+  const { ZANA_DIR } = require("./config");
 
   const projectStoreDir = path.join(workspace.getHiveDir(), moduleId);
-  const globalStoreDir = path.join(HIVE_DIR, "modules", moduleId);
+  const globalStoreDir = path.join(ZANA_DIR, "modules", moduleId);
 
   const subs = [];
   const busOn = (filter, cb) => {
@@ -151,7 +151,7 @@ function buildContext(moduleId, manifest) {
       info: (msg) => process.stderr.write(`[module:${moduleId}] ${msg}\n`),
       warn: (msg) => process.stderr.write(`[module:${moduleId}] WARN ${msg}\n`),
       error: (msg) => process.stderr.write(`[module:${moduleId}] ERROR ${msg}\n`),
-      debug: (msg) => { if (process.env.HIVE_DEBUG) process.stderr.write(`[module:${moduleId}] DEBUG ${msg}\n`); },
+      debug: (msg) => { if (process.env.ZANA_DEBUG) process.stderr.write(`[module:${moduleId}] DEBUG ${msg}\n`); },
     },
     getModule(id) {
       const record = modules.get(id);
@@ -171,7 +171,7 @@ function buildContext(moduleId, manifest) {
           if (!coreModulesRef?.agentManager) return null;
           let profile = profileOrId;
           if (typeof profileOrId === "string") {
-            const profileStore = require("./profile-store");
+            const profileStore = require("../agents/profile-store");
             profile = profileStore.getProfile(profileOrId) || profileStore.getProfile(`built-in-${profileOrId}`);
             if (!profile) return null;
           }
@@ -304,7 +304,7 @@ export async function init(coreModules) {
 
     // Register module MCP tools
     if (manifest.api?.mcp?.length > 0) {
-      const moduleToolRegistry = require("./module-tool-registry");
+      const moduleToolRegistry = require("./tool-registry");
       const tools = manifest.api.mcp.map(tool => ({
         ...tool,
         name: `hive_${manifest.id}_${tool.name}`,
@@ -446,7 +446,7 @@ export async function enableModule(moduleId) {
 
   // Register module MCP tools
   if (entry.manifest.api?.mcp?.length > 0) {
-    const moduleToolRegistry = require("./module-tool-registry");
+    const moduleToolRegistry = require("./tool-registry");
     const tools = entry.manifest.api.mcp.map(tool => ({
       ...tool,
       name: `hive_${entry.manifest.id}_${tool.name}`,
@@ -509,7 +509,7 @@ export async function disableModule(moduleId) {
   }
 
   // Unregister module MCP tools
-  const moduleToolRegistry = require("./module-tool-registry");
+  const moduleToolRegistry = require("./tool-registry");
   moduleToolRegistry.unregisterModuleTools(moduleId);
 
   modules.delete(moduleId);
