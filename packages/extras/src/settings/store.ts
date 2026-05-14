@@ -1,9 +1,12 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { SETTINGS_PATH } from "../config";
+// Lazy — @zana/core may still be loading when this module is first required.
+function SETTINGS_PATH(): string {
+  return require("@zana/core").config.SETTINGS_PATH;
+}
 
 function ensureDir() {
-  const dir = path.dirname(SETTINGS_PATH);
+  const dir = path.dirname(SETTINGS_PATH());
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -11,7 +14,7 @@ function ensureDir() {
 
 export function read() {
   try {
-    return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"));
+    return JSON.parse(fs.readFileSync(SETTINGS_PATH(), "utf8"));
   } catch (err) {
     if (err.code !== "ENOENT") console.warn("[settings] read error:", err.message);
     return {};
@@ -20,7 +23,7 @@ export function read() {
 
 export function write(settings) {
   ensureDir();
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf8");
+  fs.writeFileSync(SETTINGS_PATH(), JSON.stringify(settings, null, 2), "utf8");
 }
 
 export function getLlmProviders() {

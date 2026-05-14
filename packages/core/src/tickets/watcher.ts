@@ -197,7 +197,7 @@ function executeAutomation(rule, ticket) {
 function executeWorkflowAction(rule, ticket) {
   activeAutomations++;
   log(`Running workflow skill ${rule.action.skillId} for ticket ${ticket.id}`);
-  const skillStore = require("../settings/skill-store");
+  const skillStore = require("@zana/extras").settings.skillStore;
   const workflowEngine = require("../scheduling/workflow-engine");
   const skill = skillStore.getSkill(rule.action.skillId);
   if (!skill || skill.type !== "workflow") {

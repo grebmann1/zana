@@ -408,12 +408,12 @@ async function handleRequest(req, res) {
 
   // --- Settings ---
   if (method === "GET" && pathname === "/settings") {
-    const settingsStore = require("../settings/store");
+    const settingsStore = require("@zana/extras").settings.store;
     json(res, settingsStore.getSettings());
     return;
   }
   if (method === "POST" && pathname === "/settings") {
-    const settingsStore = require("../settings/store");
+    const settingsStore = require("@zana/extras").settings.store;
     const body = await readBody(req);
     settingsStore.updateSettings(body);
     json(res, settingsStore.getSettings());
@@ -852,7 +852,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  const pluginLoader = require("../plugins/loader");
+  const pluginLoader = require("@zana/extras").plugins.loader;
   if (pathname.startsWith("/x/") && pluginLoader.handlePluginRoute(pathname, req, res)) {
     return;
   }

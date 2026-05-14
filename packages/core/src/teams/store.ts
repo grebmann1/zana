@@ -178,7 +178,7 @@ const TEAM_TEMPLATES = [
 export function getTemplates() {
   const templates = [...TEAM_TEMPLATES];
   try {
-    const pluginLoader = require("../plugins/loader");
+    const pluginLoader = require("@zana/extras").plugins.loader;
     const pluginFiles = pluginLoader.getContributions("teamTemplates");
     for (const filePath of pluginFiles) {
       if (!filePath.endsWith(".json") || !fs.existsSync(filePath)) continue;

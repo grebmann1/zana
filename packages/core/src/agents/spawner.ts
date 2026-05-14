@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as fs from "node:fs";
 import * as configMod from "../config";
 import * as workspaceContext from "../project/workspace-context";
-import * as skillStore from "../settings/skill-store";
-import * as settingsStore from "../settings/store";
+const skillStore: any = new Proxy({}, { get: (_t, p) => require("@zana/extras").settings.skillStore[p] });
+const settingsStore: any = new Proxy({}, { get: (_t, p) => require("@zana/extras").settings.store[p] });
 
 export function findClaude() {
   const localBin = path.join(os.homedir(), ".local", "bin", "claude");

@@ -5,6 +5,12 @@ module.exports = {
   get swarm() {
     return require("@zana/swarm");
   },
+  get settings() {
+    return require("@zana/extras").settings;
+  },
+  get plugins() {
+    return require("@zana/extras").plugins;
+  },
 
   project: {
     init: require("./project/init"),
@@ -79,15 +85,6 @@ module.exports = {
     toolRegistry: require("./modules/tool-registry"),
     bridge: require("./modules/bridge"),
   },
-  plugins: {
-    loader: require("./plugins/loader"),
-    scaffold: require("./plugins/scaffold"),
-  },
-  settings: {
-    store: require("./settings/store"),
-    skillStore: require("./settings/skill-store"),
-  },
-
   persistence: require("./persistence"),
   guardrails: require("./guardrails/index"),
 };

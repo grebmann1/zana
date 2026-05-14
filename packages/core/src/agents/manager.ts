@@ -18,7 +18,7 @@ function getPtyHost() {
   return _ptyHost;
 }
 import * as profileStore from "./profile-store";
-import * as skillStore from "../settings/skill-store";
+const skillStore: any = new Proxy({}, { get: (_t, p) => require("@zana/extras").settings.skillStore[p] });
 const swarmPkg = require("@zana/swarm");
 const swarmRouter = swarmPkg.router;
 const swarmEvents = swarmPkg.events;

@@ -1,7 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { PLUGINS_DIR, ZANA_DIR, SETTINGS_PATH } from "../config";
-import * as eventBusService from "../events/service";
+// Lazy access to @zana/core — avoids load-order issues during core init.
+function _core() { return require("@zana/core"); }
+function PLUGINS_DIR() { return _core().config.PLUGINS_DIR; }
+function ZANA_DIR() { return _core().config.ZANA_DIR; }
+function SETTINGS_PATH() { return _core().config.SETTINGS_PATH; }
+const eventBusService: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
 
 const plugins = new Map();
 const disabledSet = new Set();
@@ -20,7 +24,7 @@ function ensureDir(dir) {
 }
 
 function readSettings() {
-  try { return JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8")); }
+  try { return JSON.parse(fs.readFileSync(SETTINGS_PATH(), "utf8")); }
   catch { return {}; }
 }
 
@@ -34,7 +38,7 @@ function createPluginLogger(pluginId) {
 }
 
 function createPluginStore(pluginId) {
-  const storeFile = path.join(PLUGINS_DIR, pluginId, "store.json");
+  const storeFile = path.join(PLUGINS_DIR(), pluginId, "store.json");
   let cache = null;
 
   function load() {
@@ -101,8 +105,8 @@ function withTimeout(fn, ms) {
 }
 
 function buildContext(pluginId, pluginDir) {
-  const agentManager = require("../agents/manager");
-  const ticketService = require("../tickets/service");
+  const agentManager = _core().agents.manager;
+  const ticketService = require("@zana/work").tickets.service;
 
   return {
     pluginId,
@@ -184,15 +188,16 @@ function registerRoutes(plugin, mod) {
 }
 
 export function loadPlugins() {
-  ensureDir(PLUGINS_DIR);
+  const pluginsDir = PLUGINS_DIR();
+  ensureDir(pluginsDir);
   let entries;
   try {
-    entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
+    entries = fs.readdirSync(pluginsDir, { withFileTypes: true });
   } catch { return; }
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const pluginDir = path.join(PLUGINS_DIR, entry.name);
+    const pluginDir = path.join(pluginsDir, entry.name);
     const manifestPath = path.join(pluginDir, "plugin.json");
     if (!fs.existsSync(manifestPath)) continue;
 
