@@ -7,7 +7,7 @@ const os = require("node:os");
 
 const args = process.argv.slice(2);
 
-const HELP = `Usage: hive-daemon [options] [command]
+const HELP = `Usage: zana-daemon [options] [command]
 
 Options:
   --workspace <path>   Working directory (default: cwd)
@@ -39,14 +39,14 @@ const serviceIdx = args.indexOf("service");
 if (serviceIdx !== -1) {
   const sub = args[serviceIdx + 1];
   if (!sub || !["install", "uninstall", "status", "logs"].includes(sub)) {
-    console.error("hive-daemon: unknown service command — expected install|uninstall|status|logs");
+    console.error("zana-daemon: unknown service command — expected install|uninstall|status|logs");
     process.exit(1);
   }
   let svc;
   try {
-    svc = require("../src/service-manager.js");
+    svc = require("../src/daemon/service-manager.js");
   } catch (e) {
-    console.error("hive-daemon: service-manager not available — ensure packages/core/src/service-manager.js is built");
+    console.error("zana-daemon: service-manager not available — ensure packages/core/src/service-manager.js is built");
     process.exit(1);
   }
   try {
@@ -66,7 +66,7 @@ if (serviceIdx !== -1) {
       if (output) process.stdout.write(output);
     }
   } catch (err) {
-    console.error(`hive-daemon: service ${sub} failed —`, err.message || err);
+    console.error(`zana-daemon: service ${sub} failed —`, err.message || err);
     process.exit(1);
   }
   process.exit(0);
@@ -76,7 +76,7 @@ const pluginIdx = args.indexOf("plugin");
 if (pluginIdx !== -1) {
   const sub = args[pluginIdx + 1];
   if (!sub || !["init", "list", "enable", "disable", "link", "unlink"].includes(sub)) {
-    console.error("hive-daemon: unknown plugin command — expected init|list|enable|disable|link|unlink");
+    console.error("zana-daemon: unknown plugin command — expected init|list|enable|disable|link|unlink");
     process.exit(1);
   }
 
@@ -86,15 +86,15 @@ if (pluginIdx !== -1) {
   if (sub === "init") {
     const name = args[pluginIdx + 2];
     if (!name) {
-      console.error("hive-daemon: plugin init requires <name>");
+      console.error("zana-daemon: plugin init requires <name>");
       process.exit(1);
     }
     const targetDir = path.join(PLUGINS_DIR, name);
     if (fs.existsSync(targetDir)) {
-      console.error(`hive-daemon: plugin directory already exists: ${targetDir}`);
+      console.error(`zana-daemon: plugin directory already exists: ${targetDir}`);
       process.exit(1);
     }
-    const { scaffold } = require("../src/plugin-scaffold.js");
+    const { scaffold } = require("../src/plugins/scaffold.js");
     scaffold(name, targetDir);
     console.log(`Plugin scaffolded at ${targetDir}`);
   } else if (sub === "list") {
@@ -128,7 +128,7 @@ if (pluginIdx !== -1) {
   } else if (sub === "enable" || sub === "disable") {
     const id = args[pluginIdx + 2];
     if (!id) {
-      console.error(`hive-daemon: plugin ${sub} requires <id>`);
+      console.error(`zana-daemon: plugin ${sub} requires <id>`);
       process.exit(1);
     }
     let settings: any = {};
@@ -142,18 +142,18 @@ if (pluginIdx !== -1) {
   } else if (sub === "link") {
     const linkPath = args[pluginIdx + 2];
     if (!linkPath) {
-      console.error("hive-daemon: plugin link requires <path>");
+      console.error("zana-daemon: plugin link requires <path>");
       process.exit(1);
     }
     const absPath = path.resolve(linkPath);
     const manifestPath = path.join(absPath, "plugin.json");
     if (!fs.existsSync(manifestPath)) {
-      console.error(`hive-daemon: no plugin.json found at ${absPath}`);
+      console.error(`zana-daemon: no plugin.json found at ${absPath}`);
       process.exit(1);
     }
     let manifest;
     try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")); } catch (err) {
-      console.error(`hive-daemon: invalid plugin.json: ${err.message}`);
+      console.error(`zana-daemon: invalid plugin.json: ${err.message}`);
       process.exit(1);
     }
     const symlinkTarget = path.join(PLUGINS_DIR, manifest.id);
@@ -165,17 +165,17 @@ if (pluginIdx !== -1) {
   } else if (sub === "unlink") {
     const id = args[pluginIdx + 2];
     if (!id) {
-      console.error("hive-daemon: plugin unlink requires <id>");
+      console.error("zana-daemon: plugin unlink requires <id>");
       process.exit(1);
     }
     const symlinkTarget = path.join(PLUGINS_DIR, id);
     if (!fs.existsSync(symlinkTarget)) {
-      console.error(`hive-daemon: plugin not found: ${id}`);
+      console.error(`zana-daemon: plugin not found: ${id}`);
       process.exit(1);
     }
     const stat = fs.lstatSync(symlinkTarget);
     if (!stat.isSymbolicLink()) {
-      console.error(`hive-daemon: "${id}" is not a symlink — use rm manually`);
+      console.error(`zana-daemon: "${id}" is not a symlink — use rm manually`);
       process.exit(1);
     }
     fs.unlinkSync(symlinkTarget);
@@ -190,13 +190,13 @@ const configIdx = args.indexOf("config");
 if (configIdx !== -1) {
   const action = args[configIdx + 1];
   if (!action || !["list", "get", "set", "reset"].includes(action)) {
-    console.error("Usage: hive-daemon config list|get|set|reset [module] [key] [value]");
+    console.error("Usage: zana-daemon config list|get|set|reset [module] [key] [value]");
     process.exit(1);
   }
 
-  const workspaceContext = require("../src/workspace-context.js");
+  const workspaceContext = require("../src/project/workspace-context.js");
   workspaceContext.init(process.env.ZANA_WORKSPACE || process.cwd());
-  const moduleConfig = require("../src/module-config.js");
+  const moduleConfig = require("../src/modules/config.js");
   const MODULES_DIR = path.resolve(__dirname, "..", "modules");
 
   const SYSTEM_SCHEMA = {
@@ -264,7 +264,7 @@ if (configIdx !== -1) {
     }
   } else if (action === "get") {
     const moduleId = args[configIdx + 2];
-    if (!moduleId) { console.error("Usage: hive-daemon config get <module>"); process.exit(1); }
+    if (!moduleId) { console.error("Usage: zana-daemon config get <module>"); process.exit(1); }
     const schemas = discoverSchemas();
     const schema = schemas[moduleId];
     if (!schema) { console.error(`Module "${moduleId}" not found. Available: ${Object.keys(schemas).join(", ")}`); process.exit(1); }
@@ -278,7 +278,7 @@ if (configIdx !== -1) {
     const key = args[configIdx + 3];
     const value = args[configIdx + 4];
     if (!moduleId || !key || value === undefined) {
-      console.error("Usage: hive-daemon config set <module> <key> <value>");
+      console.error("Usage: zana-daemon config set <module> <key> <value>");
       process.exit(1);
     }
     const schemas = discoverSchemas();
@@ -292,7 +292,7 @@ if (configIdx !== -1) {
     console.log(`✓ ${moduleId}.${key} = ${coerced}`);
   } else if (action === "reset") {
     const moduleId = args[configIdx + 2];
-    if (!moduleId) { console.error("Usage: hive-daemon config reset <module>"); process.exit(1); }
+    if (!moduleId) { console.error("Usage: zana-daemon config reset <module>"); process.exit(1); }
     const schemas = discoverSchemas();
     const schema = schemas[moduleId];
     if (!schema) { console.error(`Module "${moduleId}" not found.`); process.exit(1); }
@@ -344,7 +344,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (!fs.existsSync(workspace)) {
-  console.error(`hive-daemon: directory does not exist: ${workspace}`);
+  console.error(`zana-daemon: directory does not exist: ${workspace}`);
   process.exit(1);
 }
 
@@ -359,7 +359,7 @@ if (background) {
     env: { ...process.env, ZANA_DAEMON_FORKED: "1" },
   });
   child.unref();
-  console.log(`hive-daemon: forked to background (pid ${child.pid})`);
+  console.log(`zana-daemon: forked to background (pid ${child.pid})`);
   console.log(`  API: http://127.0.0.1:${apiPort}`);
   console.log(`  PID: ${pidFile}`);
   process.exit(0);
@@ -371,8 +371,8 @@ fs.writeFileSync(pidFile, String(process.pid), "utf8");
 const core = require("../src/core.js");
 
 async function main() {
-  console.log(`\x1b[36m[hive-daemon]\x1b[0m workspace: ${workspace}`);
-  console.log(`\x1b[36m[hive-daemon]\x1b[0m pid: ${process.pid}`);
+  console.log(`\x1b[36m[zana-daemon]\x1b[0m workspace: ${workspace}`);
+  console.log(`\x1b[36m[zana-daemon]\x1b[0m pid: ${process.pid}`);
 
   const hive = await core.init({
     workspace,
@@ -391,21 +391,21 @@ async function main() {
   });
 
   const port = hive.hookServerHandle?.port || apiPort;
-  console.log(`\x1b[32m[hive-daemon]\x1b[0m ready — id: ${hive.hiveId}  api: http://127.0.0.1:${port}`);
+  console.log(`\x1b[32m[zana-daemon]\x1b[0m ready — id: ${hive.daemonId}  api: http://127.0.0.1:${port}`);
 
   if (teamId) {
-    console.log(`\x1b[36m[hive-daemon]\x1b[0m starting team: ${teamId}`);
+    console.log(`\x1b[36m[zana-daemon]\x1b[0m starting team: ${teamId}`);
     const teamPrompt = process.env.ZANA_TEAM_PROMPT || undefined;
     const result = await hive.teamManager.startTeam(teamId, { cwd: workspace, prompt: teamPrompt });
     if (result.ok) {
-      console.log(`\x1b[32m[hive-daemon]\x1b[0m team started: ${result.orchestratorAgentId}`);
+      console.log(`\x1b[32m[zana-daemon]\x1b[0m team started: ${result.orchestratorAgentId}`);
     } else {
-      console.error(`\x1b[31m[hive-daemon]\x1b[0m team start failed: ${result.error}`);
+      console.error(`\x1b[31m[zana-daemon]\x1b[0m team start failed: ${result.error}`);
     }
   }
 
   function shutdown() {
-    console.log(`\n\x1b[33m[hive-daemon]\x1b[0m shutting down...`);
+    console.log(`\n\x1b[33m[zana-daemon]\x1b[0m shutting down...`);
     const agents = hive.agentManager.listAgents();
     for (const agent of agents) {
       if (agent.state !== "terminated") {
@@ -422,7 +422,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("[hive-daemon] fatal:", err);
+  console.error("[zana-daemon] fatal:", err);
   try { fs.unlinkSync(pidFile); } catch {}
   process.exit(1);
 });

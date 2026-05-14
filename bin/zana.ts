@@ -22,7 +22,7 @@ if (!subcommand || subcommand === "--help" || subcommand === "-h") {
 }
 
 if (subcommand === "init") {
-  const { initHiveDir } = require(path.join(appRoot, "packages", "core", "dist", "src", "hive-init.js"));
+  const { initProjectDir } = require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
   const initArgs = args.slice(1);
   const wizardMode = initArgs[0] === "wizard" || initArgs.includes("--wizard");
   if (wizardMode) {
@@ -32,7 +32,7 @@ if (subcommand === "init") {
 
   const target = initArgs.find((arg) => !arg.startsWith("-")) || process.cwd();
   const workspace = path.resolve(target);
-  initHiveDir(workspace, { force: initArgs.includes("--force") });
+  initProjectDir(workspace, { force: initArgs.includes("--force") });
   process.exit(0);
 }
 
@@ -47,13 +47,13 @@ if (subcommand === "status") {
 }
 
 if (subcommand === "stop") {
-  stopHive(args[1]);
+  stopDaemon(args[1]);
   process.exit(0);
 }
 
 if (subcommand === "config") {
   const { execFileSync } = require("child_process");
-  const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "hive-daemon.js");
+  const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "daemon.js");
   try {
     execFileSync(process.execPath, [daemonBin, "config", ...args.slice(1)], { stdio: "inherit" });
   } catch (err) {
@@ -79,19 +79,19 @@ Commands:
   init [path]          Initialize .zana/ in a project directory
   init wizard [path]   Guided setup: initialize + register MCP server
   migrate [path]       Run pending migrations
-  status               Show running hive instances
-  stop <id|port>       Stop a running hive
+  status               Show running daemon instances
+  stop <id|port>       Stop a running daemon
   config [args...]     Print or modify module configuration
-  headless [path]      Run hive-daemon in foreground (default)
+  headless [path]      Run zana-daemon in foreground (default)
 
 Options:
-  --repair-mcp        With init wizard, overwrite stale hive MCP config
+  --repair-mcp         With init wizard, overwrite stale zana MCP config
   --help, -h           Show this help
 `);
 }
 
 function runInitWizard(initArgs) {
-  const { initHiveDir, isHiveInitialized } = require(path.join(appRoot, "packages", "core", "dist", "src", "hive-init.js"));
+  const { initProjectDir, isProjectInitialized } = require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
   const { ensureMcpServer } = require(path.join(appRoot, "packages", "mcp", "dist", "src", "claude-settings.js"));
 
   const target = initArgs.find((arg) => !arg.startsWith("-")) || process.cwd();
@@ -104,9 +104,9 @@ function runInitWizard(initArgs) {
     process.exit(1);
   }
 
-  const wasInitialized = isHiveInitialized(workspace);
+  const wasInitialized = isProjectInitialized(workspace);
   if (!wasInitialized || force) {
-    initHiveDir(workspace, { force });
+    initProjectDir(workspace, { force });
   }
 
   const localMcpBin = path.join(appRoot, "packages", "mcp", "dist", "bin", "zana-mcp-server.js");
@@ -149,12 +149,12 @@ function launchHeadless(restArgs) {
   }
 
   // Auto-init .zana/ on first launch
-  const { isHiveInitialized, initHiveDir } = require(path.join(appRoot, "packages", "core", "dist", "src", "hive-init.js"));
-  if (!isHiveInitialized(workspace)) {
-    initHiveDir(workspace);
+  const { isProjectInitialized, initProjectDir } = require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
+  if (!isProjectInitialized(workspace)) {
+    initProjectDir(workspace);
   }
 
-  const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "hive-daemon.js");
+  const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "daemon.js");
   const daemonArgs = [`--workspace=${workspace}`, ...restArgs.filter((a) => a.startsWith("-"))];
 
   const child = spawn(process.execPath, [daemonBin, ...daemonArgs], {
@@ -167,36 +167,36 @@ function launchHeadless(restArgs) {
 // --- Status command ---
 
 function printStatus() {
-  const hivesDir = path.join(os.homedir(), ".zana", "hives");
-  if (!fs.existsSync(hivesDir)) {
-    console.log("No running hives.");
+  const daemonsDir = path.join(os.homedir(), ".zana", "daemons");
+  if (!fs.existsSync(daemonsDir)) {
+    console.log("No daemon(s) running.");
     return;
   }
 
-  const files = fs.readdirSync(hivesDir).filter((f) => f.endsWith(".json"));
+  const files = fs.readdirSync(daemonsDir).filter((f) => f.endsWith(".json"));
   if (files.length === 0) {
-    console.log("No running hives.");
+    console.log("No daemon(s) running.");
     return;
   }
 
   const alive = [];
   for (const f of files) {
     try {
-      const entry = JSON.parse(fs.readFileSync(path.join(hivesDir, f), "utf8"));
+      const entry = JSON.parse(fs.readFileSync(path.join(daemonsDir, f), "utf8"));
       if (isProcessAlive(entry.pid)) {
         alive.push(entry);
       } else {
-        try { fs.unlinkSync(path.join(hivesDir, f)); } catch {}
+        try { fs.unlinkSync(path.join(daemonsDir, f)); } catch {}
       }
     } catch {}
   }
 
   if (alive.length === 0) {
-    console.log("No running hives.");
+    console.log("No daemon(s) running.");
     return;
   }
 
-  console.log(`\x1b[36m${alive.length} hive(s) running:\x1b[0m\n`);
+  console.log(`\x1b[36m${alive.length} daemon(s) running:\x1b[0m\n`);
   for (const h of alive) {
     const uptime = formatUptime(h.startedAt);
     console.log(`  \x1b[32m●\x1b[0m \x1b[1m${h.id}\x1b[0m  port:${h.port}  pid:${h.pid}  ${uptime}`);
@@ -207,24 +207,24 @@ function printStatus() {
 
 // --- Stop command ---
 
-function stopHive(idOrPort) {
+function stopDaemon(idOrPort) {
   if (!idOrPort) {
     console.error("Usage: zana stop <id|port>");
     process.exit(1);
   }
 
-  const hivesDir = path.join(os.homedir(), ".zana", "hives");
-  if (!fs.existsSync(hivesDir)) {
-    console.error("No running hives.");
+  const daemonsDir = path.join(os.homedir(), ".zana", "daemons");
+  if (!fs.existsSync(daemonsDir)) {
+    console.error("No daemon(s) running.");
     process.exit(1);
   }
 
-  const files = fs.readdirSync(hivesDir).filter((f) => f.endsWith(".json"));
+  const files = fs.readdirSync(daemonsDir).filter((f) => f.endsWith(".json"));
   let target = null;
 
   for (const f of files) {
     try {
-      const entry = JSON.parse(fs.readFileSync(path.join(hivesDir, f), "utf8"));
+      const entry = JSON.parse(fs.readFileSync(path.join(daemonsDir, f), "utf8"));
       if (entry.id === idOrPort || String(entry.port) === idOrPort) {
         target = entry;
         break;
@@ -233,21 +233,21 @@ function stopHive(idOrPort) {
   }
 
   if (!target) {
-    console.error(`Hive not found: ${idOrPort}`);
+    console.error(`Daemon not found: ${idOrPort}`);
     process.exit(1);
   }
 
   if (!isProcessAlive(target.pid)) {
-    console.log(`Hive ${target.id} is already dead. Cleaning up.`);
-    try { fs.unlinkSync(path.join(hivesDir, `${target.id}.json`)); } catch {}
+    console.log(`Daemon ${target.id} is already dead. Cleaning up.`);
+    try { fs.unlinkSync(path.join(daemonsDir, `${target.id}.json`)); } catch {}
     return;
   }
 
   try {
     process.kill(target.pid, "SIGTERM");
-    console.log(`\x1b[33mStopped\x1b[0m hive ${target.id} (pid ${target.pid})`);
+    console.log(`\x1b[33mStopped\x1b[0m daemon ${target.id} (pid ${target.pid})`);
   } catch (err) {
-    console.error(`Failed to stop hive ${target.id}: ${err.message}`);
+    console.error(`Failed to stop daemon ${target.id}: ${err.message}`);
     process.exit(1);
   }
 }
@@ -255,7 +255,7 @@ function stopHive(idOrPort) {
 // --- Migrate command ---
 
 function runMigrate(restArgs) {
-  const { migrate, dryRun } = require(path.join(appRoot, "packages", "core", "dist", "src", "hive-migrate.js"));
+  const { migrate, dryRun } = require(path.join(appRoot, "packages", "core", "dist", "src", "project", "migrate.js"));
 
   const isDryRun = restArgs.includes("--dry-run");
   const force = restArgs.includes("--force");

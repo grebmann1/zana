@@ -3,7 +3,7 @@
 // Config: "statusLine": { "type": "command", "command": "node <path>/statusline.js" }
 const fs = require("node:fs"), path = require("node:path");
 const http = require("node:http"), os = require("node:os");
-const DAEMONS_DIR = path.join(os.homedir(), ".zana", "hives");
+const DAEMONS_DIR = path.join(os.homedir(), ".zana", "daemons");
 const STALE_MS = 30_000, HTTP_TIMEOUT = 500;
 
 function listAliveHives() {
@@ -40,7 +40,7 @@ async function main() {
   let agents = 0, tickets = 0, gotData = false;
   await Promise.all(hives.map(async h => {
     const [a, t] = await Promise.all([
-      httpGet(h.port, "/hivemind/agents"),
+      httpGet(h.port, "/swarm/agents"),
       httpGet(h.port, "/tickets?status=in_progress"),
     ]);
     if (Array.isArray(a)) { agents += a.length; gotData = true; }
