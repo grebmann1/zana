@@ -1335,23 +1335,23 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Workflow tools
     case "zana_workflow_run": {
-      const workflowEngine = require("@zana/core").workflowEngine;
-      const skillStoreWf = require("@zana/core").settings.skillStore;
+      const workflowEngine = require("@zana/work").scheduling.workflowEngine;
+      const skillStoreWf = require("@zana/extras").settings.skillStore;
       const skill = skillStoreWf.getSkill(args.skillId);
       if (!skill || skill.type !== "workflow") return { error: "workflow skill not found" };
       let context: any = {};
       if (args.ticketId) {
-        const ticketService = require("@zana/core").ticketService;
+        const ticketService = require("@zana/work").tickets.service;
         context.ticket = ticketService.getTicket(args.ticketId);
       }
       return await workflowEngine.executeWorkflow(skill, context);
     }
     case "zana_workflow_list_runs": {
-      const workflowEngine = require("@zana/core").workflowEngine;
+      const workflowEngine = require("@zana/work").scheduling.workflowEngine;
       return workflowEngine.listRuns({ status: args.status });
     }
     case "zana_workflow_get_run": {
-      const workflowEngine = require("@zana/core").workflowEngine;
+      const workflowEngine = require("@zana/work").scheduling.workflowEngine;
       const run = workflowEngine.loadRun(args.runId);
       if (!run) return { error: "run not found" };
       return run;

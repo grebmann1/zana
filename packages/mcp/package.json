@@ -17,7 +17,11 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana/core": "0.1.0"
+    "@zana/core": "0.1.0",
+    "@zana/work": "*",
+    "@zana/extras": "*",
+    "@zana/intelligence": "*",
+    "@zana/swarm": "*"
   },
   "files": [
     "dist/",
