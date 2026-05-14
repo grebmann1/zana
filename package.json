@@ -5,7 +5,7 @@
   "author": "Zana",
   "main": "packages/mcp/dist/src/mcp-server.js",
   "bin": {
-    "zana": "./dist/bin/hive.js"
+    "zana": "./dist/bin/zana.js"
   },
   "private": true,
   "engines": {
@@ -23,8 +23,8 @@
     "build:runtime:bin": "tsc -p tsconfig.bin.build.json",
     "build:runtime:scripts": "tsc -p tsconfig.scripts.build.json",
     "dev:web": "npm run dev --workspace=@zana/ui",
-    "dev:viewer": "NEXT_PUBLIC_HIVE_DAEMON_URL=http://127.0.0.1:47402 npm run dev --workspace=@zana/ui",
-    "start:viewer": "NEXT_PUBLIC_HIVE_DAEMON_URL=http://127.0.0.1:47402 npm run start --workspace=@zana/ui",
+    "dev:viewer": "NEXT_PUBLIC_ZANA_DAEMON_URL=http://127.0.0.1:47402 npm run dev --workspace=@zana/ui",
+    "start:viewer": "NEXT_PUBLIC_ZANA_DAEMON_URL=http://127.0.0.1:47402 npm run start --workspace=@zana/ui",
     "dev": "npm run dev:web",
     "build:web": "npm run build --workspace=@zana/ui",
     "start:web": "npm run start --workspace=@zana/ui",

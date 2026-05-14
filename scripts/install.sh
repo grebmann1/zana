@@ -91,7 +91,7 @@ check_requirements() {
 }
 
 resolve_project_root() {
-  if [ -f "${PROJECT_ROOT}/package.json" ] && [ -f "${PROJECT_ROOT}/bin/hive.ts" ]; then
+  if [ -f "${PROJECT_ROOT}/package.json" ] && [ -f "${PROJECT_ROOT}/bin/zana.ts" ]; then
     return
   fi
 

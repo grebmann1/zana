@@ -23,14 +23,14 @@
       "lastRun": "2026-05-14T14:29:01.665Z"
     },
     "optimize": {
-      "runCount": 4,
-      "successCount": 4,
+      "runCount": 5,
+      "successCount": 5,
       "failureCount": 0,
-      "averageDurationMs": 188915.75,
-      "isRunning": true,
+      "averageDurationMs": 213652.8,
+      "isRunning": false,
       "nextRun": "2026-05-14T14:40:08.671Z",
       "lastStartedAt": "2026-05-14T14:29:01.666Z",
-      "lastRun": "2026-05-14T14:10:08.674Z"
+      "lastRun": "2026-05-14T14:34:14.267Z"
     },
     "consolidate": {
       "runCount": 3,
@@ -136,5 +136,5 @@
       }
     ]
   },
-  "savedAt": "2026-05-14T14:32:39.904Z"
+  "savedAt": "2026-05-14T14:34:14.267Z"
 }
