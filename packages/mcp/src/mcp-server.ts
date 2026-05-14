@@ -21,6 +21,13 @@ console.log = (...args) => {
   }
 };
 
+// Lazy getters for cross-package modules — Node's require cache makes repeat calls cheap.
+// Do NOT memoize into module-scope vars; that defeats the cycle break.
+function _workflowEngine() { return require("@zana/work").scheduling.workflowEngine; }
+function _ticketServiceMcp() { return require("@zana/work").tickets.service; }
+function _skillStoreMcp() { return require("@zana/extras").settings.skillStore; }
+function _moduleConfigMcp() { return require("@zana/core").modules.config; }
+
 const MCP_MAX_BUFFER_BYTES = 10 * 1024 * 1024; // 10 MB stdin buffer cap
 
 const ZANA_MASTER_MODE = process.env.ZANA_MASTER_MODE === "true";
@@ -1229,16 +1236,14 @@ async function handleToolCall(name, args, callerAgentId) {
       return localDaemon.backgroundWorkers.list();
     }
     case "zana_module_config_list": {
-      const moduleConfig = require("@zana/core").moduleConfig;
-      const cfg = moduleConfig.get();
+      const cfg = _moduleConfigMcp().get();
       return cfg.modules || {};
     }
     case "zana_module_config_get": {
-      const moduleConfig = require("@zana/core").moduleConfig;
-      return moduleConfig.getModuleConfig(args.moduleId);
+      return _moduleConfigMcp().getModuleConfig(args.moduleId);
     }
     case "zana_module_config_set": {
-      const moduleConfig = require("@zana/core").moduleConfig;
+      const moduleConfig = _moduleConfigMcp();
       const current = moduleConfig.getModuleConfig(args.moduleId);
       const config = { ...(current.config || {}), [args.key]: args.value };
       moduleConfig.setModuleConfig(args.moduleId, { ...current, config });
@@ -1335,24 +1340,19 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Workflow tools
     case "zana_workflow_run": {
-      const workflowEngine = require("@zana/work").scheduling.workflowEngine;
-      const skillStoreWf = require("@zana/extras").settings.skillStore;
-      const skill = skillStoreWf.getSkill(args.skillId);
+      const skill = _skillStoreMcp().getSkill(args.skillId);
       if (!skill || skill.type !== "workflow") return { error: "workflow skill not found" };
       let context: any = {};
       if (args.ticketId) {
-        const ticketService = require("@zana/work").tickets.service;
-        context.ticket = ticketService.getTicket(args.ticketId);
+        context.ticket = _ticketServiceMcp().getTicket(args.ticketId);
       }
-      return await workflowEngine.executeWorkflow(skill, context);
+      return await _workflowEngine().executeWorkflow(skill, context);
     }
     case "zana_workflow_list_runs": {
-      const workflowEngine = require("@zana/work").scheduling.workflowEngine;
-      return workflowEngine.listRuns({ status: args.status });
+      return _workflowEngine().listRuns({ status: args.status });
     }
     case "zana_workflow_get_run": {
-      const workflowEngine = require("@zana/work").scheduling.workflowEngine;
-      const run = workflowEngine.loadRun(args.runId);
+      const run = _workflowEngine().loadRun(args.runId);
       if (!run) return { error: "run not found" };
       return run;
     }

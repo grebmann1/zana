@@ -23,6 +23,15 @@ const swarmPkg = require("@zana/swarm");
 const swarmRouter = swarmPkg.router;
 const swarmEvents = swarmPkg.events;
 const swarmSpawner = swarmPkg.spawner;
+
+// Lazy getters for cross-package modules — Node's require cache makes repeat calls cheap.
+// Do NOT memoize into module-scope vars; that defeats the cycle break.
+function _ticketService() { return require("@zana/work").tickets.service; }
+function _ticketStore() { return require("@zana/work").tickets.store; }
+function _schedulerService() { return require("@zana/work").scheduling.service; }
+function _checkpointStore() { return require("@zana/work").runs.checkpoint.store; }
+function _checkpointResume() { return require("@zana/work").runs.checkpoint.resume; }
+function _artifactStore() { return require("@zana/work").runs.artifacts; }
 import * as persistence from "../persistence";
 import { bus, EVENTS } from "../events/bus";
 import { MAX_CONCURRENT_AGENTS } from "../config";
@@ -469,49 +478,40 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
 
     // --- Ticketing ---
     case "ticket_create": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.createTicket(params);
+      return _ticketService().createTicket(params);
     }
     case "ticket_list": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.listTickets(params);
+      return _ticketService().listTickets(params);
     }
     case "ticket_get": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.getTicket(params.ticketId);
+      return _ticketService().getTicket(params.ticketId);
     }
     case "ticket_claim": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.claimTicket(params.ticketId, params.agentId, params.agentName, params.profileId);
+      return _ticketService().claimTicket(params.ticketId, params.agentId, params.agentName, params.profileId);
     }
     case "ticket_update_status": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.updateStatus(params.ticketId, params.status, params.updatedBy);
+      return _ticketService().updateStatus(params.ticketId, params.status, params.updatedBy);
     }
     case "ticket_comment": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.addComment(params.ticketId, params.authorId, params.authorName, params.body);
+      return _ticketService().addComment(params.ticketId, params.authorId, params.authorName, params.body);
     }
     case "ticket_complete": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.completeTicket(params.ticketId, params.resultSummary, params.completedBy);
+      return _ticketService().completeTicket(params.ticketId, params.resultSummary, params.completedBy);
     }
     case "ticket_edit": {
-      const ticketService = require("@zana/work").tickets.service;
       const { ticketId, updatedBy, ...fields } = params;
       // Remove undefined values
       const cleanFields = Object.fromEntries(
         Object.entries(fields).filter(([_, v]) => v !== undefined)
       );
-      return ticketService.updateTicket(ticketId, cleanFields, updatedBy);
+      return _ticketService().updateTicket(ticketId, cleanFields, updatedBy);
     }
     case "ticket_add_to_sprint": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.addTicketToSprint(params.ticketId, params.sprintId);
+      return _ticketService().addTicketToSprint(params.ticketId, params.sprintId);
     }
     case "ticket_update": {
-      const ticketService = require("@zana/work").tickets.service;
-      const ticketStore = require("@zana/work").tickets.store;
+      const ticketService = _ticketService();
+      const ticketStore = _ticketStore();
       const fs = require("node:fs");
       const path = require("node:path");
       const workspaceContext = require("../project/workspace-context");
@@ -559,88 +559,71 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return { ok: true, ticketId: params.ticketId };
     }
     case "sprint_list": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.listSprints(params);
+      return _ticketService().listSprints(params);
     }
     case "sprint_board": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.getSprintBoard(params.sprintId);
+      return _ticketService().getSprintBoard(params.sprintId);
     }
     case "sprint_create": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.createSprint(params);
+      return _ticketService().createSprint(params);
     }
     case "sprint_start": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.startSprint(params.sprintId);
+      return _ticketService().startSprint(params.sprintId);
     }
     case "sprint_end": {
-      const ticketService = require("@zana/work").tickets.service;
-      return ticketService.endSprint(params.sprintId);
+      return _ticketService().endSprint(params.sprintId);
     }
 
     // --- Artifacts ---
     case "artifact_create": {
-      const artifactStore = require("@zana/work").runs.artifacts;
-      return artifactStore.createArtifact(params);
+      return _artifactStore().createArtifact(params);
     }
     case "artifact_list": {
-      const artifactStore = require("@zana/work").runs.artifacts;
-      return artifactStore.listArtifacts(params);
+      return _artifactStore().listArtifacts(params);
     }
     case "artifact_read": {
-      const artifactStore = require("@zana/work").runs.artifacts;
-      const artifact = artifactStore.getArtifact(params.artifactId);
+      const artifact = _artifactStore().getArtifact(params.artifactId);
       if (!artifact) return { error: `artifact not found: ${params.artifactId}` };
       return artifact;
     }
     case "artifact_update": {
-      const artifactStore = require("@zana/work").runs.artifacts;
       const { artifactId, ...fields } = params;
-      const updated = artifactStore.updateArtifact(artifactId, fields);
+      const updated = _artifactStore().updateArtifact(artifactId, fields);
       if (!updated) return { error: `artifact not found: ${artifactId}` };
       return updated;
     }
     case "artifact_delete": {
-      const artifactStore = require("@zana/work").runs.artifacts;
-      return { ok: artifactStore.deleteArtifact(params.artifactId) };
+      return { ok: _artifactStore().deleteArtifact(params.artifactId) };
     }
 
     // --- Scheduler ---
     case "schedule_create": {
-      const schedulerService = require("@zana/work").scheduling.service;
-      return schedulerService.createSchedule(params);
+      return _schedulerService().createSchedule(params);
     }
     case "schedule_list": {
-      const schedulerService = require("@zana/work").scheduling.service;
-      return schedulerService.listSchedules();
+      return _schedulerService().listSchedules();
     }
     case "schedule_get": {
-      const schedulerService = require("@zana/work").scheduling.service;
+      const schedulerService = _schedulerService();
       const schedule = schedulerService.getSchedule(params.scheduleId);
       const history = schedulerService.getRunHistory(params.scheduleId);
       return { schedule, history };
     }
     case "schedule_update": {
-      const schedulerService = require("@zana/work").scheduling.service;
       const { id, ...fields } = params;
-      return schedulerService.updateSchedule(id, fields);
+      return _schedulerService().updateSchedule(id, fields);
     }
     case "schedule_delete": {
-      const schedulerService = require("@zana/work").scheduling.service;
-      return { ok: schedulerService.deleteSchedule(params.id) };
+      return { ok: _schedulerService().deleteSchedule(params.id) };
     }
     case "schedule_enable": {
-      const schedulerService = require("@zana/work").scheduling.service;
-      return schedulerService.enableSchedule(params.id);
+      return _schedulerService().enableSchedule(params.id);
     }
     case "schedule_disable": {
-      const schedulerService = require("@zana/work").scheduling.service;
-      return schedulerService.disableSchedule(params.id);
+      return _schedulerService().disableSchedule(params.id);
     }
     case "schedule_trigger": {
-      const schedulerService = require("@zana/work").scheduling.service;
-      return schedulerService.triggerSchedule(params.id);
+      return _schedulerService().triggerSchedule(params.id);
     }
 
     // --- Event Bus ---
@@ -660,23 +643,19 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
 
     // --- Checkpoint ---
     case "checkpoint_save": {
-      const checkpointStore = require("@zana/work").runs.checkpoint.store;
-      const cp = checkpointStore.save(params);
+      const cp = _checkpointStore().save(params);
       return { ok: true, checkpointId: cp.id };
     }
     case "checkpoint_list": {
-      const checkpointStore = require("@zana/work").runs.checkpoint.store;
-      return checkpointStore.list(params);
+      return _checkpointStore().list(params);
     }
     case "checkpoint_get": {
-      const checkpointStore = require("@zana/work").runs.checkpoint.store;
-      const cp = checkpointStore.load(params.checkpointId);
+      const cp = _checkpointStore().load(params.checkpointId);
       if (!cp) return { error: "checkpoint not found" };
       return cp;
     }
     case "checkpoint_resume": {
-      const checkpointResume = require("@zana/work").runs.checkpoint.resume;
-      return await checkpointResume.resume(params.checkpointId, { spawnHeadlessAgent, getAgent }, profileStore);
+      return await _checkpointResume().resume(params.checkpointId, { spawnHeadlessAgent, getAgent }, profileStore);
     }
 
     // --- Hive Mind P2P ---
