@@ -104,3 +104,17 @@ Given the user's task in `$ARGUMENTS`:
 ## Now execute the following task:
 
 $ARGUMENTS
+
+## Master Mode (`ZANA_MASTER_MODE`)
+
+The six `zana_swarm_*` tools (`zana_swarm_spawn`, `zana_swarm_list`, `zana_swarm_instruct`, `zana_swarm_stop`, `zana_swarm_broadcast`, `zana_swarm_poll_events`) are gated behind a master-mode flag and are not registered by default. They appear only when the Zana MCP server is started with `ZANA_MASTER_MODE=true` in its environment.
+
+Enable master mode when registering the MCP server, e.g. via the `env` block of your `claude mcp add` invocation:
+
+```bash
+claude mcp add zana \
+  --env ZANA_MASTER_MODE=true \
+  -- npx -y @zana/mcp
+```
+
+Use this for advanced multi-daemon setups where a single Zana process should be able to spawn and coordinate child Zana processes (each with its own orchestrator and worker pool). For ordinary single-daemon orchestration, leave master mode off — the in-process agent tools are sufficient.
