@@ -30,7 +30,6 @@
   "files": [
     "dist/",
     "profiles/",
-    "skills/",
     "modules/"
   ],
   "keywords": ["claude", "agent", "orchestrator", "mcp", "multi-agent"],
