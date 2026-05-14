@@ -1,0 +1,140 @@
+{
+  "running": true,
+  "startedAt": "2026-05-14T13:12:15.328Z",
+  "workers": {
+    "map": {
+      "runCount": 4,
+      "successCount": 4,
+      "failureCount": 0,
+      "averageDurationMs": 2.75,
+      "isRunning": false,
+      "nextRun": "2026-05-14T14:27:15.328Z",
+      "lastStartedAt": "2026-05-14T14:11:38.677Z",
+      "lastRun": "2026-05-14T14:11:38.679Z"
+    },
+    "audit": {
+      "runCount": 6,
+      "successCount": 6,
+      "failureCount": 0,
+      "averageDurationMs": 65901.5,
+      "isRunning": false,
+      "nextRun": "2026-05-14T14:17:04.591Z",
+      "lastStartedAt": "2026-05-14T14:11:38.712Z",
+      "lastRun": "2026-05-14T14:13:01.983Z"
+    },
+    "optimize": {
+      "runCount": 4,
+      "successCount": 4,
+      "failureCount": 0,
+      "averageDurationMs": 188915.75,
+      "isRunning": false,
+      "nextRun": "2026-05-14T14:25:08.674Z",
+      "lastStartedAt": "2026-05-14T14:04:23.980Z",
+      "lastRun": "2026-05-14T14:10:08.674Z"
+    },
+    "consolidate": {
+      "runCount": 2,
+      "successCount": 2,
+      "failureCount": 0,
+      "averageDurationMs": 2,
+      "isRunning": false,
+      "nextRun": "2026-05-14T14:18:15.326Z",
+      "lastStartedAt": "2026-05-14T13:48:15.322Z",
+      "lastRun": "2026-05-14T13:48:15.325Z"
+    },
+    "testgaps": {
+      "runCount": 2,
+      "successCount": 2,
+      "failureCount": 0,
+      "averageDurationMs": 175763,
+      "isRunning": true,
+      "nextRun": "2026-05-14T14:22:52.661Z",
+      "lastStartedAt": "2026-05-14T14:11:38.680Z",
+      "lastRun": "2026-05-14T13:51:29.509Z"
+    },
+    "predict": {
+      "runCount": 0,
+      "successCount": 0,
+      "failureCount": 0,
+      "averageDurationMs": 0,
+      "isRunning": false
+    },
+    "document": {
+      "runCount": 0,
+      "successCount": 0,
+      "failureCount": 0,
+      "averageDurationMs": 0,
+      "isRunning": false
+    }
+  },
+  "config": {
+    "autoStart": false,
+    "logDir": "/Users/grebmann/Documents/claude-workspace/zana/.claude-flow/logs",
+    "stateFile": "/Users/grebmann/Documents/claude-workspace/zana/.claude-flow/daemon-state.json",
+    "maxConcurrent": 2,
+    "workerTimeoutMs": 960000,
+    "resourceThresholds": {
+      "maxCpuLoad": 8,
+      "minFreeMemoryPercent": 5
+    },
+    "workers": [
+      {
+        "type": "map",
+        "intervalMs": 900000,
+        "offsetMs": 0,
+        "priority": "normal",
+        "description": "Codebase mapping",
+        "enabled": true
+      },
+      {
+        "type": "audit",
+        "intervalMs": 600000,
+        "offsetMs": 120000,
+        "priority": "critical",
+        "description": "Security analysis",
+        "enabled": true
+      },
+      {
+        "type": "optimize",
+        "intervalMs": 900000,
+        "offsetMs": 240000,
+        "priority": "high",
+        "description": "Performance optimization",
+        "enabled": true
+      },
+      {
+        "type": "consolidate",
+        "intervalMs": 1800000,
+        "offsetMs": 360000,
+        "priority": "low",
+        "description": "Memory consolidation",
+        "enabled": true
+      },
+      {
+        "type": "testgaps",
+        "intervalMs": 1200000,
+        "offsetMs": 480000,
+        "priority": "normal",
+        "description": "Test coverage analysis",
+        "enabled": true
+      },
+      {
+        "type": "predict",
+        "intervalMs": 600000,
+        "offsetMs": 0,
+        "priority": "low",
+        "description": "Predictive preloading",
+        "enabled": false
+      },
+      {
+        "type": "document",
+        "intervalMs": 3600000,
+        "offsetMs": 0,
+        "priority": "low",
+        "description": "Auto-documentation",
+        "enabled": false
+      }
+    ]
+  },
+  "savedAt": "2026-05-14T14:13:01.983Z"
+}

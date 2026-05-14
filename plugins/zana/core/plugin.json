@@ -1,0 +1,28 @@
+{
+  "id": "zana",
+  "name": "zana",
+  "version": "0.1.0",
+  "description": "Zana — multi-agent orchestrator for Claude Code. Spawn teams of agents, coordinate work through tickets and sprints, run goal-driven autopilot loops. Use /zana to orchestrate.",
+  "author": {
+    "name": "Guillaume Rebmann",
+    "url": "https://github.com/grebmann1"
+  },
+  "repository": "https://github.com/grebmann1/zana",
+  "license": "MIT",
+  "keywords": [
+    "hive",
+    "multi-agent",
+    "orchestrator",
+    "mcp",
+    "claude-code",
+    "swarm",
+    "agents"
+  ],
+  "category": "development",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "main": "index.js"
+}

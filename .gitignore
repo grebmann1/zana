@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+dist/
+*.dmg
+*.zip
+.DS_Store
+.env
+.env.local
+*.tsbuildinfo
+release/

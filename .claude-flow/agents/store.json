@@ -1,0 +1,44 @@
+{
+  "agents": {
+    "agent-1778766232544-7uklwl": {
+      "agentId": "agent-1778766232544-7uklwl",
+      "agentType": "code-analyzer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "haiku"
+      },
+      "createdAt": "2026-05-14T13:43:52.544Z",
+      "model": "haiku",
+      "modelRoutedBy": "explicit"
+    },
+    "agent-1778766233123-xg4ria": {
+      "agentId": "agent-1778766233123-xg4ria",
+      "agentType": "backend-dev",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "sonnet"
+      },
+      "createdAt": "2026-05-14T13:43:53.123Z",
+      "model": "sonnet",
+      "modelRoutedBy": "explicit"
+    },
+    "agent-1778766233184-x1m5bz": {
+      "agentId": "agent-1778766233184-x1m5bz",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "sonnet"
+      },
+      "createdAt": "2026-05-14T13:43:53.184Z",
+      "model": "sonnet",
+      "modelRoutedBy": "explicit"
+    }
+  },
+  "version": "3.0.0"
+}

@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "moduleDetection": "force",
+    "useUnknownInCatchVariables": false,
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": [
+    "bin/**/*.ts",
+    "packages/core/src/**/*.ts",
+    "packages/core/bin/**/*.ts",
+    "packages/core/modules/**/*.ts",
+    "packages/mcp/src/**/*.ts",
+    "packages/mcp/bin/**/*.ts"
+  ]
+}

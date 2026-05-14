@@ -1,0 +1,39 @@
+{
+  "name": "@zana/core",
+  "version": "0.1.0",
+  "description": "Zana engine — multi-agent orchestration, scheduling, persistence, and module system. Used by @zana/mcp.",
+  "main": "dist/src/index.js",
+  "bin": {
+    "hive-daemon": "./dist/bin/hive-daemon.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/bin/hive-daemon.js",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "minimatch": "^10.0.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.0.0",
+    "node-pty": "^1.1.0"
+  },
+  "files": [
+    "dist/",
+    "profiles/",
+    "skills/",
+    "modules/"
+  ],
+  "keywords": ["claude", "hive", "agent", "orchestrator", "mcp", "multi-agent"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
+}

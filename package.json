@@ -1,0 +1,46 @@
+{
+  "name": "zana",
+  "version": "0.1.0",
+  "description": "Zana — multi-agent orchestrator for Claude Code. Manage your workers from a unified dashboard.",
+  "author": "Zana",
+  "main": "packages/mcp/dist/src/mcp-server.js",
+  "bin": {
+    "zana": "./dist/bin/hive.js"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "install:bootstrap": "bash ./scripts/install.sh",
+    "clean:runtime": "rm -rf dist packages/core/dist packages/mcp/dist",
+    "build:runtime": "npm run clean:runtime && npm run build:runtime:core && npm run build:runtime:mcp && npm run build:runtime:bin && npm run build:runtime:scripts && node dist/scripts/copy-runtime-assets.js",
+    "build:runtime:core": "npm run build --workspace=@zana/core",
+    "build:runtime:mcp": "npm run build --workspace=@zana/mcp",
+    "build:runtime:bin": "tsc -p tsconfig.bin.build.json",
+    "build:runtime:scripts": "tsc -p tsconfig.scripts.build.json",
+    "dev:web": "npm run dev --workspace=@zana/ui",
+    "dev:viewer": "NEXT_PUBLIC_HIVE_DAEMON_URL=http://127.0.0.1:47402 npm run dev --workspace=@zana/ui",
+    "start:viewer": "NEXT_PUBLIC_HIVE_DAEMON_URL=http://127.0.0.1:47402 npm run start --workspace=@zana/ui",
+    "dev": "npm run dev:web",
+    "build:web": "npm run build --workspace=@zana/ui",
+    "start:web": "npm run start --workspace=@zana/ui",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck:runtime && npm run typecheck --workspace=@zana/ui",
+    "typecheck:runtime": "tsc -p tsconfig.runtime.json",
+    "typecheck:runtime:strict": "tsc -p tsconfig.runtime.strict.json",
+    "docs": "cd docs && npm start",
+    "docs:build": "cd docs && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^4.1.5"
+  }
+}

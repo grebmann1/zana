@@ -1,0 +1,34 @@
+{
+  "name": "@zana/mcp",
+  "version": "0.1.0",
+  "description": "Zana MCP server — exposes hive orchestration as MCP tools for Claude Code and other AI tools. Install this to use /zana in any project.",
+  "main": "dist/src/mcp-server.js",
+  "bin": {
+    "zana-mcp-server": "./dist/bin/zana-mcp-server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "start": "node dist/bin/zana-mcp-server.js",
+    "prepublishOnly": "npm run build && node -c dist/src/mcp-server.js",
+    "postinstall": "node dist/bin/setup.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@zana/core": "0.1.0"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "keywords": ["claude", "hive", "mcp", "agent", "orchestrator", "multi-agent", "claude-code"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
+}

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "moduleDetection": "force",
+    "useUnknownInCatchVariables": false,
+    "types": ["node"]
+  },
+  "include": [
+    "bin/hive.ts",
+    "packages/core/bin/hive-daemon.ts",
+    "packages/mcp/src/mcp-server.ts"
+  ]
+}
