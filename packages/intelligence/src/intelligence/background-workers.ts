@@ -4,13 +4,14 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ZANA_DIR } from "../config";
-import * as eventBus from "../events/service";
-import * as agentManager from "../agents/manager";
-import * as workspaceContext from "../project/workspace-context";
-import * as profileStore from "../agents/profile-store";
+function _core() { return require("@zana/core"); }
+function ZANA_DIR() { return _core().config.ZANA_DIR; }
+const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
+const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
+const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
+const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
 
-const WORKERS_PATH = path.join(ZANA_DIR, "workers.json");
+function WORKERS_PATH() { return path.join(ZANA_DIR(), "workers.json"); }
 const MAX_GLOBAL_CONCURRENT = 3;
 const MAX_HISTORY = 50;
 const CRON_INTERVAL = 60000;
@@ -59,8 +60,8 @@ function matchesCron(expr) {
 // Persistence
 function loadConfig() {
   try {
-    if (fs.existsSync(WORKERS_PATH)) {
-      const d = JSON.parse(fs.readFileSync(WORKERS_PATH, "utf8"));
+    if (fs.existsSync(WORKERS_PATH())) {
+      const d = JSON.parse(fs.readFileSync(WORKERS_PATH(), "utf8"));
       return Array.isArray(d) ? d : [];
     }
   } catch (e) { console.warn("[background-workers] load error:", e.message); }
@@ -68,13 +69,14 @@ function loadConfig() {
 }
 function saveConfig() {
   try {
-    const dir = path.dirname(WORKERS_PATH);
+    const workersPath = WORKERS_PATH();
+    const dir = path.dirname(workersPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const data = Array.from(workers.values()).map((w) => ({
       id: w.id, name: w.name, profileId: w.profileId, trigger: w.trigger,
       promptTemplate: w.promptTemplate, enabled: w.enabled, maxConcurrent: w.maxConcurrent,
     }));
-    fs.writeFileSync(WORKERS_PATH, JSON.stringify(data, null, 2));
+    fs.writeFileSync(workersPath, JSON.stringify(data, null, 2));
   } catch (e) { console.warn("[background-workers] save error:", e.message); }
 }
 

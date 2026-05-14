@@ -11,6 +11,15 @@ module.exports = {
   get plugins() {
     return require("@zana/extras").plugins;
   },
+  get intelligence() {
+    const i = require("@zana/intelligence");
+    return {
+      taskRouter: i.taskRouter,
+      goap: i.goapPlanner,
+      vectorMemory: i.vectorMemory,
+      backgroundWorkers: i.backgroundWorkers,
+    };
+  },
 
   project: {
     init: require("./project/init"),
@@ -61,12 +70,6 @@ module.exports = {
     service: require("./scheduling/service"),
     store: require("./scheduling/store"),
     workflow: require("./scheduling/workflow-engine"),
-  },
-  intelligence: {
-    taskRouter: require("./intelligence/task-router"),
-    goap: require("./intelligence/goap-planner"),
-    vectorMemory: require("./intelligence/vector-memory"),
-    backgroundWorkers: require("./intelligence/background-workers"),
   },
   hooks: {
     server: require("./hooks/server"),

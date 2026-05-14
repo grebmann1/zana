@@ -1,14 +1,15 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ZANA_DIR } from "../config";
-import * as eventBus from "../events/service";
+function _core() { return require("@zana/core"); }
+function ZANA_DIR() { return _core().config.ZANA_DIR; }
+const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MEMORY_DIR = path.join(ZANA_DIR, "memory");
-const VECTORS_PATH = path.join(MEMORY_DIR, "vectors.json");
-const VOCAB_PATH = path.join(MEMORY_DIR, "vocabulary.json");
+function MEMORY_DIR() { return path.join(ZANA_DIR(), "memory"); }
+function VECTORS_PATH() { return path.join(MEMORY_DIR(), "vectors.json"); }
+function VOCAB_PATH() { return path.join(MEMORY_DIR(), "vocabulary.json"); }
 
 const TTL = { working: 60 * 60 * 1000, episodic: 7 * 24 * 60 * 60 * 1000, semantic: Infinity };
 const SAVE_DEBOUNCE_MS = 5000;
@@ -104,13 +105,13 @@ function cosineSimilarity(a, b) {
 
 function loadFromDisk() {
   try {
-    if (fs.existsSync(VECTORS_PATH)) {
-      entries = JSON.parse(fs.readFileSync(VECTORS_PATH, "utf8"));
+    if (fs.existsSync(VECTORS_PATH())) {
+      entries = JSON.parse(fs.readFileSync(VECTORS_PATH(), "utf8"));
     }
   } catch { entries = []; }
   try {
-    if (fs.existsSync(VOCAB_PATH)) {
-      vocabulary = JSON.parse(fs.readFileSync(VOCAB_PATH, "utf8"));
+    if (fs.existsSync(VOCAB_PATH())) {
+      vocabulary = JSON.parse(fs.readFileSync(VOCAB_PATH(), "utf8"));
     }
   } catch { vocabulary = {}; }
 }
@@ -122,15 +123,15 @@ function scheduleSave() {
 
 function flushToDisk() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-  fs.mkdirSync(MEMORY_DIR, { recursive: true });
-  fs.writeFileSync(VECTORS_PATH, JSON.stringify(entries), "utf8");
-  fs.writeFileSync(VOCAB_PATH, JSON.stringify(vocabulary), "utf8");
+  fs.mkdirSync(MEMORY_DIR(), { recursive: true });
+  fs.writeFileSync(VECTORS_PATH(), JSON.stringify(entries), "utf8");
+  fs.writeFileSync(VOCAB_PATH(), JSON.stringify(vocabulary), "utf8");
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function init() {
-  fs.mkdirSync(MEMORY_DIR, { recursive: true });
+  fs.mkdirSync(MEMORY_DIR(), { recursive: true });
   loadFromDisk();
   if (Object.keys(vocabulary).length === 0 && entries.length > 0) rebuildVocabulary();
 

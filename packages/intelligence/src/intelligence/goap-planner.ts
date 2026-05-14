@@ -1,7 +1,9 @@
 import * as crypto from "node:crypto";
-import * as agentManager from "../agents/manager";
-import * as profileStore from "../agents/profile-store";
-import { bus, EVENTS } from "../events/bus";
+function _core() { return require("@zana/core"); }
+const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
+const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
+const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
+const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.bus.EVENTS[p] });
 
 const plans = new Map();
 const actionRegistry = new Map();

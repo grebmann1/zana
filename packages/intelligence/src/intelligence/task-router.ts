@@ -1,14 +1,15 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ZANA_DIR } from "../config";
-import * as eventBus from "../events/service";
-import * as profileStore from "../agents/profile-store";
+function _core() { return require("@zana/core"); }
+function ZANA_DIR() { return _core().config.ZANA_DIR; }
+const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
+const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const WEIGHTS = { label: 0.35, keyword: 0.25, successRate: 0.25, recency: 0.15 };
 const HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const HISTORY_PATH = path.join(ZANA_DIR, "routing-history.json");
+function HISTORY_PATH() { return path.join(ZANA_DIR(), "routing-history.json"); }
 
 const STOPWORDS = new Set([
   "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
@@ -30,8 +31,8 @@ let initialized = false;
 function initSqlite() {
   try {
     const Database = require("better-sqlite3");
-    const dbPath = path.join(ZANA_DIR, "routing.db");
-    fs.mkdirSync(ZANA_DIR, { recursive: true });
+    const dbPath = path.join(ZANA_DIR(), "routing.db");
+    fs.mkdirSync(ZANA_DIR(), { recursive: true });
     db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
     db.exec(`
@@ -63,9 +64,9 @@ function loadOutcomes() {
       keywords: JSON.parse(r.keywords || "[]"),
       createdAt: r.created_at,
     }));
-  } else if (fs.existsSync(HISTORY_PATH)) {
+  } else if (fs.existsSync(HISTORY_PATH())) {
     try {
-      outcomes = JSON.parse(fs.readFileSync(HISTORY_PATH, "utf8"));
+      outcomes = JSON.parse(fs.readFileSync(HISTORY_PATH(), "utf8"));
     } catch {
       outcomes = [];
     }
@@ -87,8 +88,8 @@ function persistOutcome(outcome) {
       outcome.createdAt
     );
   } else {
-    fs.mkdirSync(ZANA_DIR, { recursive: true });
-    fs.writeFileSync(HISTORY_PATH, JSON.stringify(outcomes, null, 2), "utf8");
+    fs.mkdirSync(ZANA_DIR(), { recursive: true });
+    fs.writeFileSync(HISTORY_PATH(), JSON.stringify(outcomes, null, 2), "utf8");
   }
 }
 
@@ -283,8 +284,8 @@ export function reset() {
   outcomes = [];
   if (db) {
     db.exec("DELETE FROM routing_outcomes");
-  } else if (fs.existsSync(HISTORY_PATH)) {
-    fs.unlinkSync(HISTORY_PATH);
+  } else if (fs.existsSync(HISTORY_PATH())) {
+    fs.unlinkSync(HISTORY_PATH());
   }
 }
 

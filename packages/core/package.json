@@ -18,7 +18,8 @@
   "dependencies": {
     "minimatch": "^10.0.0",
     "@zana/swarm": "*",
-    "@zana/extras": "*"
+    "@zana/extras": "*",
+    "@zana/intelligence": "*"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0",

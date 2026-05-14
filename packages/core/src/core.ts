@@ -25,10 +25,11 @@ import * as runTracker from "./runs/tracker";
 import * as ticketWatcher from "./tickets/watcher";
 import * as healthMonitor from "./api/health-monitor";
 import * as workspaceContext from "./project/workspace-context";
-import * as taskRouter from "./intelligence/task-router";
-import * as vectorMemory from "./intelligence/vector-memory";
-import * as backgroundWorkers from "./intelligence/background-workers";
-import * as goapPlanner from "./intelligence/goap-planner";
+const _intel = require("@zana/intelligence");
+const taskRouter = _intel.taskRouter;
+const vectorMemory = _intel.vectorMemory;
+const backgroundWorkers = _intel.backgroundWorkers;
+const goapPlanner = _intel.goapPlanner;
 import * as moduleLoader from "./modules/loader";
 
 export async function init({ workspace, headless = false, onHook, preferredPort, skipApiServer = false }) {
