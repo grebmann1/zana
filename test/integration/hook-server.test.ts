@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
-import { startHookServer, setHivemindModules } from "@zana/core/src/hook-server.ts";
+import { startHookServer, setHivemindModules } from "@zana/server/src/hooks/server.ts";
 
 let server;
 let port;
@@ -63,9 +63,9 @@ describe("hook-server", () => {
     expect(port).toBeGreaterThan(0);
   });
 
-  describe("GET /hivemind/agents", () => {
+  describe("GET /swarm/agents", () => {
     it("returns active agents", async () => {
-      const res = await httpGet("/hivemind/agents");
+      const res = await httpGet("/swarm/agents");
       expect(res.status).toBe(200);
       const agents = JSON.parse(res.body);
       expect(agents).toHaveLength(1);
@@ -74,30 +74,30 @@ describe("hook-server", () => {
     });
   });
 
-  describe("GET /hivemind/inbox", () => {
+  describe("GET /swarm/inbox", () => {
     it("rejects missing agentId", async () => {
-      const res = await httpGet("/hivemind/inbox");
+      const res = await httpGet("/swarm/inbox");
       expect(res.status).toBe(400);
       expect(JSON.parse(res.body).error).toContain("agentId required");
     });
 
     it("rejects invalid agentId format", async () => {
-      const res = await httpGet("/hivemind/inbox?agentId=../../etc/passwd");
+      const res = await httpGet("/swarm/inbox?agentId=../../etc/passwd");
       expect(res.status).toBe(400);
       expect(JSON.parse(res.body).error).toContain("invalid agentId format");
     });
 
     it("accepts valid agentId with drain", async () => {
-      const res = await httpGet("/hivemind/inbox?agentId=valid-agent-123&drain=true");
+      const res = await httpGet("/swarm/inbox?agentId=valid-agent-123&drain=true");
       expect(res.status).toBe(200);
       const messages = JSON.parse(res.body);
       expect(Array.isArray(messages)).toBe(true);
     });
   });
 
-  describe("POST /hivemind/inbox", () => {
+  describe("POST /swarm/inbox", () => {
     it("delivers a message", async () => {
-      const res = await httpPost("/hivemind/inbox", {
+      const res = await httpPost("/swarm/inbox", {
         toAgentId: "agent-1",
         body: "hello",
         type: "question",
@@ -107,14 +107,14 @@ describe("hook-server", () => {
     });
 
     it("rejects missing toAgentId", async () => {
-      const res = await httpPost("/hivemind/inbox", { body: "hello" });
+      const res = await httpPost("/swarm/inbox", { body: "hello" });
       expect(res.status).toBe(400);
     });
   });
 
-  describe("POST /hivemind/events", () => {
+  describe("POST /swarm/events", () => {
     it("accepts an event", async () => {
-      const res = await httpPost("/hivemind/events", {
+      const res = await httpPost("/swarm/events", {
         type: "progress",
         summary: "working",
         hiveId: "sub-1",

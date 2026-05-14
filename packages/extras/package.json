@@ -1,0 +1,16 @@
+{
+  "name": "@zana/extras",
+  "version": "0.1.0",
+  "description": "User-facing customization — settings store, skill store, plugin loader.",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "engines": { "node": ">=20.0.0" },
+  "dependencies": {
+    "@zana/core": "*",
+    "@zana/work": "*"
+  },
+  "files": ["dist/"]
+}

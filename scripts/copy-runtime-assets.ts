@@ -49,9 +49,10 @@ function copyCoreAssets() {
     }
   }
 
+  const serverRoot = path.join(root, "packages", "server");
   copyIfExists(
-    path.join(coreRoot, "src", "hook-wrapper.sh"),
-    path.join(coreRoot, "dist", "src", "hook-wrapper.sh"),
+    path.join(serverRoot, "src", "hooks", "wrapper.sh"),
+    path.join(serverRoot, "dist", "src", "hooks", "wrapper.sh"),
   );
 }
 
@@ -59,10 +60,8 @@ copyCoreAssets();
 
 // Ensure Volta can execute installed CLIs directly from dist outputs.
 [
-  path.join(root, "dist", "bin", "hive.js"),
-  path.join(root, "dist", "bin", "hive-mcp-server.js"),
-  path.join(root, "dist", "bin", "hive-headless.js"),
-  path.join(root, "packages", "core", "dist", "bin", "hive-daemon.js"),
+  path.join(root, "dist", "bin", "zana.js"),
+  path.join(root, "packages", "core", "dist", "bin", "daemon.js"),
   path.join(root, "packages", "mcp", "dist", "bin", "zana-mcp-server.js"),
   path.join(root, "packages", "mcp", "dist", "bin", "setup.js"),
 ].forEach(chmodExecutableIfExists);

@@ -59,7 +59,7 @@ describe("MCP Server (real stdio process)", () => {
     proc = spawn(process.execPath, [MCP_SERVER_PATH], {
       env: {
         ...process.env,
-        HIVE_WORKSPACE: WORKSPACE,
+        ZANA_WORKSPACE: WORKSPACE,
         ZANA_AUTO_INIT: "0",
       },
       stdio: ["pipe", "pipe", "pipe"],
@@ -94,7 +94,7 @@ describe("MCP Server (real stdio process)", () => {
     expect(res.jsonrpc).toBe("2.0");
     expect(res.id).toBe(1);
     expect(res.result.protocolVersion).toBe("2024-11-05");
-    expect(res.result.serverInfo.name).toBe("hive-orchestrator");
+    expect(res.result.serverInfo.name).toBe("zana");
     expect(res.result.capabilities.tools).toBeDefined();
 
     // Send initialized notification (no response expected)
@@ -106,7 +106,7 @@ describe("MCP Server (real stdio process)", () => {
   it("rejects tools/list before initialization", async () => {
     // Spawn a fresh server to test pre-init rejection
     const freshProc = spawn(process.execPath, [MCP_SERVER_PATH], {
-      env: { ...process.env, HIVE_WORKSPACE: WORKSPACE, ZANA_AUTO_INIT: "0" },
+      env: { ...process.env, ZANA_WORKSPACE: WORKSPACE, ZANA_AUTO_INIT: "0" },
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -151,20 +151,20 @@ describe("MCP Server (real stdio process)", () => {
     expect(res.result.tools.length).toBeGreaterThan(10);
 
     const toolNames = res.result.tools.map((t: any) => t.name);
-    expect(toolNames).toContain("hive_spawn_agent");
-    expect(toolNames).toContain("hive_list_agents");
-    expect(toolNames).toContain("hive_list_profiles");
-    expect(toolNames).toContain("hive_ticket_create");
-    expect(toolNames).toContain("hive_event_emit");
+    expect(toolNames).toContain("zana_spawn_agent");
+    expect(toolNames).toContain("zana_list_agents");
+    expect(toolNames).toContain("zana_list_profiles");
+    expect(toolNames).toContain("zana_ticket_create");
+    expect(toolNames).toContain("zana_event_emit");
   });
 
-  it("calls hive_list_profiles and gets results", async () => {
+  it("calls zana_list_profiles and gets results", async () => {
     const promise = waitResponse();
     sendMessage({
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "hive_list_profiles", arguments: {} },
+      params: { name: "zana_list_profiles", arguments: {} },
     });
 
     const res = await promise;
@@ -177,13 +177,13 @@ describe("MCP Server (real stdio process)", () => {
     expect(Array.isArray(profiles)).toBe(true);
   }, 20000);
 
-  it("calls hive_list_agents and gets results", async () => {
+  it("calls zana_list_agents and gets results", async () => {
     const promise = waitResponse();
     sendMessage({
       jsonrpc: "2.0",
       id: 4,
       method: "tools/call",
-      params: { name: "hive_list_agents", arguments: {} },
+      params: { name: "zana_list_agents", arguments: {} },
     });
 
     const res = await promise;
@@ -225,7 +225,7 @@ describe("MCP Server (real stdio process)", () => {
       jsonrpc: "2.0",
       id: 7,
       method: "tools/call",
-      params: { name: "hive_event_emit", arguments: { type: "test", payload: { msg: "日本語テスト 🚀" } } },
+      params: { name: "zana_event_emit", arguments: { type: "test", payload: { msg: "日本語テスト 🚀" } } },
     });
 
     const res = await promise;
@@ -239,7 +239,7 @@ describe("MCP Server (real stdio process)", () => {
     const promises = [];
     for (let i = 100; i < 105; i++) {
       promises.push(waitResponse());
-      sendMessage({ jsonrpc: "2.0", id: i, method: "tools/call", params: { name: "hive_list_agents", arguments: {} } });
+      sendMessage({ jsonrpc: "2.0", id: i, method: "tools/call", params: { name: "zana_list_agents", arguments: {} } });
     }
 
     const results = await Promise.all(promises);

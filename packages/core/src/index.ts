@@ -1,47 +1,83 @@
 module.exports = {
   init: require("./core").init,
   config: require("./config"),
-  agentManager: require("./agent-manager"),
-  agentSpawner: require("./agent-spawner"),
-  artifactStore: require("./artifact-store"),
-  eventBus: require("./event-bus"),
-  eventBusService: require("./event-bus-service"),
-  eventBusStore: require("./event-bus-store"),
-  eventLog: require("./event-log"),
-  hiveRegistry: require("./hive-registry"),
-  hiveSettingsStore: require("./hive-settings-store"),
-  hiveSkillStore: require("./hive-skill-store"),
-  hivemindEvents: require("./hivemind-events"),
-  hivemindRouter: require("./hivemind-router"),
-  hivemindSpawner: require("./hivemind-spawner"),
-  hookEnforcer: require("./hook-enforcer"),
-  hookServer: require("./hook-server"),
-  hookInstaller: require("./hook-installer"),
+
+  get swarm() {
+    return require("@zana/swarm");
+  },
+  get settings() {
+    return require("@zana/extras").settings;
+  },
+  get plugins() {
+    return require("@zana/extras").plugins;
+  },
+  get intelligence() {
+    const i = require("@zana/intelligence");
+    return {
+      taskRouter: i.taskRouter,
+      goap: i.goapPlanner,
+      vectorMemory: i.vectorMemory,
+      backgroundWorkers: i.backgroundWorkers,
+    };
+  },
+  get tickets() { return require("@zana/work").tickets; },
+  get scheduling() {
+    const s = require("@zana/work").scheduling;
+    return { service: s.service, store: s.store, workflow: s.workflowEngine };
+  },
+  get teams() { return require("@zana/work").teams; },
+  get runs() {
+    const r = require("@zana/work").runs;
+    return {
+      store: r.store,
+      tracker: r.tracker,
+      artifacts: r.artifacts,
+      plans: r.plans,
+      checkpoint: r.checkpoint.store,
+    };
+  },
+
+  project: {
+    init: require("./project/init"),
+    migrate: require("./project/migrate"),
+    registry: require("./project/registry"),
+    watcher: require("./project/watcher"),
+    workspaceContext: require("./project/workspace-context"),
+  },
+  daemon: {
+    registry: require("./daemon/registry"),
+    serviceManager: require("./daemon/service-manager"),
+    connectionRegistry: require("./daemon/connection-registry"),
+  },
+  agents: {
+    manager: require("./agents/manager"),
+    spawner: require("./agents/spawner"),
+    profileStore: require("./agents/profile-store"),
+    ptyHost: require("./agents/pty-host"),
+    modelRouter: require("./agents/model-router"),
+    terminalRelay: require("./agents/terminal-relay"),
+  },
+  events: {
+    bus: require("./events/bus"),
+    service: require("./events/service"),
+    store: require("./events/store"),
+    log: require("./events/log"),
+    stats: require("./events/stats-engine"),
+  },
+  get hooks() {
+    const h = require("@zana/server").hooks;
+    return { server: h.server, enforcer: h.enforcer, installer: h.installer };
+  },
+  get api() {
+    const a = require("@zana/server").api;
+    return { server: a.server, auth: a.authMiddleware, sse: a.sseBroadcaster, health: a.healthMonitor };
+  },
+  modules: {
+    config: require("./modules/config"),
+    loader: require("./modules/loader"),
+    toolRegistry: require("./modules/tool-registry"),
+    bridge: require("./modules/bridge"),
+  },
   persistence: require("./persistence"),
-  plansStore: require("./plans-store"),
-  pluginLoader: require("./plugin-loader"),
-  profileStore: require("./profile-store"),
-  projectRegistry: require("./project-registry"),
-  ptyHost: require("./pty-host"),
-  runStore: require("./run-store"),
-  runTracker: require("./run-tracker"),
-  schedulerService: require("./scheduler-service"),
-  schedulerStore: require("./scheduler-store"),
-  statsEngine: require("./stats-engine"),
-  teamManager: require("./team-manager"),
-  teamStore: require("./team-store"),
-  ticketService: require("./ticket-service"),
-  ticketStore: require("./ticket-store"),
-  ticketWatcher: require("./ticket-watcher"),
-  workflowEngine: require("./workflow-engine"),
-  workspaceContext: require("./workspace-context"),
   guardrails: require("./guardrails/index"),
-  checkpoint: require("./checkpoint/store"),
-  apiServer: require("./api-server"),
-  sseBroadcaster: require("./sse-broadcaster"),
-  healthMonitor: require("./health-monitor"),
-  connectionRegistry: require("./connection-registry"),
-  moduleConfig: require("./module-config"),
-  moduleLoader: require("./module-loader"),
-  moduleToolRegistry: require("./module-tool-registry"),
 };

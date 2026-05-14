@@ -1,0 +1,15 @@
+{
+  "name": "@zana/intelligence",
+  "version": "0.1.0",
+  "description": "Intelligence layer — task router, GOAP planner, vector memory, background workers.",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "engines": { "node": ">=20.0.0" },
+  "dependencies": {
+    "@zana/core": "*"
+  },
+  "files": ["dist/"]
+}

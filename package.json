@@ -5,7 +5,7 @@
   "author": "Zana",
   "main": "packages/mcp/dist/src/mcp-server.js",
   "bin": {
-    "zana": "./dist/bin/hive.js"
+    "zana": "./dist/bin/zana.js"
   },
   "private": true,
   "engines": {
@@ -16,15 +16,20 @@
   ],
   "scripts": {
     "install:bootstrap": "bash ./scripts/install.sh",
-    "clean:runtime": "rm -rf dist packages/core/dist packages/mcp/dist",
-    "build:runtime": "npm run clean:runtime && npm run build:runtime:core && npm run build:runtime:mcp && npm run build:runtime:bin && npm run build:runtime:scripts && node dist/scripts/copy-runtime-assets.js",
+    "clean:runtime": "rm -rf dist packages/core/dist packages/mcp/dist packages/work/dist packages/server/dist packages/swarm/dist packages/intelligence/dist packages/extras/dist",
+    "build:runtime": "npm run clean:runtime && npm run build:runtime:core && npm run build:runtime:swarm && npm run build:runtime:intelligence && npm run build:runtime:extras && npm run build:runtime:work && npm run build:runtime:server && npm run build:runtime:mcp && npm run build:runtime:bin && npm run build:runtime:scripts && node dist/scripts/copy-runtime-assets.js",
     "build:runtime:core": "npm run build --workspace=@zana/core",
+    "build:runtime:swarm": "npm run build --workspace=@zana/swarm",
+    "build:runtime:intelligence": "npm run build --workspace=@zana/intelligence",
+    "build:runtime:extras": "npm run build --workspace=@zana/extras",
+    "build:runtime:work": "npm run build --workspace=@zana/work",
+    "build:runtime:server": "npm run build --workspace=@zana/server",
     "build:runtime:mcp": "npm run build --workspace=@zana/mcp",
     "build:runtime:bin": "tsc -p tsconfig.bin.build.json",
     "build:runtime:scripts": "tsc -p tsconfig.scripts.build.json",
     "dev:web": "npm run dev --workspace=@zana/ui",
-    "dev:viewer": "NEXT_PUBLIC_HIVE_DAEMON_URL=http://127.0.0.1:47402 npm run dev --workspace=@zana/ui",
-    "start:viewer": "NEXT_PUBLIC_HIVE_DAEMON_URL=http://127.0.0.1:47402 npm run start --workspace=@zana/ui",
+    "dev:viewer": "NEXT_PUBLIC_ZANA_DAEMON_URL=http://127.0.0.1:47402 npm run dev --workspace=@zana/ui",
+    "start:viewer": "NEXT_PUBLIC_ZANA_DAEMON_URL=http://127.0.0.1:47402 npm run start --workspace=@zana/ui",
     "dev": "npm run dev:web",
     "build:web": "npm run build --workspace=@zana/ui",
     "start:web": "npm run start --workspace=@zana/ui",

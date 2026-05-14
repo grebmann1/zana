@@ -14,8 +14,8 @@
     "types": ["node"]
   },
   "include": [
-    "bin/hive.ts",
-    "packages/core/bin/hive-daemon.ts",
+    "bin/zana.ts",
+    "packages/core/bin/daemon.ts",
     "packages/mcp/src/mcp-server.ts"
   ]
 }

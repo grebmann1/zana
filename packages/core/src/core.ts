@@ -1,36 +1,56 @@
-// Core Hive logic shared between Electron (main.js) and headless (bin/hive-headless.js).
+// Core Zana logic shared between Electron (main.js) and headless (bin/zana.js).
 // Does NOT import Electron modules — pure Node.js only.
 
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { bus, EVENTS } from "./event-bus";
-import * as pluginLoader from "./plugin-loader";
-import { startHookServer, setHivemindModules } from "./hook-server";
-import * as hookInstaller from "./hook-installer";
-import * as profileStore from "./profile-store";
-import * as agentManager from "./agent-manager";
-import * as eventLog from "./event-log";
-import * as teamStore from "./team-store";
-import * as teamManager from "./team-manager";
-import * as hiveSkillStore from "./hive-skill-store";
-import * as hiveRegistry from "./hive-registry";
-import * as hivemindRouter from "./hivemind-router";
-import * as hivemindEvents from "./hivemind-events";
-import * as hivemindSpawner from "./hivemind-spawner";
+import { bus, EVENTS } from "./events/bus";
+import * as profileStore from "./agents/profile-store";
+import * as agentManager from "./agents/manager";
+import * as eventLog from "./events/log";
+import * as daemonRegistry from "./daemon/registry";
 import * as persistence from "./persistence";
-import * as eventBusService from "./event-bus-service";
-import * as runTracker from "./run-tracker";
-import * as ticketWatcher from "./ticket-watcher";
-import * as healthMonitor from "./health-monitor";
-import * as workspaceContext from "./workspace-context";
-import * as taskRouter from "./task-router";
-import * as vectorMemory from "./vector-memory";
-import * as backgroundWorkers from "./background-workers";
-import * as goapPlanner from "./goap-planner";
-import * as moduleLoader from "./module-loader";
+import * as eventBusService from "./events/service";
+import * as workspaceContext from "./project/workspace-context";
+import * as moduleLoader from "./modules/loader";
+
+// Lazy thunks for cross-package modules. Sibling packages depend on @zana/core,
+// so eager top-level requires here would deadlock during cross-package init.
+// Node's require cache keeps repeat calls cheap.
+function _serverPkg(): any { return require("@zana/server"); }
+function _swarmPkg(): any { return require("@zana/swarm"); }
+function _intel(): any { return require("@zana/intelligence"); }
+function _extras(): any { return require("@zana/extras"); }
+function _teamStore(): any { return require("@zana/work").teams.store; }
+function _teamManager(): any { return require("@zana/work").teams.manager; }
+function _runTracker(): any { return require("@zana/work").runs.tracker; }
+function _ticketWatcher(): any { return require("@zana/work").tickets.watcher; }
 
 export async function init({ workspace, headless = false, onHook, preferredPort, skipApiServer = false }) {
+  // Resolve cross-package modules lazily inside init(), so importing @zana/core
+  // (e.g. for `config` only) does not eagerly pull in 4 sibling packages.
+  const serverPkg = _serverPkg();
+  const startHookServer = serverPkg.hooks.server.startHookServer;
+  const setHivemindModules = serverPkg.hooks.server.setHivemindModules;
+  const hookInstaller = serverPkg.hooks.installer;
+  const healthMonitor = serverPkg.api.healthMonitor;
+  const swarmPkg = _swarmPkg();
+  const swarmRouter = swarmPkg.router;
+  const swarmEvents = swarmPkg.events;
+  const swarmSpawner = swarmPkg.spawner;
+  const intel = _intel();
+  const taskRouter = intel.taskRouter;
+  const vectorMemory = intel.vectorMemory;
+  const backgroundWorkers = intel.backgroundWorkers;
+  const goapPlanner = intel.goapPlanner;
+  const extras = _extras();
+  const pluginLoader = extras.plugins.loader;
+  const skillStore = extras.settings.skillStore;
+  const teamStore = _teamStore();
+  const teamManager = _teamManager();
+  const runTracker = _runTracker();
+  const ticketWatcher = _ticketWatcher();
+
   const resolvedWorkspace = workspace || process.cwd();
   if (!fs.existsSync(resolvedWorkspace)) {
     fs.mkdirSync(resolvedWorkspace, { recursive: true });
@@ -41,7 +61,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   }
 
   if (headless) {
-    process.env.HIVE_HEADLESS = "1";
+    process.env.ZANA_HEADLESS = "1";
   }
 
   eventBusService.init();
@@ -60,7 +80,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   }
 
   // Recover persisted inbox messages from disk
-  const recoveredCount = hivemindRouter.recoverFromDisk();
+  const recoveredCount = swarmRouter.recoverFromDisk();
   if (recoveredCount > 0) {
     process.stderr.write(`[core] recovered ${recoveredCount} inbox(es) from disk\n`);
   }
@@ -70,16 +90,16 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     const agentIds = agentManager.listAgents().map((a) => a.id);
     const inboxMap = new Map();
     for (const id of agentIds) {
-      const msgs = hivemindRouter.peekInbox(id);
+      const msgs = swarmRouter.peekInbox(id);
       if (msgs.length > 0) inboxMap.set(id, msgs);
     }
     return inboxMap;
   });
 
-  // Wire up hivemind modules for hook-server GET/POST routes
+  // Wire up swarm modules for hook-server GET/POST routes
   setHivemindModules({
-    router: hivemindRouter,
-    events: hivemindEvents,
+    router: swarmRouter,
+    events: swarmEvents,
     getAgents: () => agentManager.listAgents(),
   });
 
@@ -93,22 +113,22 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     preferredPort,
   );
 
-  let hiveId = null;
+  let daemonId = null;
   let stopHeartbeat = null;
 
   if (hookServerHandle?.port) {
-    process.env.HIVE_HOOK_PORT = String(hookServerHandle.port);
+    process.env.ZANA_HOOK_PORT = String(hookServerHandle.port);
 
-    hiveRegistry.cleanStale();
-    hiveId = hiveRegistry.generateHiveId();
-    hiveRegistry.register({
-      id: hiveId,
+    daemonRegistry.cleanStale();
+    daemonId = daemonRegistry.generateDaemonId();
+    daemonRegistry.register({
+      id: daemonId,
       port: hookServerHandle.port,
       workspace: resolvedWorkspace,
       headless,
     });
-    stopHeartbeat = hiveRegistry.startHeartbeat(hiveId);
-    process.env.HIVE_ID = hiveId;
+    stopHeartbeat = daemonRegistry.startHeartbeat(daemonId);
+    process.env.ZANA_ID = daemonId;
 
     try {
       if (!hookInstaller.isHooksInstalled()) {
@@ -146,34 +166,34 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
 
   // Start REST API server (headless/daemon mode)
   let apiServerHandle = null;
-  const hiveModules = {
-    hiveId,
+  const zanaModules = {
+    daemonId,
     hookServerHandle,
     workspace: resolvedWorkspace,
     agentManager,
     profileStore,
     teamStore,
     teamManager,
-    hiveSkillStore,
-    hiveRegistry,
+    skillStore,
+    daemonRegistry,
     eventLog,
-    hivemindRouter,
-    hivemindEvents,
-    hivemindSpawner,
+    swarmRouter,
+    swarmEvents,
+    swarmSpawner,
     taskRouter,
     vectorMemory,
     backgroundWorkers,
     goapPlanner,
     moduleLoader,
   };
-  await moduleLoader.init(hiveModules);
+  await moduleLoader.init(zanaModules);
   if (headless && !skipApiServer) {
-    const apiServer = require("./api-server");
+    const apiServer = serverPkg.api.server;
     const apiPort = (hookServerHandle?.port || preferredPort || 47400) + 1;
-    apiServerHandle = apiServer.start(hiveModules, apiPort);
+    apiServerHandle = apiServer.start(zanaModules, apiPort);
   }
 
-  bus.emit(EVENTS.HIVE_READY, { hiveId, workspace: resolvedWorkspace, port: hookServerHandle?.port });
+  bus.emit(EVENTS.ZANA_READY, { daemonId, workspace: resolvedWorkspace, port: hookServerHandle?.port });
 
   let shuttingDown = false;
   async function shutdown() {
@@ -184,8 +204,8 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     vectorMemory.shutdown();
     ticketWatcher.stop();
     healthMonitor.stop();
-    if (apiServerHandle) { try { require("./api-server").stop(); } catch {} }
-    bus.emit(EVENTS.HIVE_SHUTDOWN, { hiveId });
+    if (apiServerHandle) { try { serverPkg.api.server.stop(); } catch {} }
+    bus.emit(EVENTS.ZANA_SHUTDOWN, { daemonId });
     eventBusService.stop();
     persistence.stopPeriodicCompaction();
     persistence.snapshotAgents(agentManager.listAgents());
@@ -194,8 +214,8 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
         console.warn("[core] stopHeartbeat error:", err.message || err);
       }
     }
-    if (hiveId) {
-      try { hiveRegistry.deregister(hiveId); } catch (err) {
+    if (daemonId) {
+      try { daemonRegistry.deregister(daemonId); } catch (err) {
         console.warn("[core] deregister error:", err.message || err);
       }
     }
@@ -208,7 +228,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   }
 
   return {
-    ...hiveModules,
+    ...zanaModules,
     shutdown,
     apiServerHandle,
   };

@@ -4,11 +4,11 @@
   "description": "Zana engine — multi-agent orchestration, scheduling, persistence, and module system. Used by @zana/mcp.",
   "main": "dist/src/index.js",
   "bin": {
-    "hive-daemon": "./dist/bin/hive-daemon.js"
+    "zana-daemon": "./dist/bin/daemon.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/bin/hive-daemon.js",
+    "start": "node dist/bin/daemon.js",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },
@@ -16,7 +16,12 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "minimatch": "^10.0.0"
+    "minimatch": "^10.0.0",
+    "@zana/swarm": "*",
+    "@zana/extras": "*",
+    "@zana/intelligence": "*",
+    "@zana/work": "*",
+    "@zana/server": "*"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0",
@@ -28,7 +33,7 @@
     "skills/",
     "modules/"
   ],
-  "keywords": ["claude", "hive", "agent", "orchestrator", "mcp", "multi-agent"],
+  "keywords": ["claude", "agent", "orchestrator", "mcp", "multi-agent"],
   "license": "MIT",
   "repository": {
     "type": "git",

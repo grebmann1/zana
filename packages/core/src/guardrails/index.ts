@@ -1,4 +1,4 @@
-import * as builtins from "./builtins.ts";
+import * as builtins from "./builtins";
 
 const DEFAULT_MAX_RETRIES = 2;
 
