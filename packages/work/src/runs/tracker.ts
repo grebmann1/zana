@@ -241,13 +241,13 @@ export function exportRun(runId, format = "json") {
       ...events.map((ev) => JSON.stringify({ type: "event", data: ev })),
     ];
     return {
-      filename: `hive-run-${runId.slice(0, 8)}-${new Date(run.startedAt).toISOString().slice(0, 10)}.ndjson`,
+      filename: `run-${runId.slice(0, 8)}-${new Date(run.startedAt).toISOString().slice(0, 10)}.ndjson`,
       data: lines.join("\n") + "\n",
     };
   }
 
   return {
-    filename: `hive-run-${runId.slice(0, 8)}-${new Date(run.startedAt).toISOString().slice(0, 10)}.json`,
+    filename: `run-${runId.slice(0, 8)}-${new Date(run.startedAt).toISOString().slice(0, 10)}.json`,
     data: JSON.stringify({ run, events }, null, 2),
   };
 }

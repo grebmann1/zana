@@ -46,9 +46,9 @@ describe("swarm/events", () => {
     });
 
     it("filters by daemonId", () => {
-      events.addEvent({ daemonId: "hive-a", type: "progress", summary: "a" });
-      events.addEvent({ daemonId: "hive-b", type: "progress", summary: "b" });
-      const result = events.query({ daemonId: "hive-a" });
+      events.addEvent({ daemonId: "daemon-a", type: "progress", summary: "a" });
+      events.addEvent({ daemonId: "daemon-b", type: "progress", summary: "b" });
+      const result = events.query({ daemonId: "daemon-a" });
       expect(result.length).toBe(1);
       expect(result[0].summary).toBe("a");
     });

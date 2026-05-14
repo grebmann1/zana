@@ -35,7 +35,7 @@ function capture(type, payload) {
   const event = {
     id: crypto.randomUUID(),
     type,
-    source: payload?.agentId || payload?.hiveId || "system",
+    source: payload?.agentId || payload?.daemonId || "system",
     timestamp: Date.now(),
     payload: payload || {},
     tags: payload?.tags || [],

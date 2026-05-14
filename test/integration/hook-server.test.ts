@@ -117,7 +117,7 @@ describe("hook-server", () => {
       const res = await httpPost("/swarm/events", {
         type: "progress",
         summary: "working",
-        hiveId: "sub-1",
+        daemonId: "sub-1",
       });
       expect(res.status).toBe(200);
       expect(JSON.parse(res.body).ok).toBe(true);

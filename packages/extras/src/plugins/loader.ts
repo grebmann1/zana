@@ -111,7 +111,7 @@ function buildContext(pluginId, pluginDir) {
   return {
     pluginId,
     pluginDir,
-    hive: {
+    swarm: {
       agents: {
         list: () => agentManager.listAgents(),
         get: (id) => agentManager.listAgents().find((a) => a.id === id) || null,

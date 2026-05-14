@@ -58,7 +58,7 @@ function createWatcher(subdir, channel, mainWindow) {
 
     watcher.on('error', (err) => {
       if (err.code === 'ENOENT') return;
-      console.error(`[hive-watcher] Error on ${subdir}:`, err.message);
+      console.error(`[project-watcher] Error on ${subdir}:`, err.message);
       // Attempt to re-establish watcher after delay
       watcher.close();
       watchers.delete(subdir);
@@ -72,7 +72,7 @@ function createWatcher(subdir, channel, mainWindow) {
     watchers.set(subdir, watcher);
   } catch (err) {
     if (err.code !== 'ENOENT') {
-      console.error(`[hive-watcher] Failed to watch ${subdir}:`, err.message);
+      console.error(`[project-watcher] Failed to watch ${subdir}:`, err.message);
     }
   }
 }
@@ -88,7 +88,7 @@ function start(projectDir, mainWindow) {
     createWatcher(subdir, channel, mainWindow);
   }
 
-  process.stderr.write(`[hive-watcher] Watching ${projectDir}\n`);
+  process.stderr.write(`[project-watcher] Watching ${projectDir}\n`);
 }
 
 function stop() {
@@ -109,7 +109,7 @@ function stop() {
   mainWindowRef = null;
   projectDirRef = null;
 
-  process.stderr.write('[hive-watcher] Stopped\n');
+  process.stderr.write('[project-watcher] Stopped\n');
 }
 
 function isWatching() {

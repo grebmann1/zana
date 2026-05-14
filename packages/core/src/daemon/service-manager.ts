@@ -8,7 +8,7 @@ const { execSync } = require('node:child_process');
 const LABEL = 'com.zana.daemon';
 const CONFIG_DIR = path.join(os.homedir(), '.zana');
 const LOG_DIR = path.join(CONFIG_DIR, 'logs');
-const DAEMON_BIN = path.resolve(__dirname, '..', 'bin', 'hive-daemon.js');
+const DAEMON_BIN = path.resolve(__dirname, '..', 'bin', 'daemon.js');
 
 function nodePath() {
   return process.execPath;

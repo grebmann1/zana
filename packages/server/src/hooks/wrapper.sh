@@ -2,8 +2,8 @@
 # Zana hook relay (broadcast mode).
 #
 # Claude Code hooks invoke this script with the event's JSON payload on
-# stdin. We forward that payload to ALL running Hive instances discovered
-# from the registry at ~/.zana/hives/*.json.
+# stdin. We forward that payload to ALL running daemon instances discovered
+# from the registry at ~/.zana/daemons/*.json (legacy ~/.zana/hives also scanned).
 
 set -u
 
@@ -14,9 +14,8 @@ if [ -n "$TERMINAL_ID" ]; then
   INPUT=$(printf '%s' "$INPUT" | sed "s#^{#{\"zana_terminal_id\":\"$TERMINAL_ID\",#")
 fi
 
-ZANA_DIR="$HOME/.zana/hives"
-
-if [ -d "$ZANA_DIR" ]; then
+for ZANA_DIR in "$HOME/.zana/daemons" "$HOME/.zana/hives"; do
+  [ -d "$ZANA_DIR" ] || continue
   for f in "$ZANA_DIR"/*.json; do
     [ -f "$f" ] || continue
     PORT=$(grep -o '"port":[[:space:]]*[0-9]*' "$f" | head -1 | grep -o '[0-9]*$')
@@ -28,6 +27,6 @@ if [ -d "$ZANA_DIR" ]; then
         >/dev/null 2>&1
     ) &
   done
-fi
+done
 
 exit 0

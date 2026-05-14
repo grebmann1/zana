@@ -30,7 +30,7 @@ function json(res, data, status = 200, req = null) {
   res.end(JSON.stringify(data));
 }
 
-function getHive() {
+function getDaemon() {
   return daemonInstance;
 }
 
@@ -56,18 +56,18 @@ async function handleRequest(req, res) {
   const pathname = url.pathname;
   const method = req.method;
 
-  const hive = getHive();
-  if (!hive && pathname !== "/health") {
-    json(res, { error: "hive not ready" }, 503);
+  const daemon = getDaemon();
+  if (!daemon && pathname !== "/health") {
+    json(res, { error: "daemon not ready" }, 503);
     return;
   }
 
   // --- Health ---
   if (method === "GET" && pathname === "/health") {
-    const status = healthMonitor.getStatus(hive ? () => hive.agentManager.listAgents() : undefined);
+    const status = healthMonitor.getStatus(daemon ? () => daemon.agentManager.listAgents() : undefined);
     json(res, {
       ...status,
-      hiveId: hive?.hiveId || null,
+      daemonId: daemon?.daemonId || null,
       sseClients: sseBroadcaster.getClientCount(),
       connections: connectionRegistry.getCount(),
     });
@@ -76,11 +76,11 @@ async function handleRequest(req, res) {
 
   // --- Status (detailed) ---
   if (method === "GET" && pathname === "/status") {
-    const agents = hive.agentManager.listAgents();
-    const running = hive.teamManager ? hive.teamManager.listRunningTeams() : [];
+    const agents = daemon.agentManager.listAgents();
+    const running = daemon.teamManager ? daemon.teamManager.listRunningTeams() : [];
     json(res, {
-      hiveId: hive.daemonId,
-      workspace: hive.workspace,
+      daemonId: daemon.daemonId,
+      workspace: daemon.workspace,
       uptime: process.uptime(),
       agents: agents.map((a) => ({ id: a.id, profile: a.profileName, state: a.state, mode: a.mode })),
       teams: running,
@@ -117,27 +117,27 @@ async function handleRequest(req, res) {
       "Connection": "keep-alive",
       "Access-Control-Allow-Origin": "*",
     });
-    res.write(`event: connected\ndata: ${JSON.stringify({ hiveId: hive.daemonId })}\n\n`);
+    res.write(`event: connected\ndata: ${JSON.stringify({ daemonId: daemon.daemonId })}\n\n`);
     sseBroadcaster.addClient(res, filterTypes);
     return;
   }
 
   // --- Agents ---
   if (method === "GET" && pathname === "/agents") {
-    json(res, hive.agentManager.listAgents());
+    json(res, daemon.agentManager.listAgents());
     return;
   }
   if (method === "POST" && pathname === "/agents") {
     const body = await readBody(req);
-    const profile = hive.profileStore.getProfile(body.profileId);
+    const profile = daemon.profileStore.getProfile(body.profileId);
     if (!profile) { json(res, { error: "profile not found" }, 404); return; }
-    let cwd = body.cwd || hive.workspace;
+    let cwd = body.cwd || daemon.workspace;
     const resolved = path.resolve(cwd);
-    if (!resolved.startsWith(path.resolve(hive.workspace))) {
+    if (!resolved.startsWith(path.resolve(daemon.workspace))) {
       json(res, { error: "cwd must be within workspace" }, 403);
       return;
     }
-    const result = hive.agentManager.spawnHeadlessAgent(profile, {
+    const result = daemon.agentManager.spawnHeadlessAgent(profile, {
       prompt: body.prompt,
       cwd: resolved,
     });
@@ -148,23 +148,23 @@ async function handleRequest(req, res) {
   if (agentMatch) {
     const agentId = agentMatch[1];
     if (method === "GET") {
-      const agents = hive.agentManager.listAgents();
+      const agents = daemon.agentManager.listAgents();
       const agent = agents.find((a) => a.id === agentId);
       if (!agent) { json(res, { error: "not found" }, 404); return; }
       json(res, agent);
       return;
     }
     if (method === "DELETE") {
-      const ok = hive.agentManager.killAgent(agentId);
+      const ok = daemon.agentManager.killAgent(agentId);
       json(res, { ok });
       return;
     }
   }
   const agentResultMatch = pathname.match(/^\/agents\/([^/]+)\/result$/);
   if (method === "GET" && agentResultMatch) {
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "agent_result", agentId: agentResultMatch[1] },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
@@ -172,7 +172,7 @@ async function handleRequest(req, res) {
 
   // --- Profiles ---
   if (method === "GET" && pathname === "/profiles") {
-    json(res, hive.profileStore.listProfiles().map((p) => ({
+    json(res, daemon.profileStore.listProfiles().map((p) => ({
       id: p.id, name: p.displayName, icon: p.icon, category: p.category, description: p.description,
     })));
     return;
@@ -180,7 +180,7 @@ async function handleRequest(req, res) {
   const profileMatch = pathname.match(/^\/profiles\/([^/]+)$/);
   if (profileMatch) {
     if (method === "GET") {
-      const p = hive.profileStore.getProfile(profileMatch[1]);
+      const p = daemon.profileStore.getProfile(profileMatch[1]);
       if (!p) { json(res, { error: "not found" }, 404); return; }
       json(res, p);
       return;
@@ -188,32 +188,32 @@ async function handleRequest(req, res) {
     if (method === "PUT") {
       const body = await readBody(req);
       body.id = profileMatch[1];
-      const saved = hive.profileStore.saveProfile(body);
+      const saved = daemon.profileStore.saveProfile(body);
       json(res, saved);
       return;
     }
     if (method === "DELETE") {
-      const ok = hive.profileStore.deleteProfile(profileMatch[1]);
+      const ok = daemon.profileStore.deleteProfile(profileMatch[1]);
       json(res, { ok });
       return;
     }
   }
   if (method === "POST" && pathname === "/profiles") {
     const body = await readBody(req);
-    const saved = hive.profileStore.saveProfile(body);
+    const saved = daemon.profileStore.saveProfile(body);
     json(res, saved, 201);
     return;
   }
 
   // --- Teams ---
   if (method === "GET" && pathname === "/teams") {
-    json(res, hive.teamStore.listTeams());
+    json(res, daemon.teamStore.listTeams());
     return;
   }
   const teamMatch = pathname.match(/^\/teams\/([^/]+)$/);
   if (teamMatch) {
     if (method === "GET") {
-      const t = hive.teamStore.getTeam(teamMatch[1]);
+      const t = daemon.teamStore.getTeam(teamMatch[1]);
       if (!t) { json(res, { error: "not found" }, 404); return; }
       json(res, t);
       return;
@@ -221,34 +221,34 @@ async function handleRequest(req, res) {
     if (method === "PUT") {
       const body = await readBody(req);
       body.id = teamMatch[1];
-      hive.teamStore.saveTeam(body);
+      daemon.teamStore.saveTeam(body);
       json(res, body);
       return;
     }
     if (method === "DELETE") {
-      hive.teamStore.deleteTeam(teamMatch[1]);
+      daemon.teamStore.deleteTeam(teamMatch[1]);
       json(res, { ok: true });
       return;
     }
   }
   if (method === "POST" && pathname === "/teams") {
     const body = await readBody(req);
-    hive.teamStore.saveTeam(body);
+    daemon.teamStore.saveTeam(body);
     json(res, body, 201);
     return;
   }
   const teamStartMatch = pathname.match(/^\/teams\/([^/]+)\/start$/);
   if (method === "POST" && teamStartMatch) {
     const body = await readBody(req);
-    const result = await hive.teamManager.startTeam(teamStartMatch[1], {
-      prompt: body.prompt, cwd: body.cwd || hive.workspace, headless: true,
+    const result = await daemon.teamManager.startTeam(teamStartMatch[1], {
+      prompt: body.prompt, cwd: body.cwd || daemon.workspace, headless: true,
     });
     json(res, result);
     return;
   }
   const teamStopMatch = pathname.match(/^\/teams\/([^/]+)\/stop$/);
   if (method === "POST" && teamStopMatch) {
-    const result = hive.teamManager.stopTeam(teamStopMatch[1]);
+    const result = daemon.teamManager.stopTeam(teamStopMatch[1]);
     json(res, result);
     return;
   }
@@ -263,9 +263,9 @@ async function handleRequest(req, res) {
   }
   if (method === "POST" && pathname === "/tickets") {
     const body = await readBody(req);
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "ticket_create", ...body, createdBy: body.createdBy || "api" },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result, 201);
     return;
@@ -282,9 +282,9 @@ async function handleRequest(req, res) {
     if (method === "PUT") {
       const body = await readBody(req);
       body.ticketId = ticketMatch[1];
-      const result = await hive.agentManager.handleOrchestratorCommand(
+      const result = await daemon.agentManager.handleOrchestratorCommand(
         { action: "ticket_update", ...body },
-        () => hive.workspace
+        () => daemon.workspace
       );
       json(res, result);
       return;
@@ -293,9 +293,9 @@ async function handleRequest(req, res) {
   const ticketClaimMatch = pathname.match(/^\/tickets\/([^/]+)\/claim$/);
   if (method === "POST" && ticketClaimMatch) {
     const body = await readBody(req);
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "ticket_claim", ticketId: ticketClaimMatch[1], agentId: body.agentId || "api", agentName: body.agentName || "API" },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
@@ -303,9 +303,9 @@ async function handleRequest(req, res) {
   const ticketCompleteMatch = pathname.match(/^\/tickets\/([^/]+)\/complete$/);
   if (method === "POST" && ticketCompleteMatch) {
     const body = await readBody(req);
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "ticket_complete", ticketId: ticketCompleteMatch[1], resultSummary: body.resultSummary, completedBy: body.completedBy || "api" },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
@@ -321,33 +321,33 @@ async function handleRequest(req, res) {
 
   // --- Sprints ---
   if (method === "GET" && pathname === "/sprints") {
-    const result = await hive.agentManager.handleOrchestratorCommand({ action: "sprint_list" }, () => hive.workspace);
+    const result = await daemon.agentManager.handleOrchestratorCommand({ action: "sprint_list" }, () => daemon.workspace);
     json(res, result);
     return;
   }
   if (method === "POST" && pathname === "/sprints") {
     const body = await readBody(req);
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "sprint_create", name: body.name, ticketIds: body.ticketIds },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result, 201);
     return;
   }
   const sprintStartMatch = pathname.match(/^\/sprints\/([^/]+)\/start$/);
   if (method === "POST" && sprintStartMatch) {
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "sprint_start", sprintId: sprintStartMatch[1] },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
   }
   const sprintEndMatch = pathname.match(/^\/sprints\/([^/]+)\/end$/);
   if (method === "POST" && sprintEndMatch) {
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "sprint_end", sprintId: sprintEndMatch[1] },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
@@ -355,27 +355,27 @@ async function handleRequest(req, res) {
 
   // --- Artifacts ---
   if (method === "GET" && pathname === "/artifacts") {
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "artifact_list", type: url.searchParams.get("type"), tag: url.searchParams.get("tag") },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
   }
   if (method === "POST" && pathname === "/artifacts") {
     const body = await readBody(req);
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "artifact_create", ...body, createdBy: body.createdBy || "api" },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result, 201);
     return;
   }
   const artifactMatch = pathname.match(/^\/artifacts\/([^/]+)$/);
   if (method === "GET" && artifactMatch) {
-    const result = await hive.agentManager.handleOrchestratorCommand(
+    const result = await daemon.agentManager.handleOrchestratorCommand(
       { action: "artifact_read", artifactId: artifactMatch[1] },
-      () => hive.workspace
+      () => daemon.workspace
     );
     json(res, result);
     return;
@@ -383,25 +383,25 @@ async function handleRequest(req, res) {
 
   // --- Skills ---
   if (method === "GET" && pathname === "/skills") {
-    json(res, hive.skillStore.listSkills());
+    json(res, daemon.skillStore.listSkills());
     return;
   }
   if (method === "POST" && pathname === "/skills") {
     const body = await readBody(req);
-    const saved = hive.skillStore.saveSkill(body);
+    const saved = daemon.skillStore.saveSkill(body);
     json(res, saved, 201);
     return;
   }
   const skillMatch = pathname.match(/^\/skills\/([^/]+)$/);
   if (skillMatch) {
     if (method === "GET") {
-      const s = hive.skillStore.getSkill(skillMatch[1]);
+      const s = daemon.skillStore.getSkill(skillMatch[1]);
       if (!s) { json(res, { error: "not found" }, 404); return; }
       json(res, s);
       return;
     }
     if (method === "DELETE") {
-      const ok = hive.skillStore.deleteSkill(skillMatch[1]);
+      const ok = daemon.skillStore.deleteSkill(skillMatch[1]);
       json(res, { ok });
       return;
     }
@@ -436,7 +436,7 @@ async function handleRequest(req, res) {
   if (method === "POST" && pathname === "/orchestrator") {
     const body = await readBody(req);
     try {
-      const result = await hive.agentManager.handleOrchestratorCommand(body, () => hive.workspace);
+      const result = await daemon.agentManager.handleOrchestratorCommand(body, () => daemon.workspace);
       json(res, result);
     } catch (err) {
       json(res, { error: err.message }, 500);
@@ -444,9 +444,9 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // --- Hivemind ---
+  // --- Swarm ---
   if (method === "GET" && pathname === "/swarm/agents") {
-    const agents = hive.agentManager.listAgents()
+    const agents = daemon.agentManager.listAgents()
       .filter((a) => a.state !== "terminated")
       .map((a) => ({ id: a.id, terminalId: a.terminalId, profileName: a.profileName, state: a.state, mode: a.mode }));
     json(res, agents);
@@ -457,32 +457,32 @@ async function handleRequest(req, res) {
     if (!agentId) { json(res, { error: "agentId required" }, 400); return; }
     const drain = url.searchParams.get("drain") === "true";
     const messages = drain
-      ? hive.swarmRouter.drainInbox(agentId)
-      : hive.swarmRouter.peekInbox(agentId);
+      ? daemon.swarmRouter.drainInbox(agentId)
+      : daemon.swarmRouter.peekInbox(agentId);
     json(res, messages);
     return;
   }
   if (method === "POST" && pathname === "/swarm/inbox") {
     const body = await readBody(req);
     if (body.toAgentId) {
-      hive.swarmRouter.deliverLocal(body.toAgentId, body);
+      daemon.swarmRouter.deliverLocal(body.toAgentId, body);
     }
     json(res, { ok: true });
     return;
   }
   if (method === "POST" && pathname === "/swarm/instruct") {
     const body = await readBody(req);
-    const agents = hive.agentManager.listAgents();
+    const agents = daemon.agentManager.listAgents();
     const lead = agents.find((a) => a.state === "active" && a.mode === "headless");
     if (!lead) { json(res, { ok: false, error: "no active agent" }, 404); return; }
     const payload = { type: "user", message: { role: "user", content: [{ type: "text", text: body.message }] } };
-    const written = hive.agentManager.writeToAgent(lead.id, payload);
+    const written = daemon.agentManager.writeToAgent(lead.id, payload);
     json(res, { ok: written, agentId: lead.id });
     return;
   }
   if (method === "POST" && pathname === "/swarm/events") {
     const body = await readBody(req);
-    hive.swarmEvents.pushEvent(body);
+    daemon.swarmEvents.pushEvent(body);
     json(res, { ok: true });
     return;
   }
@@ -497,17 +497,17 @@ async function handleRequest(req, res) {
   // --- Task Router (Intelligence) ---
   if (method === "POST" && pathname === "/route") {
     const body = await readBody(req);
-    const results = hive.taskRouter.route(body);
+    const results = daemon.taskRouter.route(body);
     json(res, results);
     return;
   }
   if (method === "GET" && pathname === "/route/stats") {
-    json(res, hive.taskRouter.getStats());
+    json(res, daemon.taskRouter.getStats());
     return;
   }
   if (method === "POST" && pathname === "/route/outcome") {
     const body = await readBody(req);
-    hive.taskRouter.recordOutcome(body);
+    daemon.taskRouter.recordOutcome(body);
     json(res, { ok: true });
     return;
   }
@@ -515,35 +515,35 @@ async function handleRequest(req, res) {
   // --- Vector Memory ---
   if (method === "POST" && pathname === "/memory") {
     const body = await readBody(req);
-    const result = hive.vectorMemory.store(body);
+    const result = daemon.vectorMemory.store(body);
     json(res, result, 201);
     return;
   }
   if (method === "GET" && pathname === "/memory") {
     const query = url.searchParams.get("q");
-    if (!query) { json(res, hive.vectorMemory.stats()); return; }
+    if (!query) { json(res, daemon.vectorMemory.stats()); return; }
     const limit = parseInt(url.searchParams.get("limit") || "10", 10);
     const tier = url.searchParams.get("tier") || undefined;
-    const results = hive.vectorMemory.search(query, { limit, tier });
+    const results = daemon.vectorMemory.search(query, { limit, tier });
     json(res, results);
     return;
   }
   const memoryMatch = pathname.match(/^\/memory\/([^/]+)$/);
   if (memoryMatch) {
     if (method === "GET") {
-      const entry = hive.vectorMemory.get(memoryMatch[1]);
+      const entry = daemon.vectorMemory.get(memoryMatch[1]);
       if (!entry) { json(res, { error: "not found" }, 404); return; }
       json(res, entry);
       return;
     }
     if (method === "DELETE") {
-      const ok = hive.vectorMemory.delete(memoryMatch[1]);
+      const ok = daemon.vectorMemory.delete(memoryMatch[1]);
       json(res, { ok });
       return;
     }
   }
   if (method === "POST" && pathname === "/memory/maintain") {
-    const result = hive.vectorMemory.maintain();
+    const result = daemon.vectorMemory.maintain();
     json(res, result);
     return;
   }
@@ -551,31 +551,31 @@ async function handleRequest(req, res) {
   // --- GOAP Planner ---
   if (method === "POST" && pathname === "/plans") {
     const body = await readBody(req);
-    const plan = hive.goapPlanner.createPlan(body.goal, body.options);
+    const plan = daemon.goapPlanner.createPlan(body.goal, body.options);
     json(res, plan, 201);
     return;
   }
   if (method === "GET" && pathname === "/plans") {
-    json(res, hive.goapPlanner.listPlans());
+    json(res, daemon.goapPlanner.listPlans());
     return;
   }
   const planMatch = pathname.match(/^\/plans\/([^/]+)$/);
   if (planMatch) {
     if (method === "GET") {
-      const status = hive.goapPlanner.getPlanStatus(planMatch[1]);
+      const status = daemon.goapPlanner.getPlanStatus(planMatch[1]);
       if (!status) { json(res, { error: "not found" }, 404); return; }
       json(res, status);
       return;
     }
     if (method === "DELETE") {
-      const ok = hive.goapPlanner.cancelPlan(planMatch[1]);
+      const ok = daemon.goapPlanner.cancelPlan(planMatch[1]);
       json(res, { ok });
       return;
     }
   }
   const planExecMatch = pathname.match(/^\/plans\/([^/]+)\/execute$/);
   if (method === "POST" && planExecMatch) {
-    hive.goapPlanner.executePlan(planExecMatch[1]).then((result) => {
+    daemon.goapPlanner.executePlan(planExecMatch[1]).then((result) => {
       _core().events.service.emit("plan:execution-done", { planId: planExecMatch[1], ...result });
     });
     json(res, { ok: true, message: "execution started" });
@@ -584,32 +584,32 @@ async function handleRequest(req, res) {
 
   // --- Background Workers ---
   if (method === "GET" && pathname === "/workers") {
-    json(res, hive.backgroundWorkers.list());
+    json(res, daemon.backgroundWorkers.list());
     return;
   }
   const workerMatch = pathname.match(/^\/workers\/([^/]+)$/);
   if (workerMatch) {
     if (method === "GET") {
-      json(res, hive.backgroundWorkers.history(workerMatch[1]));
+      json(res, daemon.backgroundWorkers.history(workerMatch[1]));
       return;
     }
   }
   const workerEnableMatch = pathname.match(/^\/workers\/([^/]+)\/enable$/);
   if (method === "POST" && workerEnableMatch) {
-    const ok = hive.backgroundWorkers.enable(workerEnableMatch[1]);
+    const ok = daemon.backgroundWorkers.enable(workerEnableMatch[1]);
     json(res, { ok });
     return;
   }
   const workerDisableMatch = pathname.match(/^\/workers\/([^/]+)\/disable$/);
   if (method === "POST" && workerDisableMatch) {
-    const ok = hive.backgroundWorkers.disable(workerDisableMatch[1]);
+    const ok = daemon.backgroundWorkers.disable(workerDisableMatch[1]);
     json(res, { ok });
     return;
   }
   const workerTriggerMatch = pathname.match(/^\/workers\/([^/]+)\/trigger$/);
   if (method === "POST" && workerTriggerMatch) {
     try {
-      const result = await hive.backgroundWorkers.trigger(workerTriggerMatch[1]);
+      const result = await daemon.backgroundWorkers.trigger(workerTriggerMatch[1]);
       json(res, result);
     } catch (err) {
       json(res, { error: err.message }, 400);
@@ -619,13 +619,13 @@ async function handleRequest(req, res) {
 
   // --- Modules ---
   if (method === "GET" && pathname === "/api/modules") {
-    json(res, hive.moduleLoader.listModules());
+    json(res, daemon.moduleLoader.listModules());
     return;
   }
   const moduleMatch = pathname.match(/^\/api\/modules\/([^/]+)$/);
   if (moduleMatch) {
     if (method === "GET") {
-      const modules = hive.moduleLoader.listModules();
+      const modules = daemon.moduleLoader.listModules();
       const mod = modules.find((m) => m.id === moduleMatch[1]);
       if (!mod) { json(res, { error: "not found" }, 404); return; }
       json(res, mod);
@@ -634,11 +634,11 @@ async function handleRequest(req, res) {
     if (method === "PATCH") {
       const body = await readBody(req);
       if (body.enabled === true) {
-        hive.moduleLoader.enableModule(moduleMatch[1]);
+        daemon.moduleLoader.enableModule(moduleMatch[1]);
       } else if (body.enabled === false) {
-        hive.moduleLoader.disableModule(moduleMatch[1]);
+        daemon.moduleLoader.disableModule(moduleMatch[1]);
       }
-      const modules = hive.moduleLoader.listModules();
+      const modules = daemon.moduleLoader.listModules();
       const mod = modules.find((m) => m.id === moduleMatch[1]);
       json(res, mod || { id: moduleMatch[1], enabled: body.enabled });
       return;
@@ -670,7 +670,7 @@ async function handleRequest(req, res) {
   // --- Module route delegation ---
   const moduleRouteMatch = pathname.match(/^\/m\/([^/]+)\/(.*)$/);
   if (moduleRouteMatch) {
-    const handled = await hive.moduleLoader.handleRoute(moduleRouteMatch[1], "/" + moduleRouteMatch[2], req, res);
+    const handled = await daemon.moduleLoader.handleRoute(moduleRouteMatch[1], "/" + moduleRouteMatch[2], req, res);
     if (handled) return;
     json(res, { error: "module route not found" }, 404);
     return;
@@ -773,8 +773,8 @@ async function handleRequest(req, res) {
     const checkpointResume = require("@zana/work").runs.checkpoint.resume;
     const result = await checkpointResume.resume(
       checkpointResumeMatch[1],
-      hive.agentManager,
-      hive.profileStore
+      daemon.agentManager,
+      daemon.profileStore
     );
     if (!result.ok) { json(res, result, result.error === "checkpoint not found" ? 404 : 400); return; }
     json(res, result);
@@ -811,7 +811,7 @@ async function handleRequest(req, res) {
 
   // --- Autopilot Goals ---
   if (method === "GET" && pathname === "/api/autopilot/goals") {
-    const autopilot = hive.moduleLoader.getModule("autopilot");
+    const autopilot = daemon.moduleLoader.getModule("autopilot");
     if (!autopilot || !autopilot.api) { json(res, { error: "autopilot module not available" }, 503); return; }
     const filter = {};
     const status = url.searchParams.get("status");
@@ -820,7 +820,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "POST" && pathname === "/api/autopilot/goals") {
-    const autopilot = hive.moduleLoader.getModule("autopilot");
+    const autopilot = daemon.moduleLoader.getModule("autopilot");
     if (!autopilot || !autopilot.api) { json(res, { error: "autopilot module not available" }, 503); return; }
     const body = await readBody(req);
     const goal = autopilot.api.setGoal(body);
@@ -829,7 +829,7 @@ async function handleRequest(req, res) {
   }
   const autopilotGoalMatch = pathname.match(/^\/api\/autopilot\/goals\/([^/]+)$/);
   if (autopilotGoalMatch) {
-    const autopilot = hive.moduleLoader.getModule("autopilot");
+    const autopilot = daemon.moduleLoader.getModule("autopilot");
     if (!autopilot || !autopilot.api) { json(res, { error: "autopilot module not available" }, 503); return; }
     const id = autopilotGoalMatch[1];
     if (method === "GET") {
@@ -861,8 +861,8 @@ async function handleRequest(req, res) {
   json(res, { error: "not found" }, 404);
 }
 
-export function start(hive, port, options = {}) {
-  daemonInstance = hive;
+export function start(daemon, port, options = {}) {
+  daemonInstance = daemon;
   sseBroadcaster.init();
   if (options.token) {
     authMiddleware.init({ token: options.token });

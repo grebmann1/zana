@@ -10,15 +10,15 @@ describe("swarm/spawner", () => {
   });
 
   describe("getSubDaemon", () => {
-    it("returns null for unknown hive", () => {
-      const result = spawner.getSubDaemon("nonexistent-hive");
+    it("returns null for unknown daemon", () => {
+      const result = spawner.getSubDaemon("nonexistent-daemon");
       expect(result).toBeNull();
     });
   });
 
   describe("stopSubDaemon", () => {
-    it("returns error for unknown hive", () => {
-      const result = spawner.stopSubDaemon("nonexistent-hive");
+    it("returns error for unknown daemon", () => {
+      const result = spawner.stopSubDaemon("nonexistent-daemon");
       expect(result.ok).toBe(false);
       expect(result.error).toContain("not found");
     });
@@ -39,14 +39,14 @@ describe("swarm/spawner", () => {
   });
 
   describe("getSubDaemonAgents", () => {
-    it("returns empty for unknown hive", async () => {
+    it("returns empty for unknown daemon", async () => {
       const agents = await spawner.getSubDaemonAgents("nonexistent");
       expect(agents).toEqual([]);
     });
   });
 
   describe("instructSubDaemon", () => {
-    it("returns error for unknown hive", async () => {
+    it("returns error for unknown daemon", async () => {
       const result = await spawner.instructSubDaemon("nonexistent", "hello");
       expect(result.ok).toBe(false);
       expect(result.error).toContain("not found");
@@ -62,7 +62,7 @@ describe("swarm/spawner", () => {
   });
 
   describe("updateHeartbeat", () => {
-    it("does nothing for unknown hive (no throw)", () => {
+    it("does nothing for unknown daemon (no throw)", () => {
       expect(() => spawner.updateHeartbeat("nonexistent")).not.toThrow();
     });
   });

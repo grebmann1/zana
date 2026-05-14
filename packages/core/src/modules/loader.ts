@@ -163,7 +163,7 @@ function buildContext(moduleId, manifest) {
       projectDir: () => workspace.getProjectDir(),
       paths: () => workspace.getProjectPaths(),
     },
-    hive: {
+    swarm: {
       agents: {
         list: () => coreModulesRef?.agentManager?.listAgents() || [],
         get: (id) => (coreModulesRef?.agentManager?.listAgents() || []).find((a) => a.id === id) || null,
