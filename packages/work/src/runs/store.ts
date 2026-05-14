@@ -6,13 +6,26 @@ function ensureDir() {
   fs.mkdirSync(RUNS_DIR(), { recursive: true });
 }
 
+function migrateRun(run) {
+  if (!run || typeof run !== "object") return run;
+  if (run.hiveId !== undefined && run.daemonId === undefined) {
+    run.daemonId = run.hiveId;
+    delete run.hiveId;
+  }
+  if (Array.isArray(run.subHives) && !Array.isArray(run.subDaemons)) {
+    run.subDaemons = run.subHives;
+    delete run.subHives;
+  }
+  return run;
+}
+
 export function listRuns({ limit = 50, offset = 0, status } = {}) {
   ensureDir();
   try {
     const files = fs.readdirSync(RUNS_DIR()).filter((f) => f.endsWith(".json"));
     let runs = files.map((f) => {
       try {
-        return JSON.parse(fs.readFileSync(path.join(RUNS_DIR(), f), "utf8"));
+        return migrateRun(JSON.parse(fs.readFileSync(path.join(RUNS_DIR(), f), "utf8")));
       } catch {
         return null;
       }
@@ -34,7 +47,7 @@ export function getRun(id) {
   ensureDir();
   const filePath = path.join(RUNS_DIR(), `${id}.json`);
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return migrateRun(JSON.parse(fs.readFileSync(filePath, "utf8")));
   } catch {
     return null;
   }
