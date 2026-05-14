@@ -308,7 +308,7 @@ export function listChannels() {
 
 // --- Acknowledgment Functions ---
 
-function requestAck(messageId) {
+export function requestAck(messageId) {
   acks.set(messageId, { status: "pending", timestamp: Date.now() });
 }
 

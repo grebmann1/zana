@@ -1091,10 +1091,10 @@ let moduleToolRegistry = null;
 function getModuleToolRegistry() {
   if (!moduleToolRegistry) {
     try {
-      moduleToolRegistry = require("@zana/core").moduleToolRegistry;
+      moduleToolRegistry = require("@zana/core").modules.toolRegistry;
     } catch {
       try {
-        moduleToolRegistry = require(path.resolve(__dirname, "../../../core/dist/src/module-tool-registry.js"));
+        moduleToolRegistry = require(path.resolve(__dirname, "../../../core/dist/src/modules/tool-registry.js"));
       } catch {
         moduleToolRegistry = { listModuleTools: () => [], getModuleTool: () => null };
       }

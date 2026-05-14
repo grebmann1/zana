@@ -1,5 +1,6 @@
-const path = require("node:path");
-const os = require("node:os");
+import * as path from "node:path";
+import * as os from "node:os";
+import * as ctx from "./project/workspace-context.js";
 
 const ZANA_DIR = path.join(os.homedir(), ".zana");
 
@@ -30,37 +31,37 @@ module.exports = {
   // They will be removed in a future sprint.
 
   get TICKETS_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().ticketsDir : path.join(ZANA_DIR, "tickets");
   },
 
   get SPRINTS_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().sprintsDir : path.join(ZANA_DIR, "sprints");
   },
 
   get ARTIFACTS_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().artifactsDir : path.join(ZANA_DIR, "artifacts");
   },
 
   get SESSIONS_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().sessionsDir : path.join(ZANA_DIR, "sessions");
   },
 
   get EVENTS_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().eventsDir : path.join(ZANA_DIR, "events");
   },
 
   get RUNS_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().runsDir : path.join(ZANA_DIR, "runs");
   },
 
   get SCHEDULER_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().schedulerDir : path.join(ZANA_DIR, "scheduler");
   },
 
@@ -70,7 +71,7 @@ module.exports = {
   },
 
   get TMP_DIR() {
-    const ctx = require("./project/workspace-context");
+    /* hoisted */
     return ctx.isInitialized() ? ctx.getProjectPaths().tmpDir : path.join(ZANA_DIR, "tmp");
   },
 

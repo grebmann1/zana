@@ -3,19 +3,16 @@ import * as path from "node:path";
 
 // ─── Path resolution ─────────────────────────────────────────────────────────
 
+import * as ctx from "../project/workspace-context.js";
+import { ZANA_DIR } from "../config.js";
+
 function getTicketsDir() {
-  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
-  // Fallback to global (backwards compat during migration)
-  const { ZANA_DIR } = require("../config");
   return path.join(ZANA_DIR, "tickets");
 }
 
 function getSprintsDir() {
-  const ctx = require("../project/workspace-context");
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
-  // Fallback to global (backwards compat during migration)
-  const { ZANA_DIR } = require("../config");
   return path.join(ZANA_DIR, "sprints");
 }
 

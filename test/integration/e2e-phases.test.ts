@@ -77,7 +77,7 @@ describe("Phase 1: Guardrails", () => {
   describe("builtins.fileExists", () => {
     let tmpDir;
 
-    beforeEach(() => {
+    beforeEach(async () => {
       tmpDir = mkdtempSync(join(tmpdir(), "guardrail-test-"));
     });
 
@@ -309,9 +309,9 @@ describe("Phase 3: Checkpoints", () => {
   let tmpDir;
   let store;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "checkpoint-test-"));
-    store = require("@zana/core/src/runs/checkpoint/store.ts");
+    store = await import("@zana/core/src/runs/checkpoint/store.ts");
     store.init(tmpDir);
   });
 
@@ -439,8 +439,8 @@ describe("Phase 3: Checkpoints", () => {
   describe("resume logic", () => {
     let resumeMod;
 
-    beforeEach(() => {
-      resumeMod = require("@zana/core/src/runs/checkpoint/resume.ts");
+    beforeEach(async () => {
+      resumeMod = await import("@zana/core/src/runs/checkpoint/resume.ts");
     });
 
     it("builds context from completed agents", () => {
@@ -573,9 +573,9 @@ describe("Integration: guardrail → channel → checkpoint flow", () => {
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "integration-test-"));
     router = await import("@zana/core/src/swarm/router.ts");
-    store = require("@zana/core/src/runs/checkpoint/store.ts");
-    guardrails = require("@zana/core/src/guardrails/index.ts");
-    resumeMod = require("@zana/core/src/runs/checkpoint/resume.ts");
+    store = await import("@zana/core/src/runs/checkpoint/store.ts");
+    guardrails = await import("@zana/core/src/guardrails/index.ts");
+    resumeMod = await import("@zana/core/src/runs/checkpoint/resume.ts");
     store.init(tmpDir);
   });
 

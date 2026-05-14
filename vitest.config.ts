@@ -12,15 +12,32 @@ export default defineConfig({
     // The build emits CommonJS .js files; tests run TS sources directly.
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json"],
   },
+  ssr: {
+    // Inline @zana/core sources so Vite's plugin can transform their requires.
+    // Without this, Node's CJS loader handles internal requires and can't find
+    // the `.js`-suffixed paths used in source files.
+    noExternal: [/^@zana\//, "@zana/core"],
+  },
   plugins: [
     {
       name: "js-to-ts-resolve",
       enforce: "pre",
       async resolveId(source, importer) {
-        if (!importer || !source.startsWith(".") || !source.endsWith(".js")) return null;
+        if (!importer || !source.startsWith(".")) return null;
         const resolved = path.resolve(path.dirname(importer), source);
-        const tsCandidate = resolved.slice(0, -3) + ".ts";
-        if (fs.existsSync(tsCandidate)) return tsCandidate;
+        // ".js" → ".ts" (rewritten ESM-style imports)
+        if (source.endsWith(".js")) {
+          const tsCandidate = resolved.slice(0, -3) + ".ts";
+          if (fs.existsSync(tsCandidate)) return tsCandidate;
+        }
+        // Bare relative require ("./foo" or "./foo/bar") with no extension
+        if (!path.extname(source)) {
+          const tsCandidate = resolved + ".ts";
+          if (fs.existsSync(tsCandidate)) return tsCandidate;
+          // Or directory with index.ts
+          const indexCandidate = path.join(resolved, "index.ts");
+          if (fs.existsSync(indexCandidate)) return indexCandidate;
+        }
         return null;
       },
     },
