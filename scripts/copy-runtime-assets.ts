@@ -49,9 +49,10 @@ function copyCoreAssets() {
     }
   }
 
+  const serverRoot = path.join(root, "packages", "server");
   copyIfExists(
-    path.join(coreRoot, "src", "hooks", "wrapper.sh"),
-    path.join(coreRoot, "dist", "src", "hooks", "wrapper.sh"),
+    path.join(serverRoot, "src", "hooks", "wrapper.sh"),
+    path.join(serverRoot, "dist", "src", "hooks", "wrapper.sh"),
   );
 }
 

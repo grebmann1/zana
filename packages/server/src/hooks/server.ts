@@ -1,15 +1,13 @@
 import * as http from "node:http";
 import * as url from "node:url";
-import * as configMod from "../config";
-import * as workspaceContext from "../project/workspace-context";
-import { appendAudit } from "../events/log";
+function _core() { return require("@zana/core"); }
+const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
+function appendAudit(...args: any[]) { return _core().events.log.appendAudit(...args); }
 const ticketService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.service[p] });
 const schedulerService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").scheduling.service[p] });
-import * as eventBusService from "../events/service";
+const eventBusService: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
 
-const DEFAULT_HOOK_PORT_VALUE = (configMod as any).DEFAULT_HOOK_PORT;
-
-const DEFAULT_PORT = DEFAULT_HOOK_PORT_VALUE;
+function DEFAULT_PORT() { return _core().config.DEFAULT_HOOK_PORT; }
 const MAX_BODY_BYTES = 256 * 1024;
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
 
@@ -34,7 +32,8 @@ export function setHivemindModules({ router, events, getAgents }) {
   agentListFn = getAgents;
 }
 
-export function startHookServer(onHook, orchestratorHandler, preferredPort = DEFAULT_PORT, { getMainWindow }: any = {}) {
+export function startHookServer(onHook, orchestratorHandler, preferredPort: any = undefined, { getMainWindow }: any = {}) {
+  if (preferredPort === undefined) preferredPort = DEFAULT_PORT();
   // Register built-in routes
   registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow);
 

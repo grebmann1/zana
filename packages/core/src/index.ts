@@ -64,16 +64,13 @@ module.exports = {
     log: require("./events/log"),
     stats: require("./events/stats-engine"),
   },
-  hooks: {
-    server: require("./hooks/server"),
-    enforcer: require("./hooks/enforcer"),
-    installer: require("./hooks/installer"),
+  get hooks() {
+    const h = require("@zana/server").hooks;
+    return { server: h.server, enforcer: h.enforcer, installer: h.installer };
   },
-  api: {
-    server: require("./api/server"),
-    auth: require("./api/auth-middleware"),
-    sse: require("./api/sse-broadcaster"),
-    health: require("./api/health-monitor"),
+  get api() {
+    const a = require("@zana/server").api;
+    return { server: a.server, auth: a.authMiddleware, sse: a.sseBroadcaster, health: a.healthMonitor };
   },
   modules: {
     config: require("./modules/config"),

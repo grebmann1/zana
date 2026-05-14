@@ -1,4 +1,4 @@
-import { bus } from "../events/bus";
+const bus: any = new Proxy({}, { get: (_t, p) => require("@zana/core").events.bus.bus[p] });
 
 export const STALE_AGENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 export const MEMORY_THRESHOLD_MB = 512;

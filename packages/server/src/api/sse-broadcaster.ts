@@ -1,4 +1,4 @@
-import { bus } from "../events/bus";
+const bus: any = new Proxy({}, { get: (_t, p) => require("@zana/core").events.bus.bus[p] });
 
 const clients = new Set();
 let eventCounter = 0;

@@ -2,9 +2,10 @@ import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as sseBroadcaster from "./sse-broadcaster";
-import * as connectionRegistry from "../daemon/connection-registry";
+function _core() { return require("@zana/core"); }
+const connectionRegistry: any = new Proxy({}, { get: (_t, p) => _core().daemon.connectionRegistry[p] });
 import * as healthMonitor from "./health-monitor";
-import * as terminalRelay from "../agents/terminal-relay";
+const terminalRelay: any = new Proxy({}, { get: (_t, p) => _core().agents.terminalRelay[p] });
 import * as authMiddleware from "./auth-middleware";
 
 let server = null;
@@ -91,7 +92,7 @@ async function handleRequest(req, res) {
 
   // --- Events (history query) ---
   if (method === "GET" && pathname === "/events") {
-    const eventBusService = require("../events/service");
+    const eventBusService = _core().events.service;
     const filter = {};
     const typesParam = url.searchParams.get("types");
     if (typesParam) filter.types = typesParam.split(",");
@@ -422,7 +423,7 @@ async function handleRequest(req, res) {
 
   // --- Workspace ---
   if (method === "GET" && pathname === "/workspace") {
-    const workspaceContext = require("../project/workspace-context");
+    const workspaceContext = _core().project.workspaceContext;
     json(res, {
       root: workspaceContext.getWorkspaceRoot(),
       paths: workspaceContext.getProjectPaths(),
@@ -488,7 +489,7 @@ async function handleRequest(req, res) {
 
   // --- Terminals ---
   if (method === "GET" && pathname === "/terminals") {
-    const ptyHost = require("../agents/pty-host");
+    const ptyHost = _core().agents.ptyHost;
     json(res, ptyHost.listTerminals());
     return;
   }
@@ -575,7 +576,7 @@ async function handleRequest(req, res) {
   const planExecMatch = pathname.match(/^\/plans\/([^/]+)\/execute$/);
   if (method === "POST" && planExecMatch) {
     hive.goapPlanner.executePlan(planExecMatch[1]).then((result) => {
-      require("../events/service").emit("plan:execution-done", { planId: planExecMatch[1], ...result });
+      _core().events.service.emit("plan:execution-done", { planId: planExecMatch[1], ...result });
     });
     json(res, { ok: true, message: "execution started" });
     return;
@@ -645,7 +646,7 @@ async function handleRequest(req, res) {
   }
   const moduleConfigMatch = pathname.match(/^\/api\/modules\/([^/]+)\/config$/);
   if (moduleConfigMatch) {
-    const workspaceContext = require("../project/workspace-context");
+    const workspaceContext = _core().project.workspaceContext;
     const root = workspaceContext.getWorkspaceRoot();
     const configPath = path.join(root, ".zana", "config.json");
     if (method === "GET") {

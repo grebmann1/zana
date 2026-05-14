@@ -6,8 +6,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { bus, EVENTS } from "./events/bus";
 const pluginLoader = require("@zana/extras").plugins.loader;
-import { startHookServer, setHivemindModules } from "./hooks/server";
-import * as hookInstaller from "./hooks/installer";
+const _serverPkg: any = require("@zana/server");
+const startHookServer = _serverPkg.hooks.server.startHookServer;
+const setHivemindModules = _serverPkg.hooks.server.setHivemindModules;
+const hookInstaller = _serverPkg.hooks.installer;
 import * as profileStore from "./agents/profile-store";
 import * as agentManager from "./agents/manager";
 import * as eventLog from "./events/log";
@@ -25,7 +27,7 @@ import * as persistence from "./persistence";
 import * as eventBusService from "./events/service";
 const runTracker: any = new Proxy({}, { get: (_t, p) => require("@zana/work").runs.tracker[p] });
 const ticketWatcher: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.watcher[p] });
-import * as healthMonitor from "./api/health-monitor";
+const healthMonitor = _serverPkg.api.healthMonitor;
 import * as workspaceContext from "./project/workspace-context";
 const _intel = require("@zana/intelligence");
 const taskRouter = _intel.taskRouter;
@@ -172,7 +174,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   };
   await moduleLoader.init(zanaModules);
   if (headless && !skipApiServer) {
-    const apiServer = require("./api/server");
+    const apiServer = _serverPkg.api.server;
     const apiPort = (hookServerHandle?.port || preferredPort || 47400) + 1;
     apiServerHandle = apiServer.start(zanaModules, apiPort);
   }
@@ -188,7 +190,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     vectorMemory.shutdown();
     ticketWatcher.stop();
     healthMonitor.stop();
-    if (apiServerHandle) { try { require("./api/server").stop(); } catch {} }
+    if (apiServerHandle) { try { _serverPkg.api.server.stop(); } catch {} }
     bus.emit(EVENTS.ZANA_SHUTDOWN, { daemonId });
     eventBusService.stop();
     persistence.stopPeriodicCompaction();

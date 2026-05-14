@@ -20,7 +20,8 @@
     "@zana/swarm": "*",
     "@zana/extras": "*",
     "@zana/intelligence": "*",
-    "@zana/work": "*"
+    "@zana/work": "*",
+    "@zana/server": "*"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0",

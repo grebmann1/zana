@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { BIN_DIR, CLAUDE_SETTINGS_BACKUP } from "../config";
+function _config() { return require("@zana/core").config; }
 
 export const HOOK_EVENTS = [
   "SessionStart",
@@ -18,7 +18,7 @@ function homeDir() {
 }
 
 export function wrapperPath() {
-  return path.join(BIN_DIR, "post-hook.sh");
+  return path.join(_config().BIN_DIR, "post-hook.sh");
 }
 
 export function settingsPath() {
@@ -26,7 +26,7 @@ export function settingsPath() {
 }
 
 function backupPath() {
-  return CLAUDE_SETTINGS_BACKUP;
+  return _config().CLAUDE_SETTINGS_BACKUP;
 }
 
 function readSettings() {

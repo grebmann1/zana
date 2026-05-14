@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
-import { startHookServer, setHivemindModules } from "@zana/core/src/hooks/server.ts";
+import { startHookServer, setHivemindModules } from "@zana/server/src/hooks/server.ts";
 
 let server;
 let port;
