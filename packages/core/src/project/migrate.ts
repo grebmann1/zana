@@ -16,7 +16,7 @@ const MIGRATE_DIRS = ["tickets", "sprints", "artifacts"];
  * @returns {{ files: { source: string, target: string }[], globalDir: string }}
  */
 export function dryRun(workspaceRoot) {
-  const hivePath = path.join(workspaceRoot, ".zana");
+  const projectPath = path.join(workspaceRoot, ".zana");
   const files = [];
 
   for (const dir of MIGRATE_DIRS) {
@@ -30,7 +30,7 @@ export function dryRun(workspaceRoot) {
     for (const entry of entries) {
       files.push({
         source: path.join(sourceDir, entry),
-        target: path.join(hivePath, dir, entry),
+        target: path.join(projectPath, dir, entry),
       });
     }
   }
@@ -71,28 +71,28 @@ export function migrate(workspaceRoot, options = {}) {
   }
 
   // 2. Verify .zana/ exists in workspaceRoot (or create it)
-  const { isHiveInitialized, initHiveDir } = require("./init");
-  if (!isHiveInitialized(workspaceRoot)) {
+  const { isProjectInitialized, initProjectDir } = require("./init");
+  if (!isProjectInitialized(workspaceRoot)) {
     if (isDryRun) {
       if (verbose) {
         console.log(`  [dry-run] Would initialize .zana/ in ${workspaceRoot}`);
       }
     } else {
-      initHiveDir(workspaceRoot, { silent: true });
+      initProjectDir(workspaceRoot, { silent: true });
       if (verbose) {
         console.log(`  Initialized .zana/ in ${workspaceRoot}`);
       }
     }
   }
 
-  const hivePath = path.join(workspaceRoot, ".zana");
+  const projectPath = path.join(workspaceRoot, ".zana");
 
   // 3. Copy files from global to local
   for (const dir of MIGRATE_DIRS) {
     const sourceDir = path.join(GLOBAL_ZANA_DIR, dir);
     if (!fs.existsSync(sourceDir)) continue;
 
-    const targetDir = path.join(hivePath, dir);
+    const targetDir = path.join(projectPath, dir);
 
     // Ensure target directory exists
     if (!isDryRun) {
@@ -140,8 +140,8 @@ export function migrate(workspaceRoot, options = {}) {
     try {
       // We need workspace-context to be pointed at this workspace for rebuildIndex to work.
       // Instead, rebuild indexes directly against the target directories.
-      rebuildIndexAt(path.join(hivePath, "tickets"), "ticket");
-      rebuildIndexAt(path.join(hivePath, "sprints"), "sprint");
+      rebuildIndexAt(path.join(projectPath, "tickets"), "ticket");
+      rebuildIndexAt(path.join(projectPath, "sprints"), "sprint");
       if (verbose) {
         console.log("  [index] Rebuilt _index.json for tickets and sprints");
       }

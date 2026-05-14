@@ -21,7 +21,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
 function getLockPath() {
   if (lockPath) return lockPath;
   const workspace = require("../project/workspace-context");
-  lockPath = path.join(workspace.getHiveDir(), "modules.lock");
+  lockPath = path.join(workspace.getProjectDir(), "modules.lock");
   return lockPath;
 }
 
@@ -123,7 +123,7 @@ function buildContext(moduleId, manifest) {
   const workspace = require("../project/workspace-context");
   const { ZANA_DIR } = require("./config");
 
-  const projectStoreDir = path.join(workspace.getHiveDir(), moduleId);
+  const projectStoreDir = path.join(workspace.getProjectDir(), moduleId);
   const globalStoreDir = path.join(ZANA_DIR, "modules", moduleId);
 
   const subs = [];
@@ -160,7 +160,7 @@ function buildContext(moduleId, manifest) {
     },
     workspace: {
       root: () => workspace.getWorkspaceRoot(),
-      hiveDir: () => workspace.getHiveDir(),
+      projectDir: () => workspace.getProjectDir(),
       paths: () => workspace.getProjectPaths(),
     },
     hive: {

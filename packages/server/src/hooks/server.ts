@@ -26,7 +26,7 @@ function matchRoute(method, pathname) {
   return routes.get(`${method} ${pathname}`) || null;
 }
 
-export function setHivemindModules({ router, events, getAgents }) {
+export function setSwarmModules({ router, events, getAgents }) {
   swarmRouter = router;
   swarmEvents = events;
   agentListFn = getAgents;

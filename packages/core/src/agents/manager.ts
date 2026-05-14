@@ -88,7 +88,7 @@ function notifyChange() {
 
 export function spawnInteractive(profile, options = {}) {
   const agentId = crypto.randomUUID();
-  const terminalId = options.terminalId || `hive-${agentId.slice(0, 8)}`;
+  const terminalId = options.terminalId || `zana-${agentId.slice(0, 8)}`;
   const cwd = options.cwd || profile.defaultCwd || process.env.HOME;
 
   const { command, args } = buildInteractiveCommand(profile, {
@@ -224,7 +224,7 @@ export function onAgentsChange(cb) {
 
 export function spawnHeadlessAgent(profile, options = {}) {
   const agentId = crypto.randomUUID();
-  const terminalId = options.terminalId || `hive-hl-${agentId.slice(0, 8)}`;
+  const terminalId = options.terminalId || `zana-hl-${agentId.slice(0, 8)}`;
   const cwd = options.cwd || profile.defaultCwd || process.env.HOME;
 
   // 3-tier model routing: auto-select cheapest capable model
@@ -658,7 +658,7 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return await _checkpointResume().resume(params.checkpointId, { spawnHeadlessAgent, getAgent }, profileStore);
     }
 
-    // --- Hive Mind P2P ---
+    // --- Swarm P2P ---
     case "discover_agents": {
       const localAgents = listAgents();
       const subDaemonPorts = swarmSpawner.getSubDaemonPorts();

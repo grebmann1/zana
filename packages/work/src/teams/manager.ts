@@ -64,7 +64,7 @@ export function onTeamsChange(cb) {
 function buildTeamLeadDisallowedTools(team, baseProfile) {
   const disallowed = new Set(baseProfile.disallowedTools || []);
 
-  // hive-mind-master delegates via zana_swarm_spawn (MCP), not Write/Edit/Bash
+  // swarm-master delegates via zana_swarm_spawn (MCP), not Write/Edit/Bash
   // Don't restrict it — its prompt already forbids direct coding
   if (baseProfile.id === "swarm-master") {
     return [...disallowed];

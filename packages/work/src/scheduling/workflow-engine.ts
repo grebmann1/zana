@@ -12,7 +12,7 @@ const activeRuns = new Map();
 
 function getWorkflowsDir() {
   const paths = workspaceContext.getProjectPaths();
-  const dir = path.join(paths.hiveDir, "workflows");
+  const dir = path.join(paths.projectDir, "workflows");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

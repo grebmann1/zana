@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
-import { startHookServer, setHivemindModules } from "@zana/server/src/hooks/server.ts";
+import { startHookServer, setSwarmModules } from "@zana/server/src/hooks/server.ts";
 
 let server;
 let port;
 
-// Mock hivemind modules
+// Mock swarm modules
 const mockRouter = {
   deliverLocal(agentId, msg) {},
   drainInbox(agentId) { return [{ id: "msg1", body: "test" }]; },
@@ -19,7 +19,7 @@ const mockGetAgents = () => [
 ];
 
 beforeAll(async () => {
-  setHivemindModules({ router: mockRouter, events: mockEvents, getAgents: mockGetAgents });
+  setSwarmModules({ router: mockRouter, events: mockEvents, getAgents: mockGetAgents });
   server = await startHookServer(() => {}, async () => ({ ok: true }), 47900);
   port = server.port;
 });

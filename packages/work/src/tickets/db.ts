@@ -11,9 +11,9 @@ let _db: any = null;
 
 function getDbPath() {
   if (workspaceContext.isInitialized()) {
-    const hiveDir = workspaceContext.getHiveDir();
-    fs.mkdirSync(hiveDir, { recursive: true });
-    return path.join(hiveDir, "tickets.db");
+    const projectDir = workspaceContext.getProjectDir();
+    fs.mkdirSync(projectDir, { recursive: true });
+    return path.join(projectDir, "tickets.db");
   }
   const ZANA_DIR = _core().config.ZANA_DIR;
   fs.mkdirSync(ZANA_DIR, { recursive: true });

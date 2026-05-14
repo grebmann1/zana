@@ -10,7 +10,7 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 
 import * as config from "../config";
-import { initHiveDir, isHiveInitialized } from "./init";
+import { initProjectDir, isProjectInitialized } from "./init";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -220,8 +220,8 @@ export function importProject(absPath, opts) {
   }
 
   // Initialize .zana/ if not present
-  if (!isHiveInitialized(resolvedPath)) {
-    initHiveDir(resolvedPath, { silent: true });
+  if (!isProjectInitialized(resolvedPath)) {
+    initProjectDir(resolvedPath, { silent: true });
   }
 
   const name = (opts && opts.name) || readProjectName(resolvedPath);
@@ -343,7 +343,7 @@ export function checkHealth(id) {
     return { exists: false, hiveInitialized: false, configValid: false };
   }
 
-  const hiveInitialized = isHiveInitialized(entry.path);
+  const hiveInitialized = isProjectInitialized(entry.path);
 
   let configValid = false;
   const configPath = fs.existsSync(path.join(entry.path, ".zana", "config.json"))

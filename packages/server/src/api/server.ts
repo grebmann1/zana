@@ -9,7 +9,7 @@ const terminalRelay: any = new Proxy({}, { get: (_t, p) => _core().agents.termin
 import * as authMiddleware from "./auth-middleware";
 
 let server = null;
-let hiveInstance = null;
+let daemonInstance = null;
 
 function readBody(req) {
   return new Promise((resolve) => {
@@ -31,7 +31,7 @@ function json(res, data, status = 200, req = null) {
 }
 
 function getHive() {
-  return hiveInstance;
+  return daemonInstance;
 }
 
 async function handleRequest(req, res) {
@@ -862,7 +862,7 @@ async function handleRequest(req, res) {
 }
 
 export function start(hive, port, options = {}) {
-  hiveInstance = hive;
+  daemonInstance = hive;
   sseBroadcaster.init();
   if (options.token) {
     authMiddleware.init({ token: options.token });
