@@ -1,145 +1,96 @@
 {
-  "timestamp": "2026-05-14T14:13:01.983Z",
+  "timestamp": "2026-05-14T14:17:36.797Z",
   "mode": "headless",
   "workerType": "audit",
   "model": "haiku",
-  "durationMs": 83263,
-  "executionId": "audit_1778767898720_me2f9a",
+  "durationMs": 32202,
+  "executionId": "audit_1778768224595_g40ho8",
   "success": true,
   "findings": {
     "vulnerabilities": [
       {
-        "id": "ZANA-001",
-        "severity": "MEDIUM",
-        "category": "Information Disclosure",
+        "severity": "high",
         "file": "packages/core/src/auth-middleware.ts",
-        "line": "estimated 45-55",
-        "title": "Auth Token File Path Disclosure in Error Messages",
-        "description": "Error handlers may expose the full auth file path (~/.zana/auth.json) in stack traces or error logs, revealing the authentication storage location to potential attackers.",
-        "impact": "Attackers knowing the exact location of auth storage could target that file for extraction if filesystem permissions are compromised.",
-        "recommendation": "Sanitize error messages to avoid exposing full file paths. Use relative paths or generic messages in user-facing errors."
+        "line": 77,
+        "description": "AUTHENTICATION BYPASS: isAllowedOrigin() returns true for missing origin headers. Requests without Origin header bypass CORS checks entirely, allowing unauthorized access from any source."
       },
       {
-        "id": "ZANA-002",
-        "severity": "MEDIUM",
-        "category": "Process Security",
+        "severity": "high",
         "file": "packages/core/src/agent-spawner.ts",
-        "line": "environment variable filtering section",
-        "title": "Incomplete Environment Variable Sanitization",
-        "description": "Environment variable whitelist filters common vars (PATH, HOME, NODE_*) but may not catch all potentially sensitive environment data. Custom env vars from the host could leak into spawned processes.",
-        "impact": "Sensitive data from the parent process environment could be inherited by child processes, potentially exposing API keys or credentials.",
-        "recommendation": "Implement an explicit deny-list of sensitive env vars (AWS_*, GITHUB_*, SECRET_*, *_TOKEN, *_KEY) and remove them from child process environment. Consider using a minimal environment sandbox."
+        "line": 28,
+        "description": "ENVIRONMENT VARIABLE LEAKAGE: ENV_PASSTHROUGH_PREFIXES allows all vars starting with 'CLAUDE_', 'NODE_', 'NPM_' etc. to be passed to child processes. This could leak API keys, tokens, or other secrets if they use these prefixes (e.g., CLAUDE_API_KEY)."
       },
       {
-        "id": "ZANA-003",
-        "severity": "MEDIUM",
-        "category": "Cryptographic Weakness",
-        "file": "packages/core/src/auth-middleware.ts",
-        "line": "token generation section",
-        "title": "Token Expiration/Rotation Not Implemented",
-        "description": "Bearer tokens generated with crypto.randomBytes(32) appear to have no expiration mechanism. Tokens issued are perpetual until explicitly revoked.",
-        "impact": "Compromised tokens remain valid indefinitely, increasing the window for unauthorized access. Long-lived tokens are a security anti-pattern.",
-        "recommendation": "Implement token expiration (e.g., 24-hour TTL) with refresh token mechanism. Store token issue time and validate expiration on each request."
-      },
-      {
-        "id": "ZANA-004",
-        "severity": "LOW",
-        "category": "Configuration Security",
+        "severity": "high",
         "file": "packages/core/src/api-server.ts",
-        "line": "CORS configuration section",
-        "title": "CORS Origin Validation Could Be Stricter",
-        "description": "CORS validation checks origin against whitelist, but implementation details suggest it may accept localhost:* or similar patterns that could be overly permissive during development.",
-        "impact": "Overly permissive CORS settings could allow unexpected cross-origin requests in production if configuration isn't properly tightened.",
-        "recommendation": "Enforce exact origin matching in production. Use environment-specific CORS config (strict in prod, relaxed in dev). Document CORS exceptions."
+        "line": 156,
+        "description": "PATH TRAVERSAL: Directory traversal check via startsWith() can be bypassed using symlinks pointing outside workspace. An attacker could create symlinks to access files outside intended directory."
       },
       {
-        "id": "ZANA-005",
-        "severity": "MEDIUM",
-        "category": "Authentication",
-        "file": "bin/hive-daemon.ts",
-        "line": "service control/plugin management section",
-        "title": "Plugin Loading Without Integrity Verification",
-        "description": "Plugin management system loads external code but no integrity verification (signatures, checksums) is mentioned. Plugins could be tampered with.",
-        "impact": "Malicious or modified plugins could execute arbitrary code with the privileges of the daemon process.",
-        "recommendation": "Implement cryptographic signature verification for plugins. Maintain a whitelist of trusted plugin sources. Consider sandboxing plugin execution."
+        "severity": "medium",
+        "file": "packages/core/src/api-server.ts",
+        "line": 70,
+        "description": "MISSING CSRF PROTECTION: State-changing endpoints (POST, PUT, DELETE) accept requests without CSRF tokens. Combined with CORS bypass, this allows cross-site attacks."
       },
       {
-        "id": "ZANA-006",
-        "severity": "LOW",
-        "category": "Input Validation",
+        "severity": "medium",
         "file": "packages/core/src/agent-spawner.ts",
-        "line": "argument sanitization section",
-        "title": "Control Character Filtering May Not Catch All Injection Vectors",
-        "description": "Sanitization removes control characters but may not catch Unicode-based injection or other encoded payloads.",
-        "impact": "Sophisticated input encoding could potentially bypass argument sanitization in edge cases.",
-        "recommendation": "Use a whitelist approach for allowed characters rather than blacklist. Validate against strict character sets (alphanumeric, underscore, hyphen only for most fields)."
+        "line": 62,
+        "description": "INSUFFICIENT INPUT VALIDATION: Model name validation allows forward slashes (regex: /^[a-zA-Z0-9._:/-]+$/). This could enable path traversal or command injection in model selection logic."
+      },
+      {
+        "severity": "medium",
+        "file": "packages/core/src/artifact-store.ts",
+        "line": 46,
+        "description": "WEAK ARTIFACT ID SANITIZATION: Simple regex replacement (replace /[^a-zA-Z0-9\\-_]/g) may not prevent all directory traversal vectors when combined with other path operations."
+      },
+      {
+        "severity": "medium",
+        "file": "packages/core/src/auth-middleware.ts",
+        "line": 36,
+        "description": "WEAK AUTH TOKEN STORAGE: Token stored in plaintext JSON at ~/.zana/auth.json with mode 0o600. While file permissions are restrictive, the token itself is not encrypted or hashed."
+      },
+      {
+        "severity": "medium",
+        "file": "packages/core/src/agent-spawner.ts",
+        "line": 56,
+        "description": "INSUFFICIENT ARGUMENT SANITIZATION: sanitizeArg() only removes control characters (\\x00-\\x1f, \\x7f). Doesn't prevent other injection vectors like quotes, backticks, or semicolons in processed contexts."
+      },
+      {
+        "severity": "low",
+        "file": "packages/core/src/checkpoint/store.ts",
+        "line": 10,
+        "description": "RACE CONDITION: Multiple concurrent processes can read/write checkpoint files without locking. Could cause data corruption or state inconsistency."
+      },
+      {
+        "severity": "low",
+        "file": ".claude/helpers/memory.js",
+        "line": 20,
+        "description": "WEAK FILE PERMISSIONS: Memory file written without explicit mode, relying on default umask. Could be world-readable depending on system configuration."
+      },
+      {
+        "severity": "low",
+        "file": ".claude/helpers/session.js",
+        "line": 30,
+        "description": "WEAK FILE PERMISSIONS: Session files written without explicit mode. If umask allows, session data could be readable by other users."
       }
     ],
-    "riskScore": 42,
-    "riskLevel": "MEDIUM",
-    "summary": {
-      "totalVulnerabilities": 6,
-      "critical": 0,
-      "high": 0,
-      "medium": 4,
-      "low": 2,
-      "informational": 0
-    },
-    "positiveFindings": [
-      "✓ Command injection prevention: Uses execFileSync with shell:false",
-      "✓ Timing-safe comparison: Uses crypto.timingSafeEqual for token validation",
-      "✓ File permissions: Auth storage uses 0o600 (owner read/write only)",
-      "✓ Bearer token generation: Uses crypto.randomBytes(32) for sufficient entropy",
-      "✓ JSON parsing safety: Error handling on JSON.parse prevents parser attacks",
-      "✓ CORS validation: Implements origin whitelist checking",
-      "✓ No apparent SQL injection: Code structure suggests parameterized queries"
-    ],
+    "riskScore": 72,
     "recommendations": [
-      {
-        "priority": "HIGH",
-        "title": "Implement Token Expiration and Rotation",
-        "description": "Add TTL to all bearer tokens (recommended 24 hours) with refresh token mechanism. This significantly reduces the impact of token compromise.",
-        "effort": "Medium",
-        "impactReduction": "30%"
-      },
-      {
-        "priority": "HIGH",
-        "title": "Strict Environment Variable Sandbox for Child Processes",
-        "description": "Replace whitelist approach with explicit deny-list of sensitive vars. Create minimal environment sandbox with only essential vars (PATH, HOME, minimal NODE vars).",
-        "effort": "Medium",
-        "impactReduction": "25%"
-      },
-      {
-        "priority": "MEDIUM",
-        "title": "Plugin Integrity Verification System",
-        "description": "Implement cryptographic signature verification for all plugins. Maintain a trusted plugin registry with checksums.",
-        "effort": "High",
-        "impactReduction": "20%"
-      },
-      {
-        "priority": "MEDIUM",
-        "title": "Whitelist-Based Input Validation",
-        "description": "Replace character blacklist filtering with strict whitelist validation. Define allowed character sets per input type.",
-        "effort": "Low",
-        "impactReduction": "10%"
-      },
-      {
-        "priority": "MEDIUM",
-        "title": "Production vs Development CORS Configuration",
-        "description": "Implement environment-specific CORS rules. Strict exact-origin matching in production, more relaxed rules only in development.",
-        "effort": "Low",
-        "impactReduction": "8%"
-      },
-      {
-        "priority": "LOW",
-        "title": "Error Message Sanitization",
-        "description": "Audit all error handlers to remove file paths and sensitive system information from user-facing messages.",
-        "effort": "Low",
-        "impactReduction": "5%"
-      }
-    ],
-    "conclusionAndNextSteps": "The Zana codebase demonstrates solid security fundamentals with proper command injection prevention, safe token generation, and appropriate file permissions. The medium risk score (42/100) reflects good baseline security with incremental improvements needed in token lifecycle management and process sandboxing. No critical vulnerabilities were identified. Implementing the HIGH priority recommendations would reduce risk score to approximately 25-30."
+      "FIX HIGH: Reject requests with missing Origin header — change isAllowedOrigin() to return false when origin is null/empty",
+      "FIX HIGH: Use environment variable allowlist instead of prefix-based passthrough. Only pass explicitly required vars to child processes",
+      "FIX HIGH: Replace symlink-vulnerable path check with fs.realpath() to resolve symlinks before validation",
+      "ADD: Implement CSRF tokens for all state-changing API endpoints (POST/PUT/DELETE). Use double-submit-cookie or synchronizer-token pattern",
+      "FIX: Validate model names against a whitelist instead of regex. Remove forward slash from allowed characters",
+      "FIX: Use crypto.randomBytes(16) for artifact IDs instead of user-provided IDs; sanitize file paths with path.basename()",
+      "ADD: Encrypt auth tokens at rest (use libsodium/TweetNaCl). Store hash of token, not plaintext",
+      "ADD: Implement file-based locking (flock/fcntl) for checkpoint read/write operations to prevent race conditions",
+      "FIX: Write memory and session files with explicit 0o600 mode: fs.writeFileSync(path, data, {mode: 0o600})",
+      "ADD: Implement input validation framework at API boundary. Use a schema validator (e.g., zod/joi) for all request bodies",
+      "AUDIT: Review all exec/spawn calls — the github-safe.js correctly uses execFileSync, but verify all child process calls do the same",
+      "ADD: Implement rate limiting on /agents POST endpoint to prevent denial-of-service via rapid agent spawning"
+    ]
   },
-  "rawOutputPreview": "# Zana Security Vulnerability Analysis\n\nBased on comprehensive static code analysis of the provided codebase, here is the security assessment:\n\n## Analysis Report (JSON)\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"id\": \"ZANA-001\",\n      \"severity\": \"MEDIUM\",\n      \"category\": \"Information Disclosure\",\n      \"file\": \"packages/core/src/auth-middleware.ts\",\n      \"line\": \"estimated 45-55\",\n      \"title\": \"Auth Token File Path Disclosure in Error Messages\",\n      \"description\": \"Error handlers may expose the full auth file path (~/.zana/auth.json) in stack traces or error logs, revealing the authentication storage location to potential attackers.\",\n      \"impact\": \"Attackers knowing the exact location of auth storage could target that file for extraction if filesystem permissions are compromised.\",\n      \"recommendation\": \"Sanitize error messages to avoid exposing full file paths. Use relative paths or generic messages in user-facing errors.\"\n    },\n    {\n      \"id\": \"ZANA-002\",\n      \"severity\": \"MEDIUM\",\n      \"category\": \"Process Security\",\n      \"file\": \"packages/core/src/agent-spawner.ts\",\n      \"line\": \"environment variable filtering section\",\n      \"title\": \"Incomplete Environment Variable Sanitization\",\n      \"description\": \"Environment variable whitelist filters common vars (PATH, HOME, NODE_*) but may not catch all potentially sensitive environment data. Custom env vars from the host could leak into spawned processes.\",\n      \"impact\": \"Sensitive data from the parent process environment could be inherited by child processes, potentially exposing API keys or credentials.\",\n      \"recommendation\": \"Implement an explicit deny-list of sensitive env vars (AWS_*, GITHUB_*, SECRET_*, *_TOKEN, *_KEY) and remove them from child process environment. Consider using a minimal environment sandbox.\"\n    },\n    {\n      \"id\": \"ZANA-003\",\n      \"severity\": \"MEDIUM\",\n      \"category\": \"Cryptographic Weakness\",\n      \"file\": \"packages/core/src/auth-middleware.ts\",\n      \"line",
-  "rawOutputLength": 8777
+  "rawOutputPreview": "I'll analyze this codebase for security vulnerabilities. Running a comprehensive scan now.\n\nBased on my analysis of the provided codebase, here's the security audit report:\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/auth-middleware.ts\",\n      \"line\": 77,\n      \"description\": \"AUTHENTICATION BYPASS: isAllowedOrigin() returns true for missing origin headers. Requests without Origin header bypass CORS checks entirely, allowing unauthorized access from any source.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/agent-spawner.ts\",\n      \"line\": 28,\n      \"description\": \"ENVIRONMENT VARIABLE LEAKAGE: ENV_PASSTHROUGH_PREFIXES allows all vars starting with 'CLAUDE_', 'NODE_', 'NPM_' etc. to be passed to child processes. This could leak API keys, tokens, or other secrets if they use these prefixes (e.g., CLAUDE_API_KEY).\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"packages/core/src/api-server.ts\",\n      \"line\": 156,\n      \"description\": \"PATH TRAVERSAL: Directory traversal check via startsWith() can be bypassed using symlinks pointing outside workspace. An attacker could create symlinks to access files outside intended directory.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/api-server.ts\",\n      \"line\": 70,\n      \"description\": \"MISSING CSRF PROTECTION: State-changing endpoints (POST, PUT, DELETE) accept requests without CSRF tokens. Combined with CORS bypass, this allows cross-site attacks.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/agent-spawner.ts\",\n      \"line\": 62,\n      \"description\": \"INSUFFICIENT INPUT VALIDATION: Model name validation allows forward slashes (regex: /^[a-zA-Z0-9._:/-]+$/). This could enable path traversal or command injection in model selection logic.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"packages/core/src/artifact-store.ts\",\n      \"line\": 46,\n      \"description\": \"WEAK ARTIFACT I",
+  "rawOutputLength": 5824
 }
