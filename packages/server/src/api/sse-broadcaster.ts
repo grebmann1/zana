@@ -1,4 +1,4 @@
-const bus: any = new Proxy({}, { get: (_t, p) => require("@zana/core").events.bus.bus[p] });
+function _bus(): any { return require("@zana/core").events.bus.bus; }
 
 const clients = new Set();
 let eventCounter = 0;
@@ -36,7 +36,7 @@ export function addClient(res, filterTypes, lastEventId) {
   clients.add(client);
   res.on("close", () => {
     clients.delete(client);
-    bus.emit("sse:connections", { count: clients.size });
+    _bus().emit("sse:connections", { count: clients.size });
   });
 
   // Replay missed events if Last-Event-ID provided
@@ -51,7 +51,7 @@ export function addClient(res, filterTypes, lastEventId) {
     }
   }
 
-  bus.emit("sse:connections", { count: clients.size });
+  _bus().emit("sse:connections", { count: clients.size });
   return client;
 }
 
@@ -87,7 +87,7 @@ function sendPing() {
 
 export function init() {
   for (const eventType of STREAM_EVENTS) {
-    bus.on(eventType, (data) => broadcast(eventType, data));
+    _bus().on(eventType, (data) => broadcast(eventType, data));
   }
   // Auto-ping every 15s to keep connections alive
   if (!pingTimer) {

@@ -5,38 +5,52 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { bus, EVENTS } from "./events/bus";
-const pluginLoader = require("@zana/extras").plugins.loader;
-const _serverPkg: any = require("@zana/server");
-const startHookServer = _serverPkg.hooks.server.startHookServer;
-const setHivemindModules = _serverPkg.hooks.server.setHivemindModules;
-const hookInstaller = _serverPkg.hooks.installer;
 import * as profileStore from "./agents/profile-store";
 import * as agentManager from "./agents/manager";
 import * as eventLog from "./events/log";
-// Lazy proxies — @zana/work depends on @zana/core, so eager require here
-// would dead-lock during cross-package init.
-const teamStore: any = new Proxy({}, { get: (_t, p) => require("@zana/work").teams.store[p] });
-const teamManager: any = new Proxy({}, { get: (_t, p) => require("@zana/work").teams.manager[p] });
-const skillStore = require("@zana/extras").settings.skillStore;
 import * as daemonRegistry from "./daemon/registry";
-const _swarmPkg = require("@zana/swarm");
-const swarmRouter = _swarmPkg.router;
-const swarmEvents = _swarmPkg.events;
-const swarmSpawner = _swarmPkg.spawner;
 import * as persistence from "./persistence";
 import * as eventBusService from "./events/service";
-const runTracker: any = new Proxy({}, { get: (_t, p) => require("@zana/work").runs.tracker[p] });
-const ticketWatcher: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.watcher[p] });
-const healthMonitor = _serverPkg.api.healthMonitor;
 import * as workspaceContext from "./project/workspace-context";
-const _intel = require("@zana/intelligence");
-const taskRouter = _intel.taskRouter;
-const vectorMemory = _intel.vectorMemory;
-const backgroundWorkers = _intel.backgroundWorkers;
-const goapPlanner = _intel.goapPlanner;
 import * as moduleLoader from "./modules/loader";
 
+// Lazy thunks for cross-package modules. Sibling packages depend on @zana/core,
+// so eager top-level requires here would deadlock during cross-package init.
+// Node's require cache keeps repeat calls cheap.
+function _serverPkg(): any { return require("@zana/server"); }
+function _swarmPkg(): any { return require("@zana/swarm"); }
+function _intel(): any { return require("@zana/intelligence"); }
+function _extras(): any { return require("@zana/extras"); }
+function _teamStore(): any { return require("@zana/work").teams.store; }
+function _teamManager(): any { return require("@zana/work").teams.manager; }
+function _runTracker(): any { return require("@zana/work").runs.tracker; }
+function _ticketWatcher(): any { return require("@zana/work").tickets.watcher; }
+
 export async function init({ workspace, headless = false, onHook, preferredPort, skipApiServer = false }) {
+  // Resolve cross-package modules lazily inside init(), so importing @zana/core
+  // (e.g. for `config` only) does not eagerly pull in 4 sibling packages.
+  const serverPkg = _serverPkg();
+  const startHookServer = serverPkg.hooks.server.startHookServer;
+  const setHivemindModules = serverPkg.hooks.server.setHivemindModules;
+  const hookInstaller = serverPkg.hooks.installer;
+  const healthMonitor = serverPkg.api.healthMonitor;
+  const swarmPkg = _swarmPkg();
+  const swarmRouter = swarmPkg.router;
+  const swarmEvents = swarmPkg.events;
+  const swarmSpawner = swarmPkg.spawner;
+  const intel = _intel();
+  const taskRouter = intel.taskRouter;
+  const vectorMemory = intel.vectorMemory;
+  const backgroundWorkers = intel.backgroundWorkers;
+  const goapPlanner = intel.goapPlanner;
+  const extras = _extras();
+  const pluginLoader = extras.plugins.loader;
+  const skillStore = extras.settings.skillStore;
+  const teamStore = _teamStore();
+  const teamManager = _teamManager();
+  const runTracker = _runTracker();
+  const ticketWatcher = _ticketWatcher();
+
   const resolvedWorkspace = workspace || process.cwd();
   if (!fs.existsSync(resolvedWorkspace)) {
     fs.mkdirSync(resolvedWorkspace, { recursive: true });
@@ -174,7 +188,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   };
   await moduleLoader.init(zanaModules);
   if (headless && !skipApiServer) {
-    const apiServer = _serverPkg.api.server;
+    const apiServer = serverPkg.api.server;
     const apiPort = (hookServerHandle?.port || preferredPort || 47400) + 1;
     apiServerHandle = apiServer.start(zanaModules, apiPort);
   }
@@ -190,7 +204,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     vectorMemory.shutdown();
     ticketWatcher.stop();
     healthMonitor.stop();
-    if (apiServerHandle) { try { _serverPkg.api.server.stop(); } catch {} }
+    if (apiServerHandle) { try { serverPkg.api.server.stop(); } catch {} }
     bus.emit(EVENTS.ZANA_SHUTDOWN, { daemonId });
     eventBusService.stop();
     persistence.stopPeriodicCompaction();

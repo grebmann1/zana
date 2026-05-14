@@ -5,18 +5,18 @@ import * as path from "node:path";
 
 function _core() { return require("@zana/core"); }
 function _ctx() { return _core().project.workspaceContext; }
-function _ZANA_DIR() { return _core().config.ZANA_DIR; }
+import { ZANA_DIR } from "@zana/core/dist/src/config";
 
 function getTicketsDir() {
   const ctx = _ctx();
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
-  return path.join(_ZANA_DIR(), "tickets");
+  return path.join(ZANA_DIR, "tickets");
 }
 
 function getSprintsDir() {
   const ctx = _ctx();
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
-  return path.join(_ZANA_DIR(), "sprints");
+  return path.join(ZANA_DIR, "sprints");
 }
 
 // ─── Dir helpers ─────────────────────────────────────────────────────────────

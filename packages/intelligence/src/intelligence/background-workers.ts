@@ -6,10 +6,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 function _core() { return require("@zana/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
-const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
-const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
-const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
-const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
+function _eventBus(): any { return _core().events.service; }
+function _agentManager(): any { return _core().agents.manager; }
+function _workspaceContext(): any { return _core().project.workspaceContext; }
+function _profileStore(): any { return _core().agents.profileStore; }
 
 function WORKERS_PATH() { return path.join(ZANA_DIR(), "workers.json"); }
 const MAX_GLOBAL_CONCURRENT = 3;
@@ -100,17 +100,19 @@ async function executeWorker(workerId) {
     return { agentId: null, status: "queued" };
   }
   const startTime = Date.now();
-  const workspace = workspaceContext.isInitialized() ? workspaceContext.getWorkspaceRoot() : process.env.HOME;
-  const profile = profileStore.getProfile(worker.profileId);
+  const wsCtx = _workspaceContext();
+  const workspace = wsCtx.isInitialized() ? wsCtx.getWorkspaceRoot() : process.env.HOME;
+  const profile = _profileStore().getProfile(worker.profileId);
   if (!profile) return { agentId: null, status: "profile_not_found" };
 
   let agentId = null;
   try {
     if (!runningInstances.has(workerId)) runningInstances.set(workerId, new Set());
-    const result = agentManager.spawnHeadlessAgent(profile, { prompt: worker.promptTemplate, cwd: workspace });
+    const result = _agentManager().spawnHeadlessAgent(profile, { prompt: worker.promptTemplate, cwd: workspace });
     agentId = result.agentId;
     runningInstances.get(workerId).add(agentId);
     worker.lastRun = Date.now();
+    const eventBus = _eventBus();
     eventBus.emit("worker:triggered", { workerId, agentId });
 
     const unsub = eventBus.subscribe({ types: ["agent:terminated", "agent:completed", "agent:failed"] }, (ev) => {
@@ -126,7 +128,7 @@ async function executeWorker(workerId) {
   } catch (err) {
     if (agentId) runningInstances.get(workerId)?.delete(agentId);
     addHistory(workerId, { timestamp: startTime, agentId, success: false, duration: Date.now() - startTime });
-    eventBus.emit("worker:failed", { workerId, agentId, error: err.message });
+    _eventBus().emit("worker:failed", { workerId, agentId, error: err.message });
     return { agentId, status: "error" };
   }
 }
@@ -158,10 +160,11 @@ function setupTrigger(worker) {
   if (trigger.type === "schedule" && trigger.interval > 0) {
     timers.set(worker.id, setInterval(() => executeWorker(worker.id), trigger.interval));
   } else if (trigger.type === "event" && trigger.filter) {
-    unsubscribers.set(worker.id, eventBus.subscribe(trigger.filter, () => executeWorker(worker.id)));
+    unsubscribers.set(worker.id, _eventBus().subscribe(trigger.filter, () => executeWorker(worker.id)));
   } else if (trigger.type === "filewatch" && trigger.patterns) {
     try {
-      const ws = workspaceContext.isInitialized() ? workspaceContext.getWorkspaceRoot() : null;
+      const wsCtx = _workspaceContext();
+      const ws = wsCtx.isInitialized() ? wsCtx.getWorkspaceRoot() : null;
       if (ws) {
         const watcher = fs.watch(ws, { recursive: true }, (_, fn) => {
           if (fn && matchesFilePattern(fn, trigger.patterns)) executeWorker(worker.id);
@@ -244,7 +247,7 @@ export function register(def) {
   };
   workers.set(worker.id, worker);
   setupTrigger(worker); saveConfig();
-  eventBus.emit("worker:registered", { workerId: worker.id, name: worker.name });
+  _eventBus().emit("worker:registered", { workerId: worker.id, name: worker.name });
 }
 export function unregister(workerId) {
   if (!workers.has(workerId)) return false;

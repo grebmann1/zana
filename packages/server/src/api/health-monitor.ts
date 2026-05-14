@@ -1,4 +1,4 @@
-const bus: any = new Proxy({}, { get: (_t, p) => require("@zana/core").events.bus.bus[p] });
+function _bus(): any { return require("@zana/core").events.bus.bus; }
 
 export const STALE_AGENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 export const MEMORY_THRESHOLD_MB = 512;
@@ -28,7 +28,7 @@ function checkStaleAgents() {
     if (!lastActivity) continue;
     const age = now - new Date(lastActivity).getTime();
     if (age > STALE_AGENT_THRESHOLD_MS) {
-      bus.emit("health:stale-agent", {
+      _bus().emit("health:stale-agent", {
         agentId: agent.id,
         profileName: agent.profileName,
         inactiveMinutes: Math.round(age / 60000),
@@ -40,7 +40,7 @@ function checkStaleAgents() {
 function checkMemory() {
   const heapMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
   if (heapMB > MEMORY_THRESHOLD_MB) {
-    bus.emit("health:memory-warning", { heapMB, threshold: MEMORY_THRESHOLD_MB });
+    _bus().emit("health:memory-warning", { heapMB, threshold: MEMORY_THRESHOLD_MB });
   }
 }
 

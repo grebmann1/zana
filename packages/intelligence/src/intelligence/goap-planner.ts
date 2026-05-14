@@ -1,9 +1,9 @@
 import * as crypto from "node:crypto";
 function _core() { return require("@zana/core"); }
-const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
-const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
-const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
-const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.bus.EVENTS[p] });
+function _agentManager(): any { return _core().agents.manager; }
+function _profileStore(): any { return _core().agents.profileStore; }
+function _bus(): any { return _core().events.bus.bus; }
+function _EVENTS(): any { return _core().events.bus.EVENTS; }
 
 const plans = new Map();
 const actionRegistry = new Map();
@@ -166,21 +166,23 @@ export function createPlan(goalDescription, options = {}) {
   };
 
   plans.set(planId, plan);
-  bus.emit("plan:created", { planId, layers: layers.length, estimatedCost, goal: goalDescription });
+  _bus().emit("plan:created", { planId, layers: layers.length, estimatedCost, goal: goalDescription });
   return { planId, layers, estimatedCost };
 }
 
 function waitForAgent(agentId) {
   return new Promise((resolve) => {
-    const agent = agentManager.getAgent(agentId);
+    const agent = _agentManager().getAgent(agentId);
     if (agent && (agent.state === "terminated" || agent.state === "errored")) {
       resolve(agent);
       return;
     }
+    const bus = _bus();
+    const EVENTS = _EVENTS();
     const handler = (payload) => {
       if (payload.agentId === agentId) {
         bus.removeListener(EVENTS.AGENT_TERMINATED, handler);
-        resolve(agentManager.getAgent(agentId));
+        resolve(_agentManager().getAgent(agentId));
       }
     };
     bus.on(EVENTS.AGENT_TERMINATED, handler);
@@ -192,10 +194,10 @@ async function executeLayer(plan, layerIndex) {
   const cwd = plan.options.cwd || process.env.HOME;
 
   const tasks = layer.map((action) => {
-    const profile = profileStore.getProfile(action.profileId);
+    const profile = _profileStore().getProfile(action.profileId);
     if (!profile) throw new Error(`Profile not found: ${action.profileId}`);
     const prompt = action.promptTemplate.replace(/\{goal\}/g, plan.goalDescription);
-    const { agentId } = agentManager.spawnHeadlessAgent(profile, { prompt, cwd });
+    const { agentId } = _agentManager().spawnHeadlessAgent(profile, { prompt, cwd });
 
     const planAction = plan.actions.find((a) => a.id === action.id && a.status === "pending");
     if (planAction) { planAction.status = "running"; planAction.agentId = agentId; }
@@ -222,7 +224,7 @@ export async function executePlan(planId) {
   if (plan.state === "running") throw new Error("Plan already running: " + planId);
 
   plan.state = "running";
-  bus.emit("plan:started", { planId });
+  _bus().emit("plan:started", { planId });
   const allResults = [];
 
   try {
@@ -231,13 +233,13 @@ export async function executePlan(planId) {
       plan.progress = Math.round((i / plan.layers.length) * 100);
       const { results, failed } = await executeLayer(plan, i);
       allResults.push(...results);
-      bus.emit("plan:layer-complete", { planId, layer: i, failed: failed.length });
+      _bus().emit("plan:layer-complete", { planId, layer: i, failed: failed.length });
 
       if (failed.length > 0) {
         const replanned = replan(planId);
         if (!replanned.success) {
           plan.state = "failed";
-          bus.emit("plan:failed", { planId, layer: i, reason: "replan failed" });
+          _bus().emit("plan:failed", { planId, layer: i, reason: "replan failed" });
           return { success: false, results: allResults };
         }
         i = plan.currentLayer - 1;
@@ -245,11 +247,11 @@ export async function executePlan(planId) {
     }
     plan.state = "completed";
     plan.progress = 100;
-    bus.emit("plan:completed", { planId, totalActions: allResults.length });
+    _bus().emit("plan:completed", { planId, totalActions: allResults.length });
     return { success: true, results: allResults };
   } catch (err) {
     plan.state = "failed";
-    bus.emit("plan:failed", { planId, reason: err.message });
+    _bus().emit("plan:failed", { planId, reason: err.message });
     return { success: false, results: allResults, error: err.message };
   }
 }
@@ -275,12 +277,12 @@ export function cancelPlan(planId) {
   if (!plan || plan.state === "completed" || plan.state === "cancelled") return false;
   for (const action of plan.actions) {
     if (action.status === "running" && action.agentId) {
-      agentManager.killAgent(action.agentId);
+      _agentManager().killAgent(action.agentId);
       action.status = "cancelled";
     }
   }
   plan.state = "cancelled";
-  bus.emit("plan:failed", { planId, reason: "cancelled" });
+  _bus().emit("plan:failed", { planId, reason: "cancelled" });
   return true;
 }
 
@@ -313,7 +315,7 @@ export function replan(planId) {
       });
     }
   }
-  bus.emit("plan:replanned", { planId, newLayers: newLayers.length });
+  _bus().emit("plan:replanned", { planId, newLayers: newLayers.length });
   return { success: true, newLayers };
 }
 
