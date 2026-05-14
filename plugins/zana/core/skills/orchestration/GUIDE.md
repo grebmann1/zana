@@ -6,7 +6,7 @@ Orchestrate multi-agent workflows in Zana. You — the orchestrator — plan, de
 
 Spawn a **single agent** when the task is well-scoped to a few files and one specialty (one bug fix, one component, one doc page). Use `zana_spawn_agent` with the right profile and a tight prompt.
 
-Spawn a **team** when the task crosses concerns or benefits from parallelism: planning + implementation + tests, or three independent features that can ship in parallel. Use `zana_start_team` (one of the templates) or build your own composition with multiple `zana_spawn_agent` calls.
+Spawn a **team** when the task crosses concerns or benefits from parallelism: planning + implementation + tests, or three independent features that can ship in parallel. Compose a team via multiple `zana_spawn_agent` calls — one per role (e.g. an architect, two coders, a tester).
 
 Spawn a **child daemon swarm** (`zana_swarm_spawn`) only when each workstream is large enough to warrant its own orchestrator and workers — typically multi-day efforts or independent epics. In-process agents are cheaper for everything else.
 
@@ -20,27 +20,15 @@ Before spawning anyone, decompose. A useful ticket is:
 
 Use `zana_ticket_create` for each piece, then `zana_sprint_create` to group them and `zana_sprint_start` to begin. Tickets are not bureaucracy — they are the unit of dispatch and the thing you mark `complete` so the orchestration loop stays honest about progress.
 
-## The two execution paths
+## The execution path
 
-### Manual orchestration
-
-You drive every step. Use this when the task is novel, the workers need careful prompts, or the success signal needs your judgement.
+You drive every step. The orchestrator plans, dispatches, and verifies — Zana does not guess about success on your behalf.
 
 1. `zana_list_profiles` to see who is available.
 2. `zana_spawn_agent` per ticket. Spawn independent tickets in parallel up to the concurrency cap (default 10).
 3. `zana_list_agents` periodically to monitor.
 4. `zana_agent_result` once an agent terminates — verify the work is real.
 5. `zana_ticket_complete` with a result summary.
-
-### Goal-driven autopilot
-
-Hand the loop to Zana. Use this when the goal is specific and the success criteria are checkable. Call `zana_autopilot_goal_driven` with:
-
-- `title`: what is being achieved
-- `criteria`: an explicit list of conditions an evaluator can grade
-- `steps`: ordered `{prompt, profile}` agent runs
-
-The system spawns workers, runs an evaluator after each pass, and restarts from step 0 if the criteria fail. You walk away.
 
 ## Writing prompts that actually work
 
