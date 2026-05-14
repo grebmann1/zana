@@ -94,7 +94,7 @@ if (pluginIdx !== -1) {
       console.error(`zana-daemon: plugin directory already exists: ${targetDir}`);
       process.exit(1);
     }
-    const { scaffold } = require("../src/plugins/scaffold.js");
+    const { scaffold } = require("@zana/extras").plugins.scaffold;
     scaffold(name, targetDir);
     console.log(`Plugin scaffolded at ${targetDir}`);
   } else if (sub === "list") {
