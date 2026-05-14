@@ -752,37 +752,37 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return swarmRouter.sendAck(params.messageId, params.agentId, params.status, params.response);
     }
 
-    // --- Hive Mind Master ---
-    case "mind_spawn_hive": {
+    // --- Swarm (multi-daemon coordination) ---
+    case "swarm_spawn": {
       const masterPort = process.env.ZANA_HOOK_PORT || "47400";
       const result = swarmSpawner.spawnSubHive({
         teamId: params.teamId,
         workspace: params.workspace || getWorkspaceFn(),
         prompt: params.prompt,
         masterPort,
-        masterHiveId: process.env.ZANA_ID || "master",
+        masterDaemonId: process.env.ZANA_ID || "master",
       });
       return result;
     }
-    case "mind_list_hives": {
+    case "swarm_list": {
       return swarmSpawner.listSubHives();
     }
-    case "mind_instruct_hive": {
-      return await swarmSpawner.instructSubHive(params.hiveId, params.message);
+    case "swarm_instruct": {
+      return await swarmSpawner.instructSubHive(params.daemonId, params.message);
     }
-    case "mind_stop_hive": {
-      return swarmSpawner.stopSubHive(params.hiveId);
+    case "swarm_stop": {
+      return swarmSpawner.stopSubHive(params.daemonId);
     }
-    case "mind_broadcast": {
-      const hives = swarmSpawner.listSubHives().filter((h) => h.status === "running");
+    case "swarm_broadcast": {
+      const daemons = swarmSpawner.listSubHives().filter((h) => h.status === "running");
       const results = [];
-      for (const h of hives) {
-        const r = await swarmSpawner.instructSubHive(h.hiveId, params.message);
-        results.push({ hiveId: h.hiveId, ...r });
+      for (const h of daemons) {
+        const r = await swarmSpawner.instructSubHive(h.daemonId || h.hiveId, params.message);
+        results.push({ daemonId: h.daemonId || h.hiveId, ...r });
       }
       return { ok: true, results };
     }
-    case "mind_poll_events": {
+    case "swarm_poll_events": {
       return swarmEvents.pending(params.since || 0);
     }
 

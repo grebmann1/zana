@@ -17,9 +17,10 @@ function notifyChange() {
   }
 }
 
-export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHiveId }) {
+export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHiveId, masterDaemonId }) {
   const hiveId = `sub-${crypto.randomUUID().slice(0, 8)}`;
-  const headlessScript = path.join(__dirname, "..", "bin", "hive-headless.js");
+  const headlessScript = path.join(__dirname, "..", "..", "bin", "daemon.js");
+  const masterId = masterDaemonId || masterHiveId;
 
   const args = [headlessScript, workspace];
   if (teamId) args.push(`--team=${teamId}`);
@@ -27,7 +28,7 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
   const env = {
     ...process.env,
     ZANA_MASTER_PORT: String(masterPort),
-    ZANA_MASTER_ID: masterHiveId || "",
+    ZANA_MASTER_ID: masterId || "",
     ZANA_ROLE: "sub",
   };
   if (prompt) env.ZANA_TEAM_PROMPT = prompt;

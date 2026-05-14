@@ -28,38 +28,38 @@ const ZANA_ID = process.env.ZANA_ID || "mcp";
 const SCRATCHPAD_PATH = path.join(SCRATCHPAD_DIR, `${ZANA_ID}.md`);
 
 // --- In-process core (always boots — no daemon needed) ---
-let localHive = null;
+let localDaemon = null;
 let bootstrapPromise = null;
 
-function getHiveInitModule() {
+function getProjectInitModule() {
   try {
-    return require("@zana/core/dist/src/hive-init.js");
+    return require("@zana/core/dist/src/project/init.js");
   } catch {
     const appRoot = path.resolve(__dirname, "..", "..", "..", "..");
-    return require(path.join(appRoot, "packages", "core", "dist", "src", "hive-init.js"));
+    return require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
   }
 }
 
-async function ensureHiveRunning() {
-  if (localHive) return;
+async function ensureDaemonRunning() {
+  if (localDaemon) return;
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
     const workspace = process.env.ZANA_WORKSPACE || require("path").resolve(__dirname, "..", "..", "..", "..");
-    process.stderr.write(`[hive-mcp] booting core in-process for: ${workspace}\n`);
+    process.stderr.write(`[zana-mcp] booting core in-process for: ${workspace}\n`);
 
     const autoInitDisabled = process.env.ZANA_AUTO_INIT === "0";
     if (!autoInitDisabled) {
-      const { isHiveInitialized, initHiveDir } = getHiveInitModule();
-      if (!isHiveInitialized(workspace)) {
-        initHiveDir(workspace, { silent: true });
-        process.stderr.write(`[hive-mcp] initialized .zana in workspace: ${workspace}\n`);
+      const { isProjectInitialized, initProjectDir } = getProjectInitModule();
+      if (!isProjectInitialized(workspace)) {
+        initProjectDir(workspace, { silent: true });
+        process.stderr.write(`[zana-mcp] initialized .zana in workspace: ${workspace}\n`);
       }
     }
 
     process.env.ZANA_SKIP_MCP_INSTALL = "1";
     const { init: coreInit } = require("@zana/core");
-    localHive = await coreInit({
+    localDaemon = await coreInit({
       workspace,
       headless: true,
       preferredPort: 0,
@@ -67,7 +67,7 @@ async function ensureHiveRunning() {
       onHook: () => {},
     });
 
-    process.stderr.write(`[hive-mcp] ready — id: ${localHive.hiveId} port: ${localHive.hookServerHandle?.port || "none"}\n`);
+    process.stderr.write(`[zana-mcp] ready — id: ${localDaemon.daemonId} port: ${localDaemon.hookServerHandle?.port || "none"}\n`);
   })().catch((err) => {
     bootstrapPromise = null;
     throw err;
@@ -77,27 +77,27 @@ async function ensureHiveRunning() {
 }
 
 function callCore(action, params = {}) {
-  return localHive.agentManager.handleOrchestratorCommand(
+  return localDaemon.agentManager.handleOrchestratorCommand(
     { action, ...params },
-    () => localHive.workspace
+    () => localDaemon.workspace
   );
 }
 
 const TOOLS = [
   {
-    name: "hive_spawn_agent",
+    name: "zana_spawn_agent",
     description: "Spawn a sub-agent from an available profile. The agent runs in headless mode and works on the current project.",
     inputSchema: {
       type: "object",
       properties: {
-        profileId: { type: "string", description: "Profile ID to spawn (use hive_list_profiles to see available)" },
+        profileId: { type: "string", description: "Profile ID to spawn (use zana_list_profiles to see available)" },
         prompt: { type: "string", description: "Initial task/prompt to give the sub-agent" },
       },
       required: ["profileId", "prompt"],
     },
   },
   {
-    name: "hive_spawn_agent_validated",
+    name: "zana_spawn_agent_validated",
     description: "Spawn a sub-agent with output validation guardrails. The agent's output is checked against the specified validators and retried automatically if validation fails.",
     inputSchema: {
       type: "object",
@@ -125,7 +125,7 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_oneshot_query",
+    name: "zana_oneshot_query",
     description: "Run a quick one-shot query using a profile. Returns the text response directly. Much cheaper than spawning a full agent session — use for lookups, summaries, quick questions.",
     inputSchema: {
       type: "object",
@@ -138,12 +138,12 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_list_agents",
+    name: "zana_list_agents",
     description: "List all currently running agents with their status.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_agent_status",
+    name: "zana_agent_status",
     description: "Get detailed status of a specific agent.",
     inputSchema: {
       type: "object",
@@ -154,7 +154,7 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_agent_result",
+    name: "zana_agent_result",
     description: "Get the result/output of a completed agent. Returns null if agent is still running.",
     inputSchema: {
       type: "object",
@@ -165,7 +165,7 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_kill_agent",
+    name: "zana_kill_agent",
     description: "Kill/terminate a running agent.",
     inputSchema: {
       type: "object",
@@ -176,12 +176,12 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_list_profiles",
+    name: "zana_list_profiles",
     description: "List all available agent profiles that can be spawned.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_get_profile",
+    name: "zana_get_profile",
     description: "Get the full configuration of a specific profile.",
     inputSchema: {
       type: "object",
@@ -192,7 +192,7 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_save_profile",
+    name: "zana_save_profile",
     description: "Create or update an agent profile. Provide an id to update, omit for new. Fields: displayName, description, icon, category, model, systemPrompt, appendSystemPrompt, permissionMode, allowedTools, disallowedTools, maxBudgetUsd, effortLevel, defaultCwd.",
     inputSchema: {
       type: "object",
@@ -222,7 +222,7 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_delete_profile",
+    name: "zana_delete_profile",
     description: "Delete a user-created profile by ID. Built-in profiles cannot be deleted.",
     inputSchema: {
       type: "object",
@@ -233,13 +233,13 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_list_skills",
-    description: "List all Hive Skills (shared instructions and tools injected into all agents).",
+    name: "zana_list_skills",
+    description: "List all Skills (shared instructions and tools injected into all agents).",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_get_skill",
-    description: "Get a specific Hive Skill by ID.",
+    name: "zana_get_skill",
+    description: "Get a specific Skill by ID.",
     inputSchema: {
       type: "object",
       properties: {
@@ -249,8 +249,8 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_save_skill",
-    description: "Create or update a Hive Skill. For instruction type: provide content (markdown text injected into agent system prompts). For tool type: provide toolSchema and handler.",
+    name: "zana_save_skill",
+    description: "Create or update a Skill. For instruction type: provide content (markdown text injected into agent system prompts). For tool type: provide toolSchema and handler.",
     inputSchema: {
       type: "object",
       properties: {
@@ -274,8 +274,8 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_delete_skill",
-    description: "Delete a Hive Skill by ID.",
+    name: "zana_delete_skill",
+    description: "Delete a Skill by ID.",
     inputSchema: {
       type: "object",
       properties: {
@@ -285,8 +285,8 @@ const TOOLS = [
     },
   },
   {
-    name: "hive_toggle_skill",
-    description: "Enable or disable a Hive Skill without deleting it.",
+    name: "zana_toggle_skill",
+    description: "Enable or disable a Skill without deleting it.",
     inputSchema: {
       type: "object",
       properties: {
@@ -301,7 +301,7 @@ const TOOLS = [
 // --- Ticket tools ---
 const TICKET_TOOLS = [
   {
-    name: "hive_ticket_create",
+    name: "zana_ticket_create",
     description: "Create a new ticket for tracking work. Tickets are globally shared across all hives.",
     inputSchema: {
       type: "object",
@@ -317,7 +317,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_list",
+    name: "zana_ticket_list",
     description: "List/filter tickets. All tickets are globally shared.",
     inputSchema: {
       type: "object",
@@ -330,7 +330,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_get",
+    name: "zana_ticket_get",
     description: "Get full details of a specific ticket including comments and history.",
     inputSchema: {
       type: "object",
@@ -341,7 +341,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_claim",
+    name: "zana_ticket_claim",
     description: "Claim a ticket (assigns it to you and moves to in-progress). Works on backlog and rework tickets.",
     inputSchema: {
       type: "object",
@@ -352,7 +352,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_update_status",
+    name: "zana_ticket_update_status",
     description: "Move a ticket to a new status. Valid transitions: backlog→in-progress/cancelled, in-progress→review/done/backlog/cancelled, review→done/rework/cancelled, rework→in-progress/cancelled.",
     inputSchema: {
       type: "object",
@@ -364,7 +364,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_comment",
+    name: "zana_ticket_comment",
     description: "Add a comment/update log to a ticket.",
     inputSchema: {
       type: "object",
@@ -376,7 +376,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_complete",
+    name: "zana_ticket_complete",
     description: "Mark a ticket as done with a result summary describing what was accomplished.",
     inputSchema: {
       type: "object",
@@ -388,7 +388,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_edit",
+    name: "zana_ticket_edit",
     description: "Edit a ticket's fields (title, description, priority, labels, type, sprintId). Only specified fields are updated.",
     inputSchema: {
       type: "object",
@@ -405,7 +405,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_update",
+    name: "zana_ticket_update",
     description: "Update a ticket with progress, plan, status, review phase, or files changed. Workers and reviewers use this to report progress and advance the review pipeline.",
     inputSchema: {
       type: "object",
@@ -422,7 +422,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_ticket_add_to_sprint",
+    name: "zana_ticket_add_to_sprint",
     description: "Add a ticket to a sprint.",
     inputSchema: {
       type: "object",
@@ -434,7 +434,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_sprint_list",
+    name: "zana_sprint_list",
     description: "List sprints, optionally filtered by team or status.",
     inputSchema: {
       type: "object",
@@ -445,7 +445,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_sprint_board",
+    name: "zana_sprint_board",
     description: "Get a sprint board with tickets grouped by status columns (backlog, in-progress, review, done).",
     inputSchema: {
       type: "object",
@@ -456,7 +456,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_sprint_create",
+    name: "zana_sprint_create",
     description: "Create a new sprint to organize tickets.",
     inputSchema: {
       type: "object",
@@ -469,7 +469,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_sprint_start",
+    name: "zana_sprint_start",
     description: "Start a sprint (moves from planning to active).",
     inputSchema: {
       type: "object",
@@ -480,7 +480,7 @@ const TICKET_TOOLS = [
     },
   },
   {
-    name: "hive_sprint_end",
+    name: "zana_sprint_end",
     description: "End an active sprint.",
     inputSchema: {
       type: "object",
@@ -495,7 +495,7 @@ const TICKET_TOOLS = [
 // --- Scheduler tools ---
 const SCHEDULER_TOOLS = [
   {
-    name: "hive_schedule_create",
+    name: "zana_schedule_create",
     description: "Create a scheduled recurring action. Supports cron expressions or simple intervals.",
     inputSchema: {
       type: "object",
@@ -525,12 +525,12 @@ const SCHEDULER_TOOLS = [
     },
   },
   {
-    name: "hive_schedule_list",
+    name: "zana_schedule_list",
     description: "List all scheduled actions.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_schedule_get",
+    name: "zana_schedule_get",
     description: "Get a schedule and its recent run history.",
     inputSchema: {
       type: "object",
@@ -541,7 +541,7 @@ const SCHEDULER_TOOLS = [
     },
   },
   {
-    name: "hive_schedule_update",
+    name: "zana_schedule_update",
     description: "Update a schedule's configuration.",
     inputSchema: {
       type: "object",
@@ -557,7 +557,7 @@ const SCHEDULER_TOOLS = [
     },
   },
   {
-    name: "hive_schedule_delete",
+    name: "zana_schedule_delete",
     description: "Delete a schedule.",
     inputSchema: {
       type: "object",
@@ -568,7 +568,7 @@ const SCHEDULER_TOOLS = [
     },
   },
   {
-    name: "hive_schedule_enable",
+    name: "zana_schedule_enable",
     description: "Enable a disabled schedule.",
     inputSchema: {
       type: "object",
@@ -577,7 +577,7 @@ const SCHEDULER_TOOLS = [
     },
   },
   {
-    name: "hive_schedule_disable",
+    name: "zana_schedule_disable",
     description: "Disable a schedule without deleting it.",
     inputSchema: {
       type: "object",
@@ -586,7 +586,7 @@ const SCHEDULER_TOOLS = [
     },
   },
   {
-    name: "hive_schedule_trigger",
+    name: "zana_schedule_trigger",
     description: "Manually trigger a schedule to run immediately.",
     inputSchema: {
       type: "object",
@@ -599,7 +599,7 @@ const SCHEDULER_TOOLS = [
 // --- Event Bus tools ---
 const EVENT_BUS_TOOLS = [
   {
-    name: "hive_event_emit",
+    name: "zana_event_emit",
     description: "Emit a custom event to the hive event bus. Other agents and UI can observe it.",
     inputSchema: {
       type: "object",
@@ -612,7 +612,7 @@ const EVENT_BUS_TOOLS = [
     },
   },
   {
-    name: "hive_event_query",
+    name: "zana_event_query",
     description: "Query recent events from the hive event bus.",
     inputSchema: {
       type: "object",
@@ -629,8 +629,8 @@ const EVENT_BUS_TOOLS = [
 // --- P2P tools (available to ALL agents) ---
 const P2P_TOOLS = [
   {
-    name: "hive_discover_agents",
-    description: "Discover agents across the entire Hive Mind. Returns agent IDs, names, profiles, and which hive they belong to. Use this to find agents you can ask questions to.",
+    name: "zana_discover_agents",
+    description: "Discover agents across the entire Swarm. Returns agent IDs, names, profiles, and which hive they belong to. Use this to find agents you can ask questions to.",
     inputSchema: {
       type: "object",
       properties: {
@@ -639,12 +639,12 @@ const P2P_TOOLS = [
     },
   },
   {
-    name: "hive_ask_agent",
+    name: "zana_ask_agent",
     description: "Send a question to another agent (P2P). Questions are read-only — you cannot give instructions, only ask. The agent will see your question in their inbox on their next tool call.",
     inputSchema: {
       type: "object",
       properties: {
-        toAgentId: { type: "string", description: "Target agent ID (from hive_discover_agents)" },
+        toAgentId: { type: "string", description: "Target agent ID (from zana_discover_agents)" },
         question: { type: "string", description: "Your question for the other agent" },
         replyTo: { type: "string", description: "Optional message ID if this is a reply" },
       },
@@ -652,12 +652,12 @@ const P2P_TOOLS = [
     },
   },
   {
-    name: "hive_check_inbox",
+    name: "zana_check_inbox",
     description: "Explicitly check your inbox for P2P messages from other agents. Messages are also auto-appended to tool responses, but use this to check proactively.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_send_message",
+    name: "zana_send_message",
     description: "Send a typed message to another agent. Supports various message types for structured communication.",
     inputSchema: {
       type: "object",
@@ -684,7 +684,7 @@ const P2P_TOOLS = [
     },
   },
   {
-    name: "hive_publish_channel",
+    name: "zana_publish_channel",
     description: "Publish a message to a named channel. All subscribed agents receive it in their inbox.",
     inputSchema: {
       type: "object",
@@ -706,7 +706,7 @@ const P2P_TOOLS = [
     },
   },
   {
-    name: "hive_subscribe_channel",
+    name: "zana_subscribe_channel",
     description: "Subscribe to a named channel to receive messages published to it.",
     inputSchema: {
       type: "object",
@@ -717,12 +717,12 @@ const P2P_TOOLS = [
     },
   },
   {
-    name: "hive_list_channels",
+    name: "zana_list_channels",
     description: "List all active channels with subscriber counts and last activity.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_channel_history",
+    name: "zana_channel_history",
     description: "Get recent message history from a channel.",
     inputSchema: {
       type: "object",
@@ -734,7 +734,7 @@ const P2P_TOOLS = [
     },
   },
   {
-    name: "hive_send_ack",
+    name: "zana_send_ack",
     description: "Acknowledge receipt/processing of a message that requested acknowledgment.",
     inputSchema: {
       type: "object",
@@ -751,7 +751,7 @@ const P2P_TOOLS = [
 // --- Intelligence tools (task router, vector memory, GOAP, background workers) ---
 const INTELLIGENCE_TOOLS = [
   {
-    name: "hive_route_task",
+    name: "zana_route_task",
     description: "Route a task to the best-fit agent profile based on content analysis",
     inputSchema: {
       type: "object",
@@ -763,7 +763,7 @@ const INTELLIGENCE_TOOLS = [
     },
   },
   {
-    name: "hive_memory_store",
+    name: "zana_memory_store",
     description: "Store a memory/fact in the hive's vector memory for later retrieval",
     inputSchema: {
       type: "object",
@@ -776,7 +776,7 @@ const INTELLIGENCE_TOOLS = [
     },
   },
   {
-    name: "hive_memory_search",
+    name: "zana_memory_search",
     description: "Search the hive's vector memory for relevant memories",
     inputSchema: {
       type: "object",
@@ -789,7 +789,7 @@ const INTELLIGENCE_TOOLS = [
     },
   },
   {
-    name: "hive_plan_create",
+    name: "zana_plan_create",
     description: "Create a goal-oriented action plan (GOAP) for a complex task",
     inputSchema: {
       type: "object",
@@ -802,17 +802,17 @@ const INTELLIGENCE_TOOLS = [
     },
   },
   {
-    name: "hive_workers_list",
+    name: "zana_workers_list",
     description: "List all background workers and their status",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_module_config_list",
+    name: "zana_module_config_list",
     description: "List all module configurations",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_module_config_get",
+    name: "zana_module_config_get",
     description: "Get configuration for a specific module",
     inputSchema: {
       type: "object",
@@ -823,7 +823,7 @@ const INTELLIGENCE_TOOLS = [
     },
   },
   {
-    name: "hive_module_config_set",
+    name: "zana_module_config_set",
     description: "Set a configuration value for a specific module",
     inputSchema: {
       type: "object",
@@ -840,7 +840,7 @@ const INTELLIGENCE_TOOLS = [
 // --- Checkpoint tools ---
 const CHECKPOINT_TOOLS = [
   {
-    name: "hive_checkpoint_save",
+    name: "zana_checkpoint_save",
     description: "Manually save a checkpoint of the current team run state. Includes completed and pending agents.",
     inputSchema: {
       type: "object",
@@ -865,7 +865,7 @@ const CHECKPOINT_TOOLS = [
     },
   },
   {
-    name: "hive_checkpoint_list",
+    name: "zana_checkpoint_list",
     description: "List saved checkpoints, optionally filtered by teamId or status.",
     inputSchema: {
       type: "object",
@@ -876,7 +876,7 @@ const CHECKPOINT_TOOLS = [
     },
   },
   {
-    name: "hive_checkpoint_get",
+    name: "zana_checkpoint_get",
     description: "Get full details of a specific checkpoint.",
     inputSchema: {
       type: "object",
@@ -887,7 +887,7 @@ const CHECKPOINT_TOOLS = [
     },
   },
   {
-    name: "hive_checkpoint_resume",
+    name: "zana_checkpoint_resume",
     description: "Resume a stopped or interrupted team run from a checkpoint. Re-spawns pending agents with context from completed ones.",
     inputSchema: {
       type: "object",
@@ -902,7 +902,7 @@ const CHECKPOINT_TOOLS = [
 // --- Workflow tools ---
 const WORKFLOW_TOOLS = [
   {
-    name: "hive_workflow_run",
+    name: "zana_workflow_run",
     description: "Trigger a workflow skill by ID. Workflows orchestrate multi-step flows with conditional agent spawning, gates, and notifications.",
     inputSchema: {
       type: "object",
@@ -914,7 +914,7 @@ const WORKFLOW_TOOLS = [
     },
   },
   {
-    name: "hive_workflow_list_runs",
+    name: "zana_workflow_list_runs",
     description: "List workflow runs, optionally filtered by status.",
     inputSchema: {
       type: "object",
@@ -924,7 +924,7 @@ const WORKFLOW_TOOLS = [
     },
   },
   {
-    name: "hive_workflow_get_run",
+    name: "zana_workflow_get_run",
     description: "Get details of a specific workflow run.",
     inputSchema: {
       type: "object",
@@ -939,7 +939,7 @@ const WORKFLOW_TOOLS = [
 // --- Artifact tools (shared planning documents, available to ALL agents) ---
 const ARTIFACT_TOOLS = [
   {
-    name: "hive_artifact_create",
+    name: "zana_artifact_create",
     description: "Create a planning artifact (architecture doc, requirement spec, design doc, etc.) that is shared with all hives. Use this to document plans, decisions, and specs before implementation.",
     inputSchema: {
       type: "object",
@@ -954,7 +954,7 @@ const ARTIFACT_TOOLS = [
     },
   },
   {
-    name: "hive_artifact_list",
+    name: "zana_artifact_list",
     description: "List all shared planning artifacts. Returns metadata (id, title, type, tags) without full content.",
     inputSchema: {
       type: "object",
@@ -965,7 +965,7 @@ const ARTIFACT_TOOLS = [
     },
   },
   {
-    name: "hive_artifact_read",
+    name: "zana_artifact_read",
     description: "Read the full content of a specific artifact by ID. Use this to access architecture docs, requirement specs, and other planning documents.",
     inputSchema: {
       type: "object",
@@ -976,7 +976,7 @@ const ARTIFACT_TOOLS = [
     },
   },
   {
-    name: "hive_artifact_update",
+    name: "zana_artifact_update",
     description: "Update an existing artifact's content or metadata.",
     inputSchema: {
       type: "object",
@@ -992,62 +992,62 @@ const ARTIFACT_TOOLS = [
   },
 ];
 
-// --- Master-only tools (spawn/control sub-hives) ---
+// --- Master-only tools (spawn/control child daemons) ---
 const MASTER_TOOLS = ZANA_MASTER_MODE ? [
   {
-    name: "hive_mind_spawn_hive",
-    description: "Spawn a new sub-hive (headless team). The sub-hive runs as a child process and can be controlled via instructions.",
+    name: "zana_swarm_spawn",
+    description: "Spawn a new child daemon (headless team). The child daemon runs as a child process and can be controlled via instructions.",
     inputSchema: {
       type: "object",
       properties: {
-        teamId: { type: "string", description: "Team ID to start in the sub-hive (optional — omit to spawn a single orchestrator)" },
-        workspace: { type: "string", description: "Working directory for the sub-hive (defaults to current workspace)" },
-        prompt: { type: "string", description: "Initial prompt/task for the sub-hive" },
+        teamId: { type: "string", description: "Team ID to start in the child daemon (optional — omit to spawn a single orchestrator)" },
+        workspace: { type: "string", description: "Working directory for the child daemon (defaults to current workspace)" },
+        prompt: { type: "string", description: "Initial prompt/task for the child daemon" },
       },
     },
   },
   {
-    name: "hive_mind_list_hives",
-    description: "List all spawned sub-hives with their status, ports, and team info.",
+    name: "zana_swarm_list",
+    description: "List all spawned child daemons with their status, ports, and team info.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "hive_mind_instruct_hive",
-    description: "Send an instruction to a sub-hive's team lead. Instructions flow DOWN only (master → team lead → workers).",
+    name: "zana_swarm_instruct",
+    description: "Send an instruction to a child daemon's team lead. Instructions flow DOWN only (master → team lead → workers).",
     inputSchema: {
       type: "object",
       properties: {
-        hiveId: { type: "string", description: "Sub-hive ID to instruct" },
+        daemonId: { type: "string", description: "Child daemon ID to instruct" },
         message: { type: "string", description: "Instruction message for the team lead" },
       },
-      required: ["hiveId", "message"],
+      required: ["daemonId", "message"],
     },
   },
   {
-    name: "hive_mind_stop_hive",
-    description: "Stop a sub-hive. Sends SIGTERM to the child process.",
+    name: "zana_swarm_stop",
+    description: "Stop a child daemon. Sends SIGTERM to the child process.",
     inputSchema: {
       type: "object",
       properties: {
-        hiveId: { type: "string", description: "Sub-hive ID to stop" },
+        daemonId: { type: "string", description: "Child daemon ID to stop" },
       },
-      required: ["hiveId"],
+      required: ["daemonId"],
     },
   },
   {
-    name: "hive_mind_broadcast",
-    description: "Send a message to ALL running sub-hives. Each team lead receives the instruction.",
+    name: "zana_swarm_broadcast",
+    description: "Send a message to ALL running child daemons. Each team lead receives the instruction.",
     inputSchema: {
       type: "object",
       properties: {
-        message: { type: "string", description: "Message to broadcast to all sub-hive team leads" },
+        message: { type: "string", description: "Message to broadcast to all child daemon team leads" },
       },
       required: ["message"],
     },
   },
   {
-    name: "hive_mind_poll_events",
-    description: "Poll events from sub-hives (progress reports, decision requests, completions, errors).",
+    name: "zana_swarm_poll_events",
+    description: "Poll events from child daemons (progress reports, decision requests, completions, errors).",
     inputSchema: {
       type: "object",
       properties: {
@@ -1058,7 +1058,7 @@ const MASTER_TOOLS = ZANA_MASTER_MODE ? [
 ] : [];
 
 // Load dynamic hive tool skills
-function loadHiveToolSkills() {
+function loadToolSkills() {
   const skillsDir = SKILLS_DIR;
   try {
     const files = fs.readdirSync(skillsDir).filter((f) => f.endsWith(".json"));
@@ -1070,20 +1070,20 @@ function loadHiveToolSkills() {
           tools.push({ skill, schema: skill.toolSchema });
         }
       } catch (err) {
-        process.stderr.write(`[orchestrator-mcp] failed to load skill ${f}: ${err.message}\n`);
+        process.stderr.write(`[zana-mcp] failed to load skill ${f}: ${err.message}\n`);
       }
     }
     return tools;
   } catch (err) {
     if (err.code !== "ENOENT") {
-      process.stderr.write(`[orchestrator-mcp] failed to read skills dir: ${err.message}\n`);
+      process.stderr.write(`[zana-mcp] failed to read skills dir: ${err.message}\n`);
     }
     return [];
   }
 }
 
-const hiveToolSkills = loadHiveToolSkills();
-const DYNAMIC_TOOLS = hiveToolSkills.map((t) => t.schema);
+const toolSkills = loadToolSkills();
+const DYNAMIC_TOOLS = toolSkills.map((t) => t.schema);
 const STATIC_TOOLS = [...TOOLS, ...TICKET_TOOLS, ...INTELLIGENCE_TOOLS, ...CHECKPOINT_TOOLS, ...WORKFLOW_TOOLS, ...ARTIFACT_TOOLS, ...SCHEDULER_TOOLS, ...EVENT_BUS_TOOLS, ...P2P_TOOLS, ...MASTER_TOOLS, ...DYNAMIC_TOOLS];
 
 // Module tool registry (tools contributed by modules via api.mcp in module.json)
@@ -1135,11 +1135,11 @@ function handleScratchpad(args) {
 }
 
 function handleBroadcast(args) {
-  if (localHive && localHive.hivemindRouter) {
-    localHive.hivemindRouter.broadcast(args.message || "");
+  if (localDaemon && localDaemon.hivemindRouter) {
+    localDaemon.hivemindRouter.broadcast(args.message || "");
     return { ok: true };
   }
-  return { ok: false, error: "hivemind not available" };
+  return { ok: false, error: "swarm not available" };
 }
 
 function sendResponse(id, result) {
@@ -1162,82 +1162,82 @@ function sendNotification(method, params) {
 
 function drainLocalInbox() {
   const agentId = process.env.ZANA_TERMINAL_ID;
-  if (!agentId || !localHive?.hivemindRouter) return [];
+  if (!agentId || !localDaemon?.hivemindRouter) return [];
   try {
-    return localHive.hivemindRouter.drainInbox(agentId) || [];
+    return localDaemon.hivemindRouter.drainInbox(agentId) || [];
   } catch {
     return [];
   }
 }
 
 async function handleToolCall(name, args, callerAgentId) {
-  await ensureHiveRunning();
+  await ensureDaemonRunning();
 
   switch (name) {
-    case "hive_spawn_agent":
+    case "zana_spawn_agent":
       return await callCore("spawn_agent", { profileId: args.profileId, prompt: args.prompt, parentAgentId: callerAgentId });
-    case "hive_spawn_agent_validated":
+    case "zana_spawn_agent_validated":
       return await callCore("spawn_agent_validated", { profileId: args.profileId, prompt: args.prompt, parentAgentId: callerAgentId, guardrails: args.guardrails || [], maxRetries: args.maxRetries });
-    case "hive_oneshot_query":
+    case "zana_oneshot_query":
       return await callCore("spawn_oneshot", { profileId: args.profileId, prompt: args.prompt, timeout: args.timeout });
-    case "hive_list_agents":
+    case "zana_list_agents":
       return await callCore("list_agents");
-    case "hive_agent_status":
+    case "zana_agent_status":
       return await callCore("agent_status", { agentId: args.agentId });
-    case "hive_agent_result":
+    case "zana_agent_result":
       return await callCore("agent_result", { agentId: args.agentId });
-    case "hive_kill_agent":
+    case "zana_kill_agent":
       return await callCore("kill_agent", { agentId: args.agentId });
-    case "hive_list_profiles":
+    case "zana_list_profiles":
       return await callCore("list_profiles");
-    case "hive_get_profile":
+    case "zana_get_profile":
       return await callCore("get_profile", { profileId: args.profileId });
-    case "hive_save_profile":
+    case "zana_save_profile":
       return await callCore("save_profile", { profile: args.profile });
-    case "hive_delete_profile":
+    case "zana_delete_profile":
       return await callCore("delete_profile", { profileId: args.profileId });
-    case "hive_list_skills":
+    case "zana_list_skills":
       return await callCore("list_skills");
-    case "hive_get_skill":
+    case "zana_get_skill":
       return await callCore("get_skill", { skillId: args.skillId });
-    case "hive_save_skill":
+    case "zana_save_skill":
       return await callCore("save_skill", { skill: args.skill });
-    case "hive_delete_skill":
+    case "zana_delete_skill":
       return await callCore("delete_skill", { skillId: args.skillId });
-    case "hive_toggle_skill":
+    case "zana_toggle_skill":
       return await callCore("toggle_skill", { skillId: args.skillId, enabled: args.enabled });
 
     // Intelligence tools (direct module access)
-    case "hive_route_task": {
+    case "zana_route_task": {
       const ticket = { title: args.prompt, description: args.context || "", labels: [] };
-      return localHive.taskRouter.route(ticket);
+      return localDaemon.taskRouter.route(ticket);
     }
-    case "hive_memory_store": {
+    case "zana_memory_store": {
       const metadata = { ...(args.metadata || {}), tags: args.tags || [] };
-      return localHive.vectorMemory.store({ content: args.content, metadata });
+      return localDaemon.vectorMemory.store({ content: args.content, metadata });
     }
-    case "hive_memory_search": {
-      return localHive.vectorMemory.search(args.query, { limit: args.limit || 5, tags: args.tags || [] });
+    case "zana_memory_search": {
+      return localDaemon.vectorMemory.search(args.query, { limit: args.limit || 5, tags: args.tags || [] });
     }
-    case "hive_plan_create": {
+    case "zana_plan_create": {
       const options: any = {};
       if (args.constraints) options.constraints = args.constraints;
       if (args.currentState) options.initialState = args.currentState;
-      return localHive.goapPlanner.createPlan(args.goal, options);
+      return localDaemon.goapPlanner.createPlan(args.goal, options);
     }
-    case "hive_workers_list": {
-      return localHive.backgroundWorkers.list();
+    case "zana_workers_list": {
+      return localDaemon.backgroundWorkers.list();
     }
-    case "hive_module_config_list": {
+    case "zana_module_config_list": {
       const moduleConfig = require("@zana/core").moduleConfig;
       const cfg = moduleConfig.get();
       return cfg.modules || {};
     }
-    case "hive_module_config_get": {
+    case "zana_module_config_get": {
       const moduleConfig = require("@zana/core").moduleConfig;
       return moduleConfig.getModuleConfig(args.moduleId);
     }
-    case "hive_module_config_set": {
+    case "zana_module_config_set": {
       const moduleConfig = require("@zana/core").moduleConfig;
       const current = moduleConfig.getModuleConfig(args.moduleId);
       const config = { ...(current.config || {}), [args.key]: args.value };
@@ -1246,98 +1246,98 @@ async function handleToolCall(name, args, callerAgentId) {
     }
 
     // Ticket tools
-    case "hive_ticket_create":
+    case "zana_ticket_create":
       return await callCore("ticket_create", { title: args.title, description: args.description, priority: args.priority, labels: args.labels, blockedBy: args.blockedBy, sprintId: args.sprintId, createdBy: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "hive_ticket_list":
+    case "zana_ticket_list":
       return await callCore("ticket_list", { status: args.status, sprintId: args.sprintId, assigneeId: args.assigneeId, label: args.label });
-    case "hive_ticket_get":
+    case "zana_ticket_get":
       return await callCore("ticket_get", { ticketId: args.ticketId });
-    case "hive_ticket_claim":
+    case "zana_ticket_claim":
       return await callCore("ticket_claim", { ticketId: args.ticketId, agentId: process.env.ZANA_TERMINAL_ID || "agent", agentName: process.env.ZANA_AGENT_NAME || "Agent", profileId: process.env.ZANA_PROFILE_ID || null });
-    case "hive_ticket_update":
+    case "zana_ticket_update":
       return await callCore("ticket_update", { ticketId: args.ticketId, status: args.status, reviewPhase: args.reviewPhase, progress: args.progress, planification: args.planification, resultSummary: args.resultSummary, filesChanged: args.filesChanged, agentId: process.env.ZANA_TERMINAL_ID || "agent", agentName: process.env.ZANA_AGENT_NAME || "Agent" });
-    case "hive_ticket_update_status":
+    case "zana_ticket_update_status":
       return await callCore("ticket_update_status", { ticketId: args.ticketId, status: args.status, updatedBy: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "hive_ticket_comment":
+    case "zana_ticket_comment":
       return await callCore("ticket_comment", { ticketId: args.ticketId, body: args.body, authorId: process.env.ZANA_TERMINAL_ID || "agent", authorName: process.env.ZANA_AGENT_NAME || "Agent" });
-    case "hive_ticket_complete":
+    case "zana_ticket_complete":
       return await callCore("ticket_complete", { ticketId: args.ticketId, resultSummary: args.resultSummary, completedBy: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "hive_ticket_edit":
+    case "zana_ticket_edit":
       return await callCore("ticket_edit", { ticketId: args.ticketId, title: args.title, description: args.description, priority: args.priority, labels: args.labels, type: args.type, sprintId: args.sprintId, updatedBy: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "hive_ticket_add_to_sprint":
+    case "zana_ticket_add_to_sprint":
       return await callCore("ticket_add_to_sprint", { ticketId: args.ticketId, sprintId: args.sprintId });
-    case "hive_sprint_list":
+    case "zana_sprint_list":
       return await callCore("sprint_list", { teamId: args.teamId, status: args.status });
-    case "hive_sprint_board":
+    case "zana_sprint_board":
       return await callCore("sprint_board", { sprintId: args.sprintId });
-    case "hive_sprint_create":
+    case "zana_sprint_create":
       return await callCore("sprint_create", { name: args.name, teamId: args.teamId, ticketIds: args.ticketIds });
-    case "hive_sprint_start":
+    case "zana_sprint_start":
       return await callCore("sprint_start", { sprintId: args.sprintId });
-    case "hive_sprint_end":
+    case "zana_sprint_end":
       return await callCore("sprint_end", { sprintId: args.sprintId });
 
     // Scheduler tools
-    case "hive_schedule_create":
+    case "zana_schedule_create":
       return await callCore("schedule_create", { name: args.name, description: args.description, cron: args.cron, intervalMs: args.intervalMs, action: args.action, enabled: args.enabled, ownerId: process.env.ZANA_TERMINAL_ID || "agent", ownerName: process.env.ZANA_AGENT_NAME || "Agent" });
-    case "hive_schedule_list":
+    case "zana_schedule_list":
       return await callCore("schedule_list");
-    case "hive_schedule_get":
+    case "zana_schedule_get":
       return await callCore("schedule_get", { scheduleId: args.scheduleId });
-    case "hive_schedule_update":
+    case "zana_schedule_update":
       return await callCore("schedule_update", { id: args.scheduleId, name: args.name, cron: args.cron, intervalMs: args.intervalMs, action: args.action, enabled: args.enabled });
-    case "hive_schedule_delete":
+    case "zana_schedule_delete":
       return await callCore("schedule_delete", { id: args.scheduleId });
-    case "hive_schedule_enable":
+    case "zana_schedule_enable":
       return await callCore("schedule_enable", { id: args.scheduleId });
-    case "hive_schedule_disable":
+    case "zana_schedule_disable":
       return await callCore("schedule_disable", { id: args.scheduleId });
-    case "hive_schedule_trigger":
+    case "zana_schedule_trigger":
       return await callCore("schedule_trigger", { id: args.scheduleId });
 
     // Event Bus tools
-    case "hive_event_emit":
+    case "zana_event_emit":
       return await callCore("event_emit", { type: args.type, payload: args.payload, tags: args.tags, source: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "hive_event_query":
+    case "zana_event_query":
       return await callCore("event_query", { types: args.types, source: args.source, since: args.since, limit: args.limit || 50 });
 
     // P2P tools
-    case "hive_discover_agents":
+    case "zana_discover_agents":
       return await callCore("discover_agents", { query: args.query });
-    case "hive_ask_agent":
+    case "zana_ask_agent":
       return await callCore("ask_agent", { toAgentId: args.toAgentId, question: args.question, replyTo: args.replyTo, fromTerminalId: process.env.ZANA_TERMINAL_ID, fromAgentName: process.env.ZANA_AGENT_NAME || "Agent" });
-    case "hive_check_inbox":
+    case "zana_check_inbox":
       return await callCore("check_inbox", { terminalId: process.env.ZANA_TERMINAL_ID });
 
     // Typed messaging + channels
-    case "hive_send_message":
+    case "zana_send_message":
       return await callCore("send_message", { toAgentId: args.toAgentId, type: args.type, payload: args.payload, priority: args.priority || "normal", replyTo: args.replyTo, requiresAck: args.requiresAck || false, fromAgentId: callerAgentId, fromAgentName: process.env.ZANA_AGENT_NAME || "Agent" });
-    case "hive_publish_channel":
+    case "zana_publish_channel":
       return await callCore("publish_channel", { channel: args.channel, type: args.type, payload: args.payload, fromAgentId: callerAgentId, fromAgentName: process.env.ZANA_AGENT_NAME || "Agent" });
-    case "hive_subscribe_channel":
+    case "zana_subscribe_channel":
       return await callCore("subscribe_channel", { channel: args.channel, agentId: callerAgentId });
-    case "hive_list_channels":
+    case "zana_list_channels":
       return await callCore("list_channels");
-    case "hive_channel_history":
+    case "zana_channel_history":
       return await callCore("channel_history", { channel: args.channel, limit: args.limit || 50 });
-    case "hive_send_ack":
+    case "zana_send_ack":
       return await callCore("send_ack", { messageId: args.messageId, status: args.status, response: args.response, agentId: callerAgentId });
 
     // Checkpoint tools
-    case "hive_checkpoint_save":
+    case "zana_checkpoint_save":
       return await callCore("checkpoint_save", { teamId: args.teamId, pendingAgents: args.pendingAgents || [], status: "running" });
-    case "hive_checkpoint_list":
+    case "zana_checkpoint_list":
       return await callCore("checkpoint_list", { teamId: args.teamId, status: args.status });
-    case "hive_checkpoint_get":
+    case "zana_checkpoint_get":
       return await callCore("checkpoint_get", { checkpointId: args.checkpointId });
-    case "hive_checkpoint_resume":
+    case "zana_checkpoint_resume":
       return await callCore("checkpoint_resume", { checkpointId: args.checkpointId });
 
     // Workflow tools
-    case "hive_workflow_run": {
+    case "zana_workflow_run": {
       const workflowEngine = require("@zana/core").workflowEngine;
-      const hiveSkillStoreWf = require("@zana/core").hiveSkillStore;
-      const skill = hiveSkillStoreWf.getSkill(args.skillId);
+      const skillStoreWf = require("@zana/core").settings.skillStore;
+      const skill = skillStoreWf.getSkill(args.skillId);
       if (!skill || skill.type !== "workflow") return { error: "workflow skill not found" };
       let context: any = {};
       if (args.ticketId) {
@@ -1346,11 +1346,11 @@ async function handleToolCall(name, args, callerAgentId) {
       }
       return await workflowEngine.executeWorkflow(skill, context);
     }
-    case "hive_workflow_list_runs": {
+    case "zana_workflow_list_runs": {
       const workflowEngine = require("@zana/core").workflowEngine;
       return workflowEngine.listRuns({ status: args.status });
     }
-    case "hive_workflow_get_run": {
+    case "zana_workflow_get_run": {
       const workflowEngine = require("@zana/core").workflowEngine;
       const run = workflowEngine.loadRun(args.runId);
       if (!run) return { error: "run not found" };
@@ -1358,34 +1358,34 @@ async function handleToolCall(name, args, callerAgentId) {
     }
 
     // Artifact tools
-    case "hive_artifact_create":
+    case "zana_artifact_create":
       return await callCore("artifact_create", { title: args.title, type: args.type, content: args.content, tags: args.tags, linkedTickets: args.linkedTickets, createdBy: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "hive_artifact_list":
+    case "zana_artifact_list":
       return await callCore("artifact_list", { type: args.type, tag: args.tag });
-    case "hive_artifact_read":
+    case "zana_artifact_read":
       return await callCore("artifact_read", { artifactId: args.artifactId });
-    case "hive_artifact_update":
+    case "zana_artifact_update":
       return await callCore("artifact_update", { artifactId: args.artifactId, title: args.title, content: args.content, tags: args.tags, linkedTickets: args.linkedTickets });
 
     // Master-only tools
-    case "hive_mind_spawn_hive":
-      return await callCore("mind_spawn_hive", { teamId: args.teamId, workspace: args.workspace, prompt: args.prompt });
-    case "hive_mind_list_hives":
-      return await callCore("mind_list_hives");
-    case "hive_mind_instruct_hive":
-      return await callCore("mind_instruct_hive", { hiveId: args.hiveId, message: args.message });
-    case "hive_mind_stop_hive":
-      return await callCore("mind_stop_hive", { hiveId: args.hiveId });
-    case "hive_mind_broadcast":
-      return await callCore("mind_broadcast", { message: args.message });
-    case "hive_mind_poll_events":
-      return await callCore("mind_poll_events", { since: args.since });
+    case "zana_swarm_spawn":
+      return await callCore("swarm_spawn", { teamId: args.teamId, workspace: args.workspace, prompt: args.prompt });
+    case "zana_swarm_list":
+      return await callCore("swarm_list");
+    case "zana_swarm_instruct":
+      return await callCore("swarm_instruct", { daemonId: args.daemonId, message: args.message });
+    case "zana_swarm_stop":
+      return await callCore("swarm_stop", { daemonId: args.daemonId });
+    case "zana_swarm_broadcast":
+      return await callCore("swarm_broadcast", { message: args.message });
+    case "zana_swarm_poll_events":
+      return await callCore("swarm_poll_events", { since: args.since });
 
     default: {
       // Check dynamic hive tool skills
-      const hiveSkill = hiveToolSkills.find((t) => t.schema.name === name);
-      if (hiveSkill) {
-        const handler = hiveSkill.skill.handler;
+      const toolSkill = toolSkills.find((t) => t.schema.name === name);
+      if (toolSkill) {
+        const handler = toolSkill.skill.handler;
         if (handler === "scratchpad") return handleScratchpad(args);
         if (handler === "broadcast") return handleBroadcast(args);
         return { error: `no handler implemented for: ${handler}` };
@@ -1416,7 +1416,7 @@ async function handleMessage(msg) {
       sendResponse(id, {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "hive-orchestrator", version: "0.1.0" },
+        serverInfo: { name: "zana", version: "0.1.0" },
       });
       break;
 
@@ -1504,29 +1504,29 @@ process.stdin.on("data", (chunk) => {
     try {
       const msg = JSON.parse(content);
       handleMessage(msg).catch((err) => {
-        process.stderr.write(`[orchestrator-mcp] unhandled tool error: ${err.message}\n`);
+        process.stderr.write(`[zana-mcp] unhandled tool error: ${err.message}\n`);
       });
     } catch (err) {
-      process.stderr.write(`[orchestrator-mcp] parse error: ${err.message}\n`);
+      process.stderr.write(`[zana-mcp] parse error: ${err.message}\n`);
     }
   }
 });
 
 process.stdin.on("end", () => {
-  if (localHive) localHive.shutdown();
+  if (localDaemon) localDaemon.shutdown();
   process.exit(0);
 });
 
 // Boot core eagerly so it's ready by the first tool call
-ensureHiveRunning().catch((err) => {
-  process.stderr.write(`[hive-mcp] bootstrap error: ${err.message}\n`);
+ensureDaemonRunning().catch((err) => {
+  process.stderr.write(`[zana-mcp] bootstrap error: ${err.message}\n`);
 });
 
 process.on("SIGTERM", () => {
-  if (localHive) localHive.shutdown();
+  if (localDaemon) localDaemon.shutdown();
   process.exit(0);
 });
 process.on("SIGINT", () => {
-  if (localHive) localHive.shutdown();
+  if (localDaemon) localDaemon.shutdown();
   process.exit(0);
 });
