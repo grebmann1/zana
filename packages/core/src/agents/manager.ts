@@ -19,9 +19,10 @@ function getPtyHost() {
 }
 import * as profileStore from "./profile-store";
 import * as skillStore from "../settings/skill-store";
-import * as swarmRouter from "../swarm/router";
-import * as swarmEvents from "../swarm/events";
-import * as swarmSpawner from "../swarm/spawner";
+const swarmPkg = require("@zana/swarm");
+const swarmRouter = swarmPkg.router;
+const swarmEvents = swarmPkg.events;
+const swarmSpawner = swarmPkg.spawner;
 import * as persistence from "../persistence";
 import { bus, EVENTS } from "../events/bus";
 import { MAX_CONCURRENT_AGENTS } from "../config";

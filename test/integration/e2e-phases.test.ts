@@ -160,7 +160,7 @@ describe("Phase 2: A2A Messaging", () => {
   let router;
 
   beforeEach(async () => {
-    router = await import("@zana/core/src/swarm/router.ts");
+    router = await import("@zana/swarm/src/swarm/router.ts");
   });
 
   describe("typed message routing", () => {
@@ -572,7 +572,7 @@ describe("Integration: guardrail → channel → checkpoint flow", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "integration-test-"));
-    router = await import("@zana/core/src/swarm/router.ts");
+    router = await import("@zana/swarm/src/swarm/router.ts");
     store = await import("@zana/core/src/runs/checkpoint/store.ts");
     guardrails = await import("@zana/core/src/guardrails/index.ts");
     resumeMod = await import("@zana/core/src/runs/checkpoint/resume.ts");

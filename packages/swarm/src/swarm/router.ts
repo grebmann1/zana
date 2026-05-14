@@ -3,7 +3,10 @@
 
 import * as http from "node:http";
 import * as crypto from "node:crypto";
-import * as persistence from "../persistence";
+// Lazy access — @zana/core may still be loading when this module is first required.
+function persistence() {
+  return require("@zana/core").persistence;
+}
 
 // agentId → { hiveId, hivePort, agentName, profileName, profileIcon }
 const routingTable = new Map();
@@ -43,7 +46,7 @@ export function deliverLocal(agentId, msg) {
     inbox.shift();
   }
   inbox.push(msg);
-  persistence.persistInboxMessage(agentId, msg);
+  persistence().persistInboxMessage(agentId, msg);
 }
 
 export function drainInbox(agentId) {
@@ -51,12 +54,12 @@ export function drainInbox(agentId) {
   if (!inbox || inbox.length === 0) return [];
   const messages = [...inbox];
   inboxes.set(agentId, []);
-  persistence.persistInboxDrain(agentId);
+  persistence().persistInboxDrain(agentId);
   return messages;
 }
 
 export function recoverFromDisk() {
-  const recovered = persistence.recoverInboxes();
+  const recovered = persistence().recoverInboxes();
   for (const [agentId, messages] of recovered) {
     if (messages.length > 0) {
       inboxes.set(agentId, messages);
@@ -66,7 +69,7 @@ export function recoverFromDisk() {
 }
 
 export function recoverChannelsFromDisk() {
-  const recovered = persistence.recoverChannels();
+  const recovered = persistence().recoverChannels();
   for (const [channelName, messages] of recovered) {
     const channel = createChannel(channelName);
     channel.history = messages.slice(-MAX_CHANNEL_HISTORY);
@@ -270,7 +273,7 @@ export function publishToChannel(channelName, msg) {
   if (channel.history.length > MAX_CHANNEL_HISTORY) {
     channel.history = channel.history.slice(-MAX_CHANNEL_HISTORY);
   }
-  persistence.persistChannelMessage(channelName, msg);
+  persistence().persistChannelMessage(channelName, msg);
 
   let delivered = 0;
   for (const subscriberId of channel.subscribers) {

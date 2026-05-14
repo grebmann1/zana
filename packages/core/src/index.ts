@@ -2,6 +2,10 @@ module.exports = {
   init: require("./core").init,
   config: require("./config"),
 
+  get swarm() {
+    return require("@zana/swarm");
+  },
+
   project: {
     init: require("./project/init"),
     migrate: require("./project/migrate"),
@@ -68,11 +72,6 @@ module.exports = {
     auth: require("./api/auth-middleware"),
     sse: require("./api/sse-broadcaster"),
     health: require("./api/health-monitor"),
-  },
-  swarm: {
-    events: require("./swarm/events"),
-    router: require("./swarm/router"),
-    spawner: require("./swarm/spawner"),
   },
   modules: {
     config: require("./modules/config"),
