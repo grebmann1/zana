@@ -6,7 +6,7 @@ import os from "node:os";
 const TICKETS_DIR = path.join(os.homedir(), ".zana", "tickets");
 const SPRINTS_DIR = path.join(os.homedir(), ".zana", "sprints");
 
-import * as ticketService from "@zana/core/src/ticket-service.ts";
+import * as ticketService from "@zana/core/src/tickets/service.ts";
 
 function cleanupTestFiles(prefix) {
   // Clean tickets (stored as directories with ticket.json inside)

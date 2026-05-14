@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import * as spawner from "@zana/core/src/hivemind-spawner.ts";
+import * as spawner from "@zana/core/src/swarm/spawner.ts";
 
-describe("hivemind-spawner", () => {
+describe("swarm/spawner", () => {
   describe("listSubHives", () => {
     it("returns an array", () => {
       const result = spawner.listSubHives();

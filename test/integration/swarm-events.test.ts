@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import * as events from "@zana/core/src/hivemind-events.ts";
+import * as events from "@zana/core/src/swarm/events.ts";
 
 beforeEach(() => {
   events.clear();
 });
 
-describe("hivemind-events", () => {
+describe("swarm/events", () => {
   describe("addEvent", () => {
     it("stores an event with auto-generated id and timestamp", () => {
       events.addEvent({ type: "progress", summary: "working" });

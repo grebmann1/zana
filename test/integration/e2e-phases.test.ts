@@ -160,7 +160,7 @@ describe("Phase 2: A2A Messaging", () => {
   let router;
 
   beforeEach(async () => {
-    router = await import("@zana/core/src/hivemind-router.ts");
+    router = await import("@zana/core/src/swarm/router.ts");
   });
 
   describe("typed message routing", () => {
@@ -311,7 +311,7 @@ describe("Phase 3: Checkpoints", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "checkpoint-test-"));
-    store = require("@zana/core/src/checkpoint/store.ts");
+    store = require("@zana/core/src/runs/checkpoint/store.ts");
     store.init(tmpDir);
   });
 
@@ -440,7 +440,7 @@ describe("Phase 3: Checkpoints", () => {
     let resumeMod;
 
     beforeEach(() => {
-      resumeMod = require("@zana/core/src/checkpoint/resume.ts");
+      resumeMod = require("@zana/core/src/runs/checkpoint/resume.ts");
     });
 
     it("builds context from completed agents", () => {
@@ -572,10 +572,10 @@ describe("Integration: guardrail → channel → checkpoint flow", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "integration-test-"));
-    router = await import("@zana/core/src/hivemind-router.ts");
-    store = require("@zana/core/src/checkpoint/store.ts");
+    router = await import("@zana/core/src/swarm/router.ts");
+    store = require("@zana/core/src/runs/checkpoint/store.ts");
     guardrails = require("@zana/core/src/guardrails/index.ts");
-    resumeMod = require("@zana/core/src/checkpoint/resume.ts");
+    resumeMod = require("@zana/core/src/runs/checkpoint/resume.ts");
     store.init(tmpDir);
   });
 

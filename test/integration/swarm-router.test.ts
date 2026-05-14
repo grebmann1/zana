@@ -3,12 +3,12 @@ import { describe, it, expect, beforeEach } from "vitest";
 // Reset module state between tests
 let router;
 beforeEach(async () => {
-  const mod = await import("@zana/core/src/hivemind-router.ts");
+  const mod = await import("@zana/core/src/swarm/router.ts");
   // Re-import doesn't reset module state — we test accumulative behavior
   router = mod;
 });
 
-describe("hivemind-router", () => {
+describe("swarm/router", () => {
   describe("deliverLocal", () => {
     it("delivers a message to an agent inbox", () => {
       const msg = { fromAgentId: "a1", body: "hello", type: "question" };

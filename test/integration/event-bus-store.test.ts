@@ -7,7 +7,7 @@ const EVENTS_DIR = path.join(os.homedir(), ".zana", "events");
 const EVENTS_FILE = path.join(EVENTS_DIR, "bus-events.ndjson");
 const CONFIG_FILE = path.join(EVENTS_DIR, "bus-config.json");
 
-import * as eventBusStore from "@zana/core/src/event-bus-store.ts";
+import * as eventBusStore from "@zana/core/src/events/store.ts";
 
 describe("event-bus-store", () => {
   let originalContent = null;
