@@ -1,4 +1,4 @@
-# Hive Orchestration
+# Orchestration
 
 Orchestrate multi-agent workflows with Zana:
 

@@ -1,6 +1,6 @@
-# Hive Collaboration
+# Collaboration
 
-Agent collaboration primitives for hive workflows:
+Agent collaboration primitives for Zana workflows:
 
 - Send messages between agents
 - Share memory and checkpoints

@@ -10,7 +10,6 @@
   "repository": "https://github.com/grebmann1/zana",
   "license": "MIT",
   "keywords": [
-    "hive",
     "multi-agent",
     "orchestrator",
     "mcp",
