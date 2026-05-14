@@ -1,10 +1,14 @@
 // Example Zana module — demonstrates the module lifecycle.
 //
 // The module loader calls these hooks in order:
-//   init      — wire up subscriptions, return a public API object
-//   recover   — invoked instead of/before init when the daemon restarts
-//   suspend   — pause work (called before shutdown on graceful stop)
-//   shutdown  — release resources
+//   init(ctx)             — wire up subscriptions, return a public API object
+//   recover(state, ctx)   — invoked instead of/before init when the daemon restarts
+//   suspend()             — pause work (called before shutdown on graceful stop)
+//   shutdown()            — release resources
+//
+// NOTE: only `init` and `recover` receive `ctx` from the module loader.
+// `suspend` and `shutdown` are called without ctx, so they cannot use
+// ctx.logger / ctx.bus — log directly to stderr via console.error instead.
 //
 // Anything returned from init() becomes the module's public API and can be
 // retrieved by other modules via ctx.getModule("example").
@@ -24,11 +28,13 @@ module.exports = {
     ctx.logger.info("example module recovered");
   },
 
-  async suspend(ctx) {
-    ctx.logger.info("example module suspending");
+  async suspend() {
+    // ctx is not provided by the loader for suspend/shutdown; write to
+    // stderr directly so the lifecycle is still observable.
+    console.error("[example] suspending");
   },
 
-  async shutdown(ctx) {
-    ctx.logger.info("example module shutting down");
+  async shutdown() {
+    console.error("[example] shutting down");
   },
 };
