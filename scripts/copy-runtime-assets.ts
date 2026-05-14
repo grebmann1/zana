@@ -28,7 +28,10 @@ function chmodExecutableIfExists(filePath) {
 function copyCoreAssets() {
   const coreRoot = path.join(root, "packages", "core");
   const modulesRoot = path.join(coreRoot, "modules");
-  const distModulesRoot = path.join(coreRoot, "dist", "modules");
+  // The module loader resolves MODULES_DIR as `path.resolve(__dirname, "..", "modules")`,
+  // and __dirname after build is packages/core/dist/src/modules — so the runtime
+  // discovery directory is packages/core/dist/src/modules.
+  const distModulesRoot = path.join(coreRoot, "dist", "src", "modules");
 
   if (fs.existsSync(modulesRoot)) {
     const stack = [modulesRoot];
@@ -42,10 +45,31 @@ function copyCoreAssets() {
           stack.push(srcPath);
           continue;
         }
-        if (entry.name.endsWith(".json") || entry.name.endsWith(".sh")) {
+        if (
+          entry.name.endsWith(".json") ||
+          entry.name.endsWith(".sh") ||
+          entry.name.endsWith(".js")
+        ) {
           copyFile(srcPath, dstPath);
         }
       }
+    }
+  }
+
+  // Copy built-in agent profiles. profile-store resolves built-ins as
+  // `path.join(__dirname, "..", "profiles")`, where __dirname after build is
+  // packages/core/dist/src/agents — so the runtime built-in dir is
+  // packages/core/dist/src/profiles.
+  const profilesRoot = path.join(coreRoot, "profiles");
+  const distProfilesRoot = path.join(coreRoot, "dist", "src", "profiles");
+  if (fs.existsSync(profilesRoot)) {
+    for (const entry of fs.readdirSync(profilesRoot, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.endsWith(".json")) continue;
+      copyFile(
+        path.join(profilesRoot, entry.name),
+        path.join(distProfilesRoot, entry.name),
+      );
     }
   }
 
