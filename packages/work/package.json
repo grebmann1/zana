@@ -1,0 +1,15 @@
+{
+  "name": "@zana/work",
+  "version": "0.1.0",
+  "description": "Work-tracking domains: tickets, scheduling, teams, runs.",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "engines": { "node": ">=20.0.0" },
+  "dependencies": {
+    "@zana/core": "*"
+  },
+  "files": ["dist/"]
+}

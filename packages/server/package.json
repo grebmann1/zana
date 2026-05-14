@@ -1,0 +1,16 @@
+{
+  "name": "@zana/server",
+  "version": "0.1.0",
+  "description": "Zana HTTP/IPC surface — hook server and REST API.",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "engines": { "node": ">=20.0.0" },
+  "dependencies": {
+    "@zana/core": "*",
+    "@zana/work": "*"
+  },
+  "files": ["dist/"]
+}

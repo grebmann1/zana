@@ -17,6 +17,11 @@
     "packages/core/src/**/*.ts",
     "packages/core/bin/**/*.ts",
     "packages/core/modules/**/*.ts",
+    "packages/work/src/**/*.ts",
+    "packages/server/src/**/*.ts",
+    "packages/swarm/src/**/*.ts",
+    "packages/intelligence/src/**/*.ts",
+    "packages/extras/src/**/*.ts",
     "packages/mcp/src/**/*.ts",
     "packages/mcp/bin/**/*.ts"
   ]
