@@ -121,17 +121,17 @@ function buildOrchestratorPrompt(team, workerProfiles, userPrompt) {
 
 YOUR WORKFLOW:
 1. PLAN: Analyze the task. Break it into specific subtasks for your workers.
-2. ARTIFACTS: Check if planning artifacts exist (hive_artifact_list / hive_artifact_read) — use them for context.
-3. TICKETS: Create a ticket (hive_ticket_create) for each subtask with clear acceptance criteria.
+2. ARTIFACTS: Check if planning artifacts exist (zana_artifact_list / zana_artifact_read) — use them for context.
+3. TICKETS: Create a ticket (zana_ticket_create) for each subtask with clear acceptance criteria.
 4. SPRINT: Optionally create and start a sprint to group tickets.
-5. SPAWN: For each subtask, spawn the appropriate worker from your roster using hive_spawn_agent.
+5. SPAWN: For each subtask, spawn the appropriate worker from your roster using zana_spawn_agent.
    - Give each worker a DETAILED prompt: what to build, which files to create, what conventions to follow.
    - Include context from earlier workers' output when tasks are sequential.
    - Spawn independent tasks in parallel for speed.
-6. MONITOR: Poll hive_agent_status until workers complete. Use Read to verify output files exist.
-7. COLLECT: Call hive_agent_result to get each worker's output summary.
+6. MONITOR: Poll zana_agent_status until workers complete. Use Read to verify output files exist.
+7. COLLECT: Call zana_agent_result to get each worker's output summary.
 8. VALIDATE: Check that deliverables match requirements. If a worker failed, spawn a replacement.
-9. CLOSE: Mark tickets done via hive_ticket_complete with a result summary.
+9. CLOSE: Mark tickets done via zana_ticket_complete with a result summary.
 
 RULES:
 - You MUST NOT write code, create files, or edit files. You have NO implementation tools.
@@ -157,7 +157,7 @@ RULES:
       dynamicRules.push("- Report back before spawning workers and wait for user approval");
     }
 
-    const artifactNote = `\nPlanning artifacts may be available. Call hive_artifact_list and hive_artifact_read to access shared architecture docs and requirement specs BEFORE spawning workers.\n`;
+    const artifactNote = `\nPlanning artifacts may be available. Call zana_artifact_list and zana_artifact_read to access shared architecture docs and requirement specs BEFORE spawning workers.\n`;
 
     return `${delegationMandate}You are the ORCHESTRATOR for "${team.name}" with DYNAMIC TEAM COMPOSITION.\n\n` +
       `Analyze the task and spawn the exact workers you need from ALL available profiles.\n` +
@@ -167,7 +167,7 @@ RULES:
       `Task:\n${userPrompt || team.initialPrompt || "Awaiting instructions."}`;
   }
 
-  const artifactNote = `\nPlanning artifacts may be available. Call hive_artifact_list and hive_artifact_read to access shared architecture docs and requirement specs BEFORE spawning workers.\n`;
+  const artifactNote = `\nPlanning artifacts may be available. Call zana_artifact_list and zana_artifact_read to access shared architecture docs and requirement specs BEFORE spawning workers.\n`;
 
   return `${delegationMandate}You are leading team "${team.name}" (${totalSlots} total slots). Your available workers:\n\n${workerList}${rulesBlock}${artifactNote}\n\nTask:\n${userPrompt || team.initialPrompt || "Awaiting instructions."}`;
 }

@@ -330,7 +330,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     try {
       const hookEvent = data.hook_event_name;
       if (hookEvent === "SessionEnd" || hookEvent === "Stop") {
-        const agentId = data.hive_terminal_id;
+        const agentId = data.zana_terminal_id;
         if (agentId) {
           appendAudit({ action: "agent_completed", agentId, hookEvent, result: data.stop_reason || null });
         }

@@ -1,6 +1,6 @@
 // Module Tool Registry
 // Maintains a registry of MCP tools contributed by modules.
-// Tools are prefixed as hive_<moduleId>_<toolName>.
+// Tools are prefixed as zana_<moduleId>_<toolName>.
 
 const registry = new Map(); // moduleId -> tool[]
 
@@ -42,7 +42,7 @@ function listModuleTools() {
 }
 
 /**
- * Get a specific tool by its prefixed name (e.g. "hive_mymodule_doStuff").
+ * Get a specific tool by its prefixed name (e.g. "zana_mymodule_doStuff").
  * @param {string} prefixedName
  * @returns {{name: string, description: string, inputSchema: object, moduleId: string, handler?: function} | null}
  */

@@ -108,8 +108,8 @@ export function enforcePreToolUse(hookPayload, profile) {
   // 3. Check canMarkDone restriction
   if (!rules.canMarkDone) {
     if (
-      tool_name === "hive_ticket_complete" ||
-      (tool_name === "hive_ticket_update_status" &&
+      tool_name === "zana_ticket_complete" ||
+      (tool_name === "zana_ticket_update_status" &&
         tool_input?.status === "done")
     ) {
       return {

@@ -11,7 +11,7 @@ INPUT=$(cat)
 TERMINAL_ID="${ZANA_TERMINAL_ID:-}"
 
 if [ -n "$TERMINAL_ID" ]; then
-  INPUT=$(printf '%s' "$INPUT" | sed "s#^{#{\"hive_terminal_id\":\"$TERMINAL_ID\",#")
+  INPUT=$(printf '%s' "$INPUT" | sed "s#^{#{\"zana_terminal_id\":\"$TERMINAL_ID\",#")
 fi
 
 ZANA_DIR="$HOME/.zana/hives"

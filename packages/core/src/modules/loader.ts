@@ -307,7 +307,7 @@ export async function init(coreModules) {
       const moduleToolRegistry = require("./tool-registry");
       const tools = manifest.api.mcp.map(tool => ({
         ...tool,
-        name: `hive_${manifest.id}_${tool.name}`,
+        name: `zana_${manifest.id}_${tool.name}`,
         moduleId: manifest.id,
       }));
       moduleToolRegistry.registerModuleTools(manifest.id, tools);
@@ -449,7 +449,7 @@ export async function enableModule(moduleId) {
     const moduleToolRegistry = require("./tool-registry");
     const tools = entry.manifest.api.mcp.map(tool => ({
       ...tool,
-      name: `hive_${entry.manifest.id}_${tool.name}`,
+      name: `zana_${entry.manifest.id}_${tool.name}`,
       moduleId: entry.manifest.id,
     }));
     moduleToolRegistry.registerModuleTools(entry.manifest.id, tools);

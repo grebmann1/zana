@@ -59,7 +59,7 @@ export function append(payload) {
     globalStream.write(line);
   }
 
-  const terminalId = payload.hive_terminal_id;
+  const terminalId = payload.zana_terminal_id;
   if (terminalId) {
     const agentFile = path.join(sessionDir, "agents", `${terminalId}.ndjson`);
     fs.appendFileSync(agentFile, line, "utf8");

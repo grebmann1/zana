@@ -132,7 +132,7 @@ export function spawnInteractive(profile, options = {}) {
 }
 
 export function updateAgentFromHook(payload) {
-  const terminalId = payload.hive_terminal_id;
+  const terminalId = payload.zana_terminal_id;
   if (!terminalId) return;
 
   const agent = Array.from(agents.values()).find(
@@ -159,7 +159,7 @@ export function updateAgentFromHook(payload) {
 
   bus.emit(EVENTS.AGENT_HOOK, {
     agentId: agent.id,
-    hive_terminal_id: terminalId,
+    zana_terminal_id: terminalId,
     hook_event_name: event,
     tool_name: payload.tool_name || payload.tool?.name,
     tool_input: payload.tool_input,

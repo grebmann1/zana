@@ -53,12 +53,12 @@ function loadRules(configPath) {
       {
         trigger: { status: "review", reviewPhase: "qa" },
         action: { spawnProfile: "built-in-code-reviewer" },
-        promptTemplate: "QA/Code Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nYou are performing a QA CODE REVIEW. Check the implementation for correctness, security, and code quality. Read the plan.md and files-changed.json in the ticket directory.\n\nWhen done, call hive_ticket_update with:\n- If PASS: set reviewPhase to \"architecture\" (next: architecture review)\n- If FAIL: set status to \"rework\" with detailed issues in progress field",
+        promptTemplate: "QA/Code Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nYou are performing a QA CODE REVIEW. Check the implementation for correctness, security, and code quality. Read the plan.md and files-changed.json in the ticket directory.\n\nWhen done, call zana_ticket_update with:\n- If PASS: set reviewPhase to \"architecture\" (next: architecture review)\n- If FAIL: set status to \"rework\" with detailed issues in progress field",
       },
       {
         trigger: { status: "review", reviewPhase: "architecture" },
         action: { spawnProfile: "built-in-arch-reviewer" },
-        promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the overall architecture, design docs, and coding conventions. Read hive artifacts for architecture context. Review plan.md and files in files-changed.json.\n\nWhen done, call hive_ticket_update with:\n- If PASS: set status to \"done\" with resultSummary (architectural approval)\n- If FAIL: set status to \"rework\" with architectural issues in progress field",
+        promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the overall architecture, design docs, and coding conventions. Read shared artifacts for architecture context. Review plan.md and files in files-changed.json.\n\nWhen done, call zana_ticket_update with:\n- If PASS: set status to \"done\" with resultSummary (architectural approval)\n- If FAIL: set status to \"rework\" with architectural issues in progress field",
       },
       {
         trigger: { status: "rework" },

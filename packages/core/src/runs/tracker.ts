@@ -83,7 +83,7 @@ export function init() {
     runEvents.push({ type: "agent:hook", timestamp: Date.now(), payload });
 
     if (payload.hook_event_name === "PostToolUse") {
-      const agent = currentRun.agents.find((a) => a.id === payload.agentId || a.terminalId === payload.hive_terminal_id);
+      const agent = currentRun.agents.find((a) => a.id === payload.agentId || a.terminalId === payload.zana_terminal_id);
       if (agent) agent.toolCalls++;
       currentRun.stats.totalToolCalls++;
 

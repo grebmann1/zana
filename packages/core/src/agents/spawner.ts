@@ -22,7 +22,7 @@ export function findClaude() {
 const VALID_PERMISSION_MODES = ["default", "plan", "auto", "trust", "bypassPermissions"];
 const VALID_EFFORT_LEVELS = ["low", "medium", "high", "max"];
 
-const ENV_PASSTHROUGH_PREFIXES = ["PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_", "NODE_", "NPM_", "VOLTA_", "NVM_", "HIVE_", "ZANA_", "CLAUDE_", "XDG_"];
+const ENV_PASSTHROUGH_PREFIXES = ["PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_", "NODE_", "NPM_", "VOLTA_", "NVM_", "ZANA_", "CLAUDE_", "XDG_"];
 
 function filterEnvForChild(env) {
   const filtered = {};
