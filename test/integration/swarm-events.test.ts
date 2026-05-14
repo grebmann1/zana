@@ -45,10 +45,10 @@ describe("swarm/events", () => {
       expect(result[0].summary).toBe("new");
     });
 
-    it("filters by hiveId", () => {
-      events.addEvent({ hiveId: "hive-a", type: "progress", summary: "a" });
-      events.addEvent({ hiveId: "hive-b", type: "progress", summary: "b" });
-      const result = events.query({ hiveId: "hive-a" });
+    it("filters by daemonId", () => {
+      events.addEvent({ daemonId: "hive-a", type: "progress", summary: "a" });
+      events.addEvent({ daemonId: "hive-b", type: "progress", summary: "b" });
+      const result = events.query({ daemonId: "hive-a" });
       expect(result.length).toBe(1);
       expect(result[0].summary).toBe("a");
     });
@@ -73,12 +73,12 @@ describe("swarm/events", () => {
     });
 
     it("combines multiple filters", () => {
-      events.addEvent({ timestamp: 100, hiveId: "a", type: "progress", summary: "1" });
-      events.addEvent({ timestamp: 200, hiveId: "a", type: "error", summary: "2" });
-      events.addEvent({ timestamp: 300, hiveId: "b", type: "progress", summary: "3" });
-      events.addEvent({ timestamp: 400, hiveId: "a", type: "progress", summary: "4" });
+      events.addEvent({ timestamp: 100, daemonId: "a", type: "progress", summary: "1" });
+      events.addEvent({ timestamp: 200, daemonId: "a", type: "error", summary: "2" });
+      events.addEvent({ timestamp: 300, daemonId: "b", type: "progress", summary: "3" });
+      events.addEvent({ timestamp: 400, daemonId: "a", type: "progress", summary: "4" });
 
-      const result = events.query({ since: 150, hiveId: "a", type: "progress" });
+      const result = events.query({ since: 150, daemonId: "a", type: "progress" });
       expect(result.length).toBe(1);
       expect(result[0].summary).toBe("4");
     });

@@ -31,7 +31,7 @@ export function init() {
         teamId: payload.teamId,
         teamName: payload.teamName,
         workspace: process.env.ZANA_WORKSPACE || process.cwd(),
-        hiveId: process.env.ZANA_ID || "default",
+        daemonId: process.env.ZANA_ID || "default",
       });
     }
   });
@@ -118,11 +118,11 @@ export function init() {
   });
 }
 
-export function startRun({ teamId, teamName, workspace, hiveId, orchestratorAgentId }) {
+export function startRun({ teamId, teamName, workspace, daemonId, orchestratorAgentId }) {
   const id = crypto.randomUUID();
   currentRun = {
     id,
-    hiveId: hiveId || "default",
+    daemonId: daemonId || "default",
     workspace: workspace || process.cwd(),
     teamId: teamId || null,
     teamName: teamName || null,
@@ -136,7 +136,7 @@ export function startRun({ teamId, teamName, workspace, hiveId, orchestratorAgen
     sprintId: null,
     sprintName: null,
     filesProduced: [],
-    subHives: [],
+    subDaemons: [],
     stats: {
       totalAgents: 0,
       peakConcurrentAgents: 0,
