@@ -1135,8 +1135,8 @@ function handleScratchpad(args) {
 }
 
 function handleBroadcast(args) {
-  if (localDaemon && localDaemon.hivemindRouter) {
-    localDaemon.hivemindRouter.broadcast(args.message || "");
+  if (localDaemon && localDaemon.swarmRouter) {
+    localDaemon.swarmRouter.broadcast(args.message || "");
     return { ok: true };
   }
   return { ok: false, error: "swarm not available" };
@@ -1162,9 +1162,9 @@ function sendNotification(method, params) {
 
 function drainLocalInbox() {
   const agentId = process.env.ZANA_TERMINAL_ID;
-  if (!agentId || !localDaemon?.hivemindRouter) return [];
+  if (!agentId || !localDaemon?.swarmRouter) return [];
   try {
-    return localDaemon.hivemindRouter.drainInbox(agentId) || [];
+    return localDaemon.swarmRouter.drainInbox(agentId) || [];
   } catch {
     return [];
   }

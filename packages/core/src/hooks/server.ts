@@ -13,8 +13,8 @@ const DEFAULT_PORT = DEFAULT_HOOK_PORT_VALUE;
 const MAX_BODY_BYTES = 256 * 1024;
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
 
-let hivemindRouter = null;
-let hivemindEvents = null;
+let swarmRouter = null;
+let swarmEvents = null;
 let agentListFn = null;
 
 // --- Route registry ---
@@ -29,8 +29,8 @@ function matchRoute(method, pathname) {
 }
 
 export function setHivemindModules({ router, events, getAgents }) {
-  hivemindRouter = router;
-  hivemindEvents = events;
+  swarmRouter = router;
+  swarmEvents = events;
   agentListFn = getAgents;
 }
 
@@ -372,10 +372,10 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
 
   // POST /swarm/inbox — deliver message to agent inbox
   registerRoute("POST", "/swarm/inbox", (_req, res, data) => {
-    if (!hivemindRouter) {
+    if (!swarmRouter) {
       res.statusCode = 503;
       res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ error: "hivemind not initialized" }));
+      res.end(JSON.stringify({ error: "swarm not initialized" }));
       return;
     }
     const toAgentId = data.toAgentId;
@@ -385,7 +385,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
       res.end(JSON.stringify({ error: "toAgentId required" }));
       return;
     }
-    hivemindRouter.deliverLocal(toAgentId, data);
+    swarmRouter.deliverLocal(toAgentId, data);
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ ok: true }));
@@ -393,13 +393,13 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
 
   // POST /swarm/events — receive events from sub-hives
   registerRoute("POST", "/swarm/events", (_req, res, data) => {
-    if (!hivemindEvents) {
+    if (!swarmEvents) {
       res.statusCode = 503;
       res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ error: "hivemind not initialized" }));
+      res.end(JSON.stringify({ error: "swarm not initialized" }));
       return;
     }
-    hivemindEvents.addEvent(data);
+    swarmEvents.addEvent(data);
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ ok: true }));
@@ -407,9 +407,9 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
 
   // GET /swarm/inbox — drain/peek agent inbox
   registerRoute("GET", "/swarm/inbox", (_req, res, parsed) => {
-    if (!hivemindRouter) {
+    if (!swarmRouter) {
       res.statusCode = 503;
-      res.end(JSON.stringify({ error: "hivemind not initialized" }));
+      res.end(JSON.stringify({ error: "swarm not initialized" }));
       return;
     }
     const agentId = parsed.query.agentId;
@@ -425,8 +425,8 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     }
     const drain = parsed.query.drain === "true";
     const messages = drain
-      ? hivemindRouter.drainInbox(agentId)
-      : hivemindRouter.peekInbox(agentId);
+      ? swarmRouter.drainInbox(agentId)
+      : swarmRouter.peekInbox(agentId);
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(messages));

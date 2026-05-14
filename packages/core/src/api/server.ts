@@ -444,14 +444,14 @@ async function handleRequest(req, res) {
   }
 
   // --- Hivemind ---
-  if (method === "GET" && pathname === "/hivemind/agents") {
+  if (method === "GET" && pathname === "/swarm/agents") {
     const agents = hive.agentManager.listAgents()
       .filter((a) => a.state !== "terminated")
       .map((a) => ({ id: a.id, terminalId: a.terminalId, profileName: a.profileName, state: a.state, mode: a.mode }));
     json(res, agents);
     return;
   }
-  if (method === "GET" && pathname === "/hivemind/inbox") {
+  if (method === "GET" && pathname === "/swarm/inbox") {
     const agentId = url.searchParams.get("agentId");
     if (!agentId) { json(res, { error: "agentId required" }, 400); return; }
     const drain = url.searchParams.get("drain") === "true";
@@ -461,7 +461,7 @@ async function handleRequest(req, res) {
     json(res, messages);
     return;
   }
-  if (method === "POST" && pathname === "/hivemind/inbox") {
+  if (method === "POST" && pathname === "/swarm/inbox") {
     const body = await readBody(req);
     if (body.toAgentId) {
       hive.swarmRouter.deliverLocal(body.toAgentId, body);
@@ -469,7 +469,7 @@ async function handleRequest(req, res) {
     json(res, { ok: true });
     return;
   }
-  if (method === "POST" && pathname === "/hivemind/instruct") {
+  if (method === "POST" && pathname === "/swarm/instruct") {
     const body = await readBody(req);
     const agents = hive.agentManager.listAgents();
     const lead = agents.find((a) => a.state === "active" && a.mode === "headless");
@@ -479,7 +479,7 @@ async function handleRequest(req, res) {
     json(res, { ok: written, agentId: lead.id });
     return;
   }
-  if (method === "POST" && pathname === "/hivemind/events") {
+  if (method === "POST" && pathname === "/swarm/events") {
     const body = await readBody(req);
     hive.swarmEvents.pushEvent(body);
     json(res, { ok: true });
