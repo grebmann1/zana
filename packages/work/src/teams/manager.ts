@@ -1,7 +1,9 @@
 import * as teamStore from "./store";
-import * as agentManager from "../agents/manager";
-import * as profileStore from "../agents/profile-store";
-import { bus, EVENTS } from "../events/bus";
+function _core() { return require("@zana/core"); }
+const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
+const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
+const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
+const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.bus.EVENTS[p] });
 import * as checkpointStore from "../runs/checkpoint/store";
 import * as checkpointResume from "../runs/checkpoint/resume";
 
@@ -217,7 +219,7 @@ export function startTeam(teamId, options = {}) {
   } else {
     result = agentManager.spawnInteractive(augmentedProfile, { cwd, cols: options.cols, rows: options.rows });
     setTimeout(() => {
-      const ptyHost = require("../agents/pty-host");
+      const ptyHost = require("@zana/core").agents.ptyHost;
       ptyHost.writeTerminal(result.terminalId, kickoffMessage + "\n");
     }, 20000);
   }

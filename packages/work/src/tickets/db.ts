@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as ticketStoreFallback from "./store";
-import * as configMod from "../config";
-import * as workspaceContext from "../project/workspace-context";
+function _core() { return require("@zana/core"); }
+const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 
 let Database: any;
 try { Database = require("better-sqlite3"); } catch { Database = null; }
@@ -15,7 +15,7 @@ function getDbPath() {
     fs.mkdirSync(hiveDir, { recursive: true });
     return path.join(hiveDir, "tickets.db");
   }
-  const ZANA_DIR = (configMod as any).ZANA_DIR;
+  const ZANA_DIR = _core().config.ZANA_DIR;
   fs.mkdirSync(ZANA_DIR, { recursive: true });
   return path.join(ZANA_DIR, "tickets.db");
 }

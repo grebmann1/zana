@@ -1,11 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as configMod from "../config";
-
 const MAX_HISTORY = 10;
 
 function getSchedulerDir(): string {
-  return (configMod as any).SCHEDULER_DIR;
+  return require("@zana/core").config.SCHEDULER_DIR;
 }
 
 export function ensureDir() {

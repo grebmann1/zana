@@ -1,8 +1,6 @@
 import * as crypto from "node:crypto";
 import * as ticketStore from "./db";
-import * as eventBus from "../events/bus";
-
-const bus = (eventBus as any).bus;
+const bus: any = new Proxy({}, { get: (_t, p) => require("@zana/core").events.bus.bus[p] });
 
 const VALID_STATUSES = ["backlog", "in-progress", "review", "rework", "blocked", "done", "cancelled"];
 const VALID_PRIORITIES = ["critical", "high", "medium", "low"];

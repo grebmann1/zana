@@ -11,8 +11,10 @@ import * as hookInstaller from "./hooks/installer";
 import * as profileStore from "./agents/profile-store";
 import * as agentManager from "./agents/manager";
 import * as eventLog from "./events/log";
-import * as teamStore from "./teams/store";
-import * as teamManager from "./teams/manager";
+// Lazy proxies — @zana/work depends on @zana/core, so eager require here
+// would dead-lock during cross-package init.
+const teamStore: any = new Proxy({}, { get: (_t, p) => require("@zana/work").teams.store[p] });
+const teamManager: any = new Proxy({}, { get: (_t, p) => require("@zana/work").teams.manager[p] });
 const skillStore = require("@zana/extras").settings.skillStore;
 import * as daemonRegistry from "./daemon/registry";
 const _swarmPkg = require("@zana/swarm");
@@ -21,8 +23,8 @@ const swarmEvents = _swarmPkg.events;
 const swarmSpawner = _swarmPkg.spawner;
 import * as persistence from "./persistence";
 import * as eventBusService from "./events/service";
-import * as runTracker from "./runs/tracker";
-import * as ticketWatcher from "./tickets/watcher";
+const runTracker: any = new Proxy({}, { get: (_t, p) => require("@zana/work").runs.tracker[p] });
+const ticketWatcher: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.watcher[p] });
 import * as healthMonitor from "./api/health-monitor";
 import * as workspaceContext from "./project/workspace-context";
 const _intel = require("@zana/intelligence");

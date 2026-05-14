@@ -1,19 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import { TEAMS_DIR } from "../config";
+function TEAMS_DIR() { return require("@zana/core").config.TEAMS_DIR; }
 
 function ensureDir() {
-  fs.mkdirSync(TEAMS_DIR, { recursive: true });
+  fs.mkdirSync(TEAMS_DIR(), { recursive: true });
 }
 
 export function listTeams() {
   ensureDir();
   try {
-    const files = fs.readdirSync(TEAMS_DIR).filter((f) => f.endsWith(".json"));
+    const files = fs.readdirSync(TEAMS_DIR()).filter((f) => f.endsWith(".json"));
     return files.map((f) => {
       try {
-        return JSON.parse(fs.readFileSync(path.join(TEAMS_DIR, f), "utf8"));
+        return JSON.parse(fs.readFileSync(path.join(TEAMS_DIR(), f), "utf8"));
       } catch {
         return null;
       }
@@ -30,7 +30,7 @@ function sanitizeId(id) {
 export function getTeam(id) {
   if (!id) return null;
   ensureDir();
-  const filePath = path.join(TEAMS_DIR, `${sanitizeId(id)}.json`);
+  const filePath = path.join(TEAMS_DIR(), `${sanitizeId(id)}.json`);
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {
@@ -75,14 +75,14 @@ export function saveTeam(team) {
   if (team.maxTotalWorkers === undefined) team.maxTotalWorkers = team.rules.maxConcurrentWorkers || 10;
   if (!team.initialPrompt) team.initialPrompt = "";
 
-  const filePath = path.join(TEAMS_DIR, `${team.id}.json`);
+  const filePath = path.join(TEAMS_DIR(), `${team.id}.json`);
   fs.writeFileSync(filePath, JSON.stringify(team, null, 2) + "\n", "utf8");
   return team;
 }
 
 export function deleteTeam(id) {
   if (!id) return false;
-  const filePath = path.join(TEAMS_DIR, `${sanitizeId(id)}.json`);
+  const filePath = path.join(TEAMS_DIR(), `${sanitizeId(id)}.json`);
   try {
     fs.unlinkSync(filePath);
     return true;

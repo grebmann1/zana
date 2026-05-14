@@ -226,7 +226,7 @@ function markBlocked(ticket) {
       "Automation",
       `⚠️ BLOCKED: This ticket has failed review ${ticket.reworkCount} times. Automatic rework cycles exhausted. Human intervention required.\n\nPlease review the comment history, identify the root issue, and either:\n- Provide guidance and move back to "in-progress" manually\n- Reassign to a different agent profile\n- Break into smaller tickets`
     );
-    const { bus } = require("../events/bus");
+    const { bus } = require("@zana/core").events.bus;
     bus.emit("ticket:blocked", { ticketId: ticket.id, reason: "max_rework_cycles", reworkCount: ticket.reworkCount });
     log(`Ticket ${ticket.id} marked as blocked — human intervention required`);
   } catch (err) {

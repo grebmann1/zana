@@ -20,6 +20,22 @@ module.exports = {
       backgroundWorkers: i.backgroundWorkers,
     };
   },
+  get tickets() { return require("@zana/work").tickets; },
+  get scheduling() {
+    const s = require("@zana/work").scheduling;
+    return { service: s.service, store: s.store, workflow: s.workflowEngine };
+  },
+  get teams() { return require("@zana/work").teams; },
+  get runs() {
+    const r = require("@zana/work").runs;
+    return {
+      store: r.store,
+      tracker: r.tracker,
+      artifacts: r.artifacts,
+      plans: r.plans,
+      checkpoint: r.checkpoint.store,
+    };
+  },
 
   project: {
     init: require("./project/init"),
@@ -41,35 +57,12 @@ module.exports = {
     modelRouter: require("./agents/model-router"),
     terminalRelay: require("./agents/terminal-relay"),
   },
-  teams: {
-    manager: require("./teams/manager"),
-    store: require("./teams/store"),
-  },
   events: {
     bus: require("./events/bus"),
     service: require("./events/service"),
     store: require("./events/store"),
     log: require("./events/log"),
     stats: require("./events/stats-engine"),
-  },
-  tickets: {
-    service: require("./tickets/service"),
-    store: require("./tickets/store"),
-    db: require("./tickets/db"),
-    migration: require("./tickets/migration"),
-    watcher: require("./tickets/watcher"),
-  },
-  runs: {
-    store: require("./runs/store"),
-    tracker: require("./runs/tracker"),
-    artifacts: require("./runs/artifact-store"),
-    plans: require("./runs/plans-store"),
-    checkpoint: require("./runs/checkpoint/store"),
-  },
-  scheduling: {
-    service: require("./scheduling/service"),
-    store: require("./scheduling/store"),
-    workflow: require("./scheduling/workflow-engine"),
   },
   hooks: {
     server: require("./hooks/server"),

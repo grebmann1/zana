@@ -11,7 +11,7 @@ export function init(hiveDir) {
 
 function getDir() {
   if (!checkpointsDir) {
-    const { ZANA_DIR } = require("../../config.js");
+    const { ZANA_DIR } = require("@zana/core").config;
     checkpointsDir = path.join(ZANA_DIR, "checkpoints");
     fs.mkdirSync(checkpointsDir, { recursive: true });
   }

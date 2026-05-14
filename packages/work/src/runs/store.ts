@@ -1,18 +1,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { RUNS_DIR } from "../config";
+function RUNS_DIR() { return require("@zana/core").config.RUNS_DIR; }
 
 function ensureDir() {
-  fs.mkdirSync(RUNS_DIR, { recursive: true });
+  fs.mkdirSync(RUNS_DIR(), { recursive: true });
 }
 
 export function listRuns({ limit = 50, offset = 0, status } = {}) {
   ensureDir();
   try {
-    const files = fs.readdirSync(RUNS_DIR).filter((f) => f.endsWith(".json"));
+    const files = fs.readdirSync(RUNS_DIR()).filter((f) => f.endsWith(".json"));
     let runs = files.map((f) => {
       try {
-        return JSON.parse(fs.readFileSync(path.join(RUNS_DIR, f), "utf8"));
+        return JSON.parse(fs.readFileSync(path.join(RUNS_DIR(), f), "utf8"));
       } catch {
         return null;
       }
@@ -32,7 +32,7 @@ export function listRuns({ limit = 50, offset = 0, status } = {}) {
 export function getRun(id) {
   if (!id) return null;
   ensureDir();
-  const filePath = path.join(RUNS_DIR, `${id}.json`);
+  const filePath = path.join(RUNS_DIR(), `${id}.json`);
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {
@@ -42,14 +42,14 @@ export function getRun(id) {
 
 export function saveRun(run) {
   ensureDir();
-  const filePath = path.join(RUNS_DIR, `${run.id}.json`);
+  const filePath = path.join(RUNS_DIR(), `${run.id}.json`);
   fs.writeFileSync(filePath, JSON.stringify(run, null, 2) + "\n", "utf8");
   return run;
 }
 
 export function deleteRun(id) {
   if (!id) return false;
-  const filePath = path.join(RUNS_DIR, `${id}.json`);
+  const filePath = path.join(RUNS_DIR(), `${id}.json`);
   try {
     fs.unlinkSync(filePath);
     return true;

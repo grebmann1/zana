@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import { bus } from "../events/bus";
-import * as workspaceContext from "../project/workspace-context";
+function _core() { return require("@zana/core"); }
+const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
+const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 
 export const MAX_STEPS = 10;
 export const MAX_CONCURRENT_RUNS = 3;
@@ -149,8 +150,8 @@ async function executeStep(step, context) {
       if (step.condition && !evaluateCondition(step.condition, context)) {
         return { halted: true, reason: `condition not met: ${step.condition}` };
       }
-      const agentManager = require("../agents/manager");
-      const profileStore = require("../agents/profile-store");
+      const agentManager = _core().agents.manager;
+      const profileStore = _core().agents.profileStore;
       const profileId = step.profile || step.profileId;
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };
@@ -170,7 +171,7 @@ async function executeStep(step, context) {
     }
 
     case "notify": {
-      const eventBusService = require("../events/service");
+      const eventBusService = _core().events.service;
       const payload = step.payload ? interpolatePrompt(JSON.stringify(step.payload), context) : "{}";
       let parsedPayload;
       try { parsedPayload = JSON.parse(payload); } catch { parsedPayload = { raw: payload }; }

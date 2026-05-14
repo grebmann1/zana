@@ -254,7 +254,7 @@ async function handleRequest(req, res) {
 
   // --- Tickets ---
   if (method === "GET" && pathname === "/tickets") {
-    const ticketService = require("../tickets/service");
+    const ticketService = require("@zana/work").tickets.service;
     const status = url.searchParams.get("status");
     const label = url.searchParams.get("label");
     json(res, ticketService.listTickets({ status, label }));
@@ -271,7 +271,7 @@ async function handleRequest(req, res) {
   }
   const ticketMatch = pathname.match(/^\/tickets\/([^/]+)$/);
   if (ticketMatch) {
-    const ticketService = require("../tickets/service");
+    const ticketService = require("@zana/work").tickets.service;
     if (method === "GET") {
       const t = ticketService.getTicket(ticketMatch[1]);
       if (!t) { json(res, { error: "not found" }, 404); return; }
@@ -311,7 +311,7 @@ async function handleRequest(req, res) {
   }
   const ticketCommentMatch = pathname.match(/^\/tickets\/([^/]+)\/comment$/);
   if (method === "POST" && ticketCommentMatch) {
-    const ticketService = require("../tickets/service");
+    const ticketService = require("@zana/work").tickets.service;
     const body = await readBody(req);
     ticketService.addComment(ticketCommentMatch[1], body.agentId || "api", body.agentName || "API", body.content);
     json(res, { ok: true });
@@ -677,12 +677,12 @@ async function handleRequest(req, res) {
 
   // --- Schedules ---
   if (method === "GET" && pathname === "/api/schedules") {
-    const schedulerService = require("../scheduling/service");
+    const schedulerService = require("@zana/work").scheduling.service;
     json(res, schedulerService.listSchedules());
     return;
   }
   if (method === "POST" && pathname === "/api/schedules") {
-    const schedulerService = require("../scheduling/service");
+    const schedulerService = require("@zana/work").scheduling.service;
     const body = await readBody(req);
     const schedule = schedulerService.createSchedule(body);
     json(res, schedule, 201);
@@ -690,7 +690,7 @@ async function handleRequest(req, res) {
   }
   const scheduleMatch = pathname.match(/^\/api\/schedules\/([^/]+)$/);
   if (scheduleMatch) {
-    const schedulerService = require("../scheduling/service");
+    const schedulerService = require("@zana/work").scheduling.service;
     const id = scheduleMatch[1];
     if (method === "GET") {
       const s = schedulerService.getSchedule(id);
@@ -713,7 +713,7 @@ async function handleRequest(req, res) {
   }
   const scheduleEnableMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/enable$/);
   if (method === "POST" && scheduleEnableMatch) {
-    const schedulerService = require("../scheduling/service");
+    const schedulerService = require("@zana/work").scheduling.service;
     const result = schedulerService.enableSchedule(scheduleEnableMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -721,7 +721,7 @@ async function handleRequest(req, res) {
   }
   const scheduleDisableMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/disable$/);
   if (method === "POST" && scheduleDisableMatch) {
-    const schedulerService = require("../scheduling/service");
+    const schedulerService = require("@zana/work").scheduling.service;
     const result = schedulerService.disableSchedule(scheduleDisableMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -729,7 +729,7 @@ async function handleRequest(req, res) {
   }
   const scheduleTriggerMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/trigger$/);
   if (method === "POST" && scheduleTriggerMatch) {
-    const schedulerService = require("../scheduling/service");
+    const schedulerService = require("@zana/work").scheduling.service;
     const result = await schedulerService.triggerSchedule(scheduleTriggerMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -738,7 +738,7 @@ async function handleRequest(req, res) {
 
   // --- Checkpoints ---
   if (method === "GET" && pathname === "/api/checkpoints") {
-    const checkpointStore = require("../runs/checkpoint/store");
+    const checkpointStore = require("@zana/work").runs.checkpoint.store;
     const filter = {};
     const teamId = url.searchParams.get("teamId");
     if (teamId) filter.teamId = teamId;
@@ -750,7 +750,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "POST" && pathname === "/api/checkpoints") {
-    const checkpointStore = require("../runs/checkpoint/store");
+    const checkpointStore = require("@zana/work").runs.checkpoint.store;
     const body = await readBody(req);
     const checkpoint = checkpointStore.save(body);
     json(res, checkpoint, 201);
@@ -758,7 +758,7 @@ async function handleRequest(req, res) {
   }
   const checkpointMatch = pathname.match(/^\/api\/checkpoints\/([^/]+)$/);
   if (checkpointMatch) {
-    const checkpointStore = require("../runs/checkpoint/store");
+    const checkpointStore = require("@zana/work").runs.checkpoint.store;
     const id = checkpointMatch[1];
     if (method === "GET") {
       const cp = checkpointStore.load(id);
@@ -769,7 +769,7 @@ async function handleRequest(req, res) {
   }
   const checkpointResumeMatch = pathname.match(/^\/api\/checkpoints\/([^/]+)\/resume$/);
   if (method === "POST" && checkpointResumeMatch) {
-    const checkpointResume = require("../runs/checkpoint/resume");
+    const checkpointResume = require("@zana/work").runs.checkpoint.resume;
     const result = await checkpointResume.resume(
       checkpointResumeMatch[1],
       hive.agentManager,
@@ -782,7 +782,7 @@ async function handleRequest(req, res) {
 
   // --- Workflows ---
   if (method === "POST" && pathname === "/api/workflows/run") {
-    const workflowEngine = require("../scheduling/workflow-engine");
+    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
     const body = await readBody(req);
     if (!body.skill && !body.steps) { json(res, { error: "skill or steps required" }, 400); return; }
     const skill = body.skill || { id: body.id || "inline", name: body.name || "inline", steps: body.steps };
@@ -792,7 +792,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "GET" && pathname === "/api/workflows/runs") {
-    const workflowEngine = require("../scheduling/workflow-engine");
+    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
     const filter = {};
     const status = url.searchParams.get("status");
     if (status) filter.status = status;
@@ -801,7 +801,7 @@ async function handleRequest(req, res) {
   }
   const workflowRunMatch = pathname.match(/^\/api\/workflows\/runs\/([^/]+)$/);
   if (method === "GET" && workflowRunMatch) {
-    const workflowEngine = require("../scheduling/workflow-engine");
+    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
     const run = workflowEngine.loadRun(workflowRunMatch[1]);
     if (!run) { json(res, { error: "not found" }, 404); return; }
     json(res, run);

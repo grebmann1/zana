@@ -3,10 +3,10 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 
 function getArtifactsDir() {
-  const ctx = require("../project/workspace-context");
+  const core = require("@zana/core");
+  const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().artifactsDir;
-  const { ZANA_DIR } = require("../config");
-  return path.join(ZANA_DIR, "artifacts");
+  return path.join(core.config.ZANA_DIR, "artifacts");
 }
 
 function ensureDir() {

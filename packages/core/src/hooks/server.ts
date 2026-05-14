@@ -3,8 +3,8 @@ import * as url from "node:url";
 import * as configMod from "../config";
 import * as workspaceContext from "../project/workspace-context";
 import { appendAudit } from "../events/log";
-import * as ticketService from "../tickets/service";
-import * as schedulerService from "../scheduling/service";
+const ticketService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.service[p] });
+const schedulerService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").scheduling.service[p] });
 import * as eventBusService from "../events/service";
 
 const DEFAULT_HOOK_PORT_VALUE = (configMod as any).DEFAULT_HOOK_PORT;

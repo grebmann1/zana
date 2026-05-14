@@ -1,7 +1,9 @@
 import * as crypto from "node:crypto";
-import { bus, EVENTS } from "../events/bus";
+function _core() { return require("@zana/core"); }
+const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
+const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.bus.EVENTS[p] });
 import * as runStore from "./store";
-import * as statsEngine from "../events/stats-engine";
+const statsEngine: any = new Proxy({}, { get: (_t, p) => _core().events.stats[p] });
 
 let currentRun = null;
 let runEvents = [];

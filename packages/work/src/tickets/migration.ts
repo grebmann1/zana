@@ -2,17 +2,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 function getTicketsDir() {
-  const ctx = require("../project/workspace-context");
+  const core = require("@zana/core");
+  const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
-  const { ZANA_DIR } = require("../config");
-  return path.join(ZANA_DIR, "tickets");
+  return path.join(core.config.ZANA_DIR, "tickets");
 }
 
 function getSprintsDir() {
-  const ctx = require("../project/workspace-context");
+  const core = require("@zana/core");
+  const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
-  const { ZANA_DIR } = require("../config");
-  return path.join(ZANA_DIR, "sprints");
+  return path.join(core.config.ZANA_DIR, "sprints");
 }
 
 function loadJsonTickets() {

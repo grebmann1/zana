@@ -13,10 +13,10 @@ import * as crypto from "node:crypto";
 // ─── Path resolution ─────────────────────────────────────────────────────────
 
 function getPlansDir() {
-  const ctx = require("../project/workspace-context");
+  const core = require("@zana/core");
+  const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().plansDir;
-  const { ZANA_DIR } = require("../config");
-  return path.join(ZANA_DIR, "plans");
+  return path.join(core.config.ZANA_DIR, "plans");
 }
 
 function ensureDir() {

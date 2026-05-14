@@ -81,8 +81,8 @@ async function executeAction(action) {
   const type = action.type;
 
   if (type === "prompt") {
-    const agentManager = require("../agents/manager");
-    const profileStore = require("../agents/profile-store");
+    const agentManager = require("@zana/core").agents.manager;
+    const profileStore = require("@zana/core").agents.profileStore;
     const profile = profileStore.getProfile(action.profileId);
     if (!profile) {
       return { status: "error", error: `profile not found: ${action.profileId}` };
