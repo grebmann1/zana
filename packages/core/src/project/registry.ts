@@ -10,7 +10,7 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 
 import * as config from "../config";
-import { initHiveDir, isHiveInitialized } from "./init";
+import { initProjectDir, isProjectInitialized } from "./init";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -220,8 +220,8 @@ export function importProject(absPath, opts) {
   }
 
   // Initialize .zana/ if not present
-  if (!isHiveInitialized(resolvedPath)) {
-    initHiveDir(resolvedPath, { silent: true });
+  if (!isProjectInitialized(resolvedPath)) {
+    initProjectDir(resolvedPath, { silent: true });
   }
 
   const name = (opts && opts.name) || readProjectName(resolvedPath);
@@ -329,21 +329,21 @@ export function archiveProject(id) {
  * Check the health of a project: path exists, .zana/ initialized, config.json parseable.
  *
  * @param {string} id
- * @returns {{ exists: boolean, hiveInitialized: boolean, configValid: boolean }}
+ * @returns {{ exists: boolean, projectInitialized: boolean, configValid: boolean }}
  */
 export function checkHealth(id) {
   const data = readRegistry();
   const entry = data.projects.find((p) => p.id === id);
   if (!entry) {
-    return { exists: false, hiveInitialized: false, configValid: false };
+    return { exists: false, projectInitialized: false, configValid: false };
   }
 
   const exists = fs.existsSync(entry.path);
   if (!exists) {
-    return { exists: false, hiveInitialized: false, configValid: false };
+    return { exists: false, projectInitialized: false, configValid: false };
   }
 
-  const hiveInitialized = isHiveInitialized(entry.path);
+  const projectInitialized = isProjectInitialized(entry.path);
 
   let configValid = false;
   const configPath = fs.existsSync(path.join(entry.path, ".zana", "config.json"))
@@ -358,13 +358,13 @@ export function checkHealth(id) {
     configValid = false;
   }
 
-  return { exists, hiveInitialized, configValid };
+  return { exists, projectInitialized, configValid };
 }
 
 /**
  * Run health checks on all active projects.
  *
- * @returns {Record<string, { exists: boolean, hiveInitialized: boolean, configValid: boolean }>}
+ * @returns {Record<string, { exists: boolean, projectInitialized: boolean, configValid: boolean }>}
  */
 export function checkAllHealth() {
   const data = readRegistry();

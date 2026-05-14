@@ -1,15 +1,15 @@
-// Hive Mind Spawner — manages sub-hive lifecycle (child processes).
+// Swarm Spawner — manages sub-daemon lifecycle (child processes).
 
 import { spawn } from "node:child_process";
 import * as path from "node:path";
 import * as http from "node:http";
 import * as crypto from "node:crypto";
 
-const subHives = new Map();
+const subDaemons = new Map();
 let changeListeners = [];
 
 function notifyChange() {
-  const snapshot = listSubHives();
+  const snapshot = listSubDaemons();
   for (const cb of changeListeners) {
     try { cb(snapshot); } catch (err) {
       console.warn("[swarm-spawner] listener callback error:", err.message || err);
@@ -17,10 +17,10 @@ function notifyChange() {
   }
 }
 
-export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHiveId, masterDaemonId }) {
-  const hiveId = `sub-${crypto.randomUUID().slice(0, 8)}`;
+export function spawnSubDaemon({ teamId, workspace, prompt, masterPort, masterDaemonId }) {
+  const daemonId = `sub-${crypto.randomUUID().slice(0, 8)}`;
   const headlessScript = path.join(__dirname, "..", "..", "bin", "daemon.js");
-  const masterId = masterDaemonId || masterHiveId;
+  const masterId = masterDaemonId;
 
   const args = [headlessScript, workspace];
   if (teamId) args.push(`--team=${teamId}`);
@@ -39,7 +39,7 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
   });
 
   const record = {
-    hiveId,
+    daemonId,
     pid: child.pid,
     port: null,
     apiPort: null,
@@ -52,7 +52,7 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
     prompt: prompt || null,
   };
 
-  subHives.set(hiveId, { record, child });
+  subDaemons.set(daemonId, { record, child });
   notifyChange();
 
   // Parse stdout for port announcement and forward output
@@ -76,9 +76,9 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
       if (prompt && teamId) {
         // Team auto-start handles its own prompt, no extra action needed
       } else if (prompt && !teamId) {
-        // Spawn a single agent with the prompt in the sub-hive
+        // Spawn a single agent with the prompt in the sub-daemon
         setTimeout(() => {
-          postToSubHive(record.apiPort, "/agent/spawn", {
+          postToSubDaemon(record.apiPort, "/agent/spawn", {
             profileId: "orchestrator",
             prompt,
             cwd: workspace,
@@ -88,11 +88,11 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
     }
 
     // Forward to main process stderr for visibility
-    process.stderr.write(`[${hiveId}] ${text}`);
+    process.stderr.write(`[${daemonId}] ${text}`);
   });
 
   child.stderr.on("data", (chunk) => {
-    process.stderr.write(`[${hiveId}:err] ${chunk.toString()}`);
+    process.stderr.write(`[${daemonId}:err] ${chunk.toString()}`);
   });
 
   child.on("exit", (code, signal) => {
@@ -100,17 +100,17 @@ export function spawnSubHive({ teamId, workspace, prompt, masterPort, masterHive
     notifyChange();
     // Clean up after a delay
     setTimeout(() => {
-      subHives.delete(hiveId);
+      subDaemons.delete(daemonId);
       notifyChange();
     }, 30000);
   });
 
-  return { hiveId, pid: child.pid };
+  return { daemonId, pid: child.pid };
 }
 
-export function stopSubHive(hiveId) {
-  const entry = subHives.get(hiveId);
-  if (!entry) return { ok: false, error: "sub-hive not found" };
+export function stopSubDaemon(daemonId) {
+  const entry = subDaemons.get(daemonId);
+  if (!entry) return { ok: false, error: "sub-daemon not found" };
 
   const { child, record } = entry;
   try {
@@ -123,50 +123,50 @@ export function stopSubHive(hiveId) {
   }
 }
 
-export async function instructSubHive(hiveId, message) {
-  const entry = subHives.get(hiveId);
-  if (!entry) return { ok: false, error: "sub-hive not found" };
-  if (!entry.record.apiPort) return { ok: false, error: "sub-hive not ready (no port yet)" };
+export async function instructSubDaemon(daemonId, message) {
+  const entry = subDaemons.get(daemonId);
+  if (!entry) return { ok: false, error: "sub-daemon not found" };
+  if (!entry.record.apiPort) return { ok: false, error: "sub-daemon not ready (no port yet)" };
 
-  const result = await postToSubHive(entry.record.apiPort, "/swarm/instruct", { message });
+  const result = await postToSubDaemon(entry.record.apiPort, "/swarm/instruct", { message });
   return result;
 }
 
-export async function getSubHiveAgents(hiveId) {
-  const entry = subHives.get(hiveId);
+export async function getSubDaemonAgents(daemonId) {
+  const entry = subDaemons.get(daemonId);
   if (!entry) return [];
   if (!entry.record.apiPort) return [];
 
   try {
-    return await getFromSubHive(entry.record.apiPort, "/agents");
+    return await getFromSubDaemon(entry.record.apiPort, "/agents");
   } catch {
     return [];
   }
 }
 
-export function listSubHives() {
-  return Array.from(subHives.values()).map((e) => e.record);
+export function listSubDaemons() {
+  return Array.from(subDaemons.values()).map((e) => e.record);
 }
 
-export function getSubHive(hiveId) {
-  const entry = subHives.get(hiveId);
+export function getSubDaemon(daemonId) {
+  const entry = subDaemons.get(daemonId);
   return entry ? entry.record : null;
 }
 
-export function getSubHivePorts() {
-  return Array.from(subHives.values())
+export function getSubDaemonPorts() {
+  return Array.from(subDaemons.values())
     .filter((e) => e.record.port && e.record.status === "running")
     .map((e) => e.record.port);
 }
 
-export function getSubHiveApiPorts() {
-  return Array.from(subHives.values())
+export function getSubDaemonApiPorts() {
+  return Array.from(subDaemons.values())
     .filter((e) => e.record.apiPort && e.record.status === "running")
     .map((e) => e.record.apiPort);
 }
 
-export function updateHeartbeat(hiveId) {
-  const entry = subHives.get(hiveId);
+export function updateHeartbeat(daemonId) {
+  const entry = subDaemons.get(daemonId);
   if (entry) {
     entry.record.lastHeartbeat = Date.now();
   }
@@ -181,7 +181,7 @@ export function onChange(cb) {
 
 // HTTP helpers
 
-function postToSubHive(port, urlPath, body) {
+function postToSubDaemon(port, urlPath, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
     const req = http.request({
@@ -206,7 +206,7 @@ function postToSubHive(port, urlPath, body) {
   });
 }
 
-function getFromSubHive(port, urlPath) {
+function getFromSubDaemon(port, urlPath) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: "127.0.0.1",

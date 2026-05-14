@@ -21,7 +21,7 @@ export function scaffold(name, targetDir) {
   };
 
   const packageJson = {
-    name: `hive-plugin-${name}`,
+    name: `swarm-plugin-${name}`,
     version: "0.1.0",
     main: "index.js",
     dependencies: {
@@ -36,10 +36,10 @@ module.exports = definePlugin({
   name: "${displayName}",
   version: "0.1.0",
 
-  activate({ hive, logger }) {
+  activate({ swarm, logger }) {
     logger.info("Plugin activated");
 
-    return hive.events.on("agent:spawned", (event) => {
+    return swarm.events.on("agent:spawned", (event) => {
       logger.info(\`Agent spawned: \${event.payload.profileName || event.source}\`);
     });
   },

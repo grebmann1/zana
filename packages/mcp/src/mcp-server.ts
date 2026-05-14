@@ -309,7 +309,7 @@ const TOOLS = [
 const TICKET_TOOLS = [
   {
     name: "zana_ticket_create",
-    description: "Create a new ticket for tracking work. Tickets are globally shared across all hives.",
+    description: "Create a new ticket for tracking work. Tickets are globally shared across all daemons.",
     inputSchema: {
       type: "object",
       properties: {
@@ -607,7 +607,7 @@ const SCHEDULER_TOOLS = [
 const EVENT_BUS_TOOLS = [
   {
     name: "zana_event_emit",
-    description: "Emit a custom event to the hive event bus. Other agents and UI can observe it.",
+    description: "Emit a custom event to the swarm event bus. Other agents and UI can observe it.",
     inputSchema: {
       type: "object",
       properties: {
@@ -620,12 +620,12 @@ const EVENT_BUS_TOOLS = [
   },
   {
     name: "zana_event_query",
-    description: "Query recent events from the hive event bus.",
+    description: "Query recent events from the swarm event bus.",
     inputSchema: {
       type: "object",
       properties: {
         types: { type: "array", items: { type: "string" }, description: "Filter by event types" },
-        source: { type: "string", description: "Filter by source agent/hive" },
+        source: { type: "string", description: "Filter by source agent/daemon" },
         since: { type: "number", description: "Timestamp (ms) — only events after this" },
         limit: { type: "number", description: "Max events to return (default 50)" },
       },
@@ -637,7 +637,7 @@ const EVENT_BUS_TOOLS = [
 const P2P_TOOLS = [
   {
     name: "zana_discover_agents",
-    description: "Discover agents across the entire Swarm. Returns agent IDs, names, profiles, and which hive they belong to. Use this to find agents you can ask questions to.",
+    description: "Discover agents across the entire swarm. Returns agent IDs, names, profiles, and which daemon they belong to. Use this to find agents you can ask questions to.",
     inputSchema: {
       type: "object",
       properties: {
@@ -771,7 +771,7 @@ const INTELLIGENCE_TOOLS = [
   },
   {
     name: "zana_memory_store",
-    description: "Store a memory/fact in the hive's vector memory for later retrieval",
+    description: "Store a memory/fact in the daemon vector memory for later retrieval",
     inputSchema: {
       type: "object",
       properties: {
@@ -784,7 +784,7 @@ const INTELLIGENCE_TOOLS = [
   },
   {
     name: "zana_memory_search",
-    description: "Search the hive's vector memory for relevant memories",
+    description: "Search the daemon vector memory for relevant memories",
     inputSchema: {
       type: "object",
       properties: {
@@ -947,7 +947,7 @@ const WORKFLOW_TOOLS = [
 const ARTIFACT_TOOLS = [
   {
     name: "zana_artifact_create",
-    description: "Create a planning artifact (architecture doc, requirement spec, design doc, etc.) that is shared with all hives. Use this to document plans, decisions, and specs before implementation.",
+    description: "Create a planning artifact (architecture doc, requirement spec, design doc, etc.) that is shared with all daemons. Use this to document plans, decisions, and specs before implementation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1064,7 +1064,7 @@ const MASTER_TOOLS = ZANA_MASTER_MODE ? [
   },
 ] : [];
 
-// Load dynamic hive tool skills
+// Load dynamic swarm tool skills
 function loadToolSkills() {
   const skillsDir = SKILLS_DIR;
   try {
@@ -1382,7 +1382,7 @@ async function handleToolCall(name, args, callerAgentId) {
       return await callCore("swarm_poll_events", { since: args.since });
 
     default: {
-      // Check dynamic hive tool skills
+      // Check dynamic swarm tool skills
       const toolSkill = toolSkills.find((t) => t.schema.name === name);
       if (toolSkill) {
         const handler = toolSkill.skill.handler;

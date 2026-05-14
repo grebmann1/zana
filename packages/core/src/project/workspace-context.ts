@@ -9,14 +9,14 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 
 let _workspaceRoot = null;
-let _hiveDir = null;
+let _projectDir = null;
 
 /**
  * Walk up from startPath looking for an existing .zana/ directory.
  * Stops at filesystem root or when a .git directory is found (project boundary).
  * If not found, returns path.join(startPath, '.zana') as the expected location.
  */
-export function resolveHiveDir(startPath) {
+export function resolveProjectDir(startPath) {
   let current = path.resolve(startPath);
 
   while (true) {
@@ -52,7 +52,7 @@ export function init(workspaceRoot) {
     throw new Error("workspace-context: workspaceRoot is required");
   }
   _workspaceRoot = path.resolve(workspaceRoot);
-  _hiveDir = resolveHiveDir(_workspaceRoot);
+  _projectDir = resolveProjectDir(_workspaceRoot);
 }
 
 /**
@@ -68,32 +68,32 @@ export function getWorkspaceRoot() {
 /**
  * Returns the project state directory path (e.g., /path/to/project/.zana).
  */
-export function getHiveDir() {
-  if (!_hiveDir) {
+export function getProjectDir() {
+  if (!_projectDir) {
     throw new Error("workspace-context: not initialized. Call init() first.");
   }
-  return _hiveDir;
+  return _projectDir;
 }
 
 /**
  * Returns an object with all project-local paths derived from the project state dir.
  */
 export function getProjectPaths() {
-  const hiveDir = getHiveDir();
+  const projectDir = getProjectDir();
 
   return {
-    hiveDir,
-    ticketsDir: path.join(hiveDir, "tickets"),
-    sprintsDir: path.join(hiveDir, "sprints"),
-    artifactsDir: path.join(hiveDir, "artifacts"),
-    plansDir: path.join(hiveDir, "plans"),
-    auditDir: path.join(hiveDir, "audit"),
-    sessionsDir: path.join(hiveDir, "sessions"),
-    runsDir: path.join(hiveDir, "runs"),
-    eventsDir: path.join(hiveDir, "events"),
-    schedulerDir: path.join(hiveDir, "scheduler"),
-    tmpDir: path.join(hiveDir, "tmp"),
-    configPath: path.join(hiveDir, "config.json"),
+    projectDir,
+    ticketsDir: path.join(projectDir, "tickets"),
+    sprintsDir: path.join(projectDir, "sprints"),
+    artifactsDir: path.join(projectDir, "artifacts"),
+    plansDir: path.join(projectDir, "plans"),
+    auditDir: path.join(projectDir, "audit"),
+    sessionsDir: path.join(projectDir, "sessions"),
+    runsDir: path.join(projectDir, "runs"),
+    eventsDir: path.join(projectDir, "events"),
+    schedulerDir: path.join(projectDir, "scheduler"),
+    tmpDir: path.join(projectDir, "tmp"),
+    configPath: path.join(projectDir, "config.json"),
   };
 }
 
@@ -111,25 +111,25 @@ export function isInitialized() {
  */
 export function createForWorkspace(dir) {
   const resolved = path.resolve(dir);
-  const hiveDir = resolveHiveDir(resolved);
+  const projectDir = resolveProjectDir(resolved);
 
   return {
     getWorkspaceRoot: () => resolved,
-    getHiveDir: () => hiveDir,
-    isInitialized: () => fs.existsSync(hiveDir),
+    getProjectDir: () => projectDir,
+    isInitialized: () => fs.existsSync(projectDir),
     getProjectPaths: () => ({
-      hiveDir,
-      ticketsDir: path.join(hiveDir, "tickets"),
-      sprintsDir: path.join(hiveDir, "sprints"),
-      artifactsDir: path.join(hiveDir, "artifacts"),
-      plansDir: path.join(hiveDir, "plans"),
-      auditDir: path.join(hiveDir, "audit"),
-      sessionsDir: path.join(hiveDir, "sessions"),
-      runsDir: path.join(hiveDir, "runs"),
-      eventsDir: path.join(hiveDir, "events"),
-      schedulerDir: path.join(hiveDir, "scheduler"),
-      tmpDir: path.join(hiveDir, "tmp"),
-      configPath: path.join(hiveDir, "config.json"),
+      projectDir,
+      ticketsDir: path.join(projectDir, "tickets"),
+      sprintsDir: path.join(projectDir, "sprints"),
+      artifactsDir: path.join(projectDir, "artifacts"),
+      plansDir: path.join(projectDir, "plans"),
+      auditDir: path.join(projectDir, "audit"),
+      sessionsDir: path.join(projectDir, "sessions"),
+      runsDir: path.join(projectDir, "runs"),
+      eventsDir: path.join(projectDir, "events"),
+      schedulerDir: path.join(projectDir, "scheduler"),
+      tmpDir: path.join(projectDir, "tmp"),
+      configPath: path.join(projectDir, "config.json"),
     }),
   };
 }

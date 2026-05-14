@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as ticketStoreFallback from "./store";
+import * as migration from "./migration";
 function _core() { return require("@zana/core"); }
 const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 
@@ -11,9 +12,9 @@ let _db: any = null;
 
 function getDbPath() {
   if (workspaceContext.isInitialized()) {
-    const hiveDir = workspaceContext.getHiveDir();
-    fs.mkdirSync(hiveDir, { recursive: true });
-    return path.join(hiveDir, "tickets.db");
+    const projectDir = workspaceContext.getProjectDir();
+    fs.mkdirSync(projectDir, { recursive: true });
+    return path.join(projectDir, "tickets.db");
   }
   const ZANA_DIR = _core().config.ZANA_DIR;
   fs.mkdirSync(ZANA_DIR, { recursive: true });
@@ -60,7 +61,7 @@ function getDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       teamId TEXT,
-      hiveId TEXT,
+      daemonId TEXT,
       status TEXT NOT NULL DEFAULT 'planning',
       ticketIds TEXT,
       startedAt TEXT,
@@ -70,7 +71,7 @@ function getDb() {
     );
   `);
 
-  const migration = require("./migration");
+  migration.migrateSchemaIfNeeded(_db);
   migration.migrateIfNeeded(_db);
 
   return _db;
@@ -192,9 +193,9 @@ function _listSprints(filter: any = {}) {
     sql += " AND teamId = ?";
     params.push(filter.teamId);
   }
-  if (filter.hiveId) {
-    sql += " AND hiveId = ?";
-    params.push(filter.hiveId);
+  if (filter.daemonId) {
+    sql += " AND daemonId = ?";
+    params.push(filter.daemonId);
   }
   if (filter.status) {
     sql += " AND status = ?";
@@ -218,9 +219,9 @@ function _saveSprint(sprint) {
   const db = getDb();
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO sprints (
-      id, name, teamId, hiveId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt
+      id, name, teamId, daemonId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt
     ) VALUES (
-      @id, @name, @teamId, @hiveId, @status, @ticketIds, @startedAt, @endedAt, @createdAt, @updatedAt
+      @id, @name, @teamId, @daemonId, @status, @ticketIds, @startedAt, @endedAt, @createdAt, @updatedAt
     )
   `);
 
@@ -228,7 +229,7 @@ function _saveSprint(sprint) {
     id: sprint.id,
     name: sprint.name,
     teamId: sprint.teamId || null,
-    hiveId: sprint.hiveId || null,
+    daemonId: sprint.daemonId || null,
     status: sprint.status || "planning",
     ticketIds: JSON.stringify(sprint.ticketIds || []),
     startedAt: sprint.startedAt || null,

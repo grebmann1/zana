@@ -4,8 +4,8 @@ import * as crypto from "node:crypto";
 
 let checkpointsDir = null;
 
-export function init(hiveDir) {
-  checkpointsDir = path.join(hiveDir, "checkpoints");
+export function init(projectDir) {
+  checkpointsDir = path.join(projectDir, "checkpoints");
   fs.mkdirSync(checkpointsDir, { recursive: true });
 }
 

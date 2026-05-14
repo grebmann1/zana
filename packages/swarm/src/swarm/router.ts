@@ -1,5 +1,5 @@
-// Hive Mind Router — P2P message routing + inbox management + channels.
-// Hub topology: all inter-hive messages route through the master hive.
+// Swarm Router — P2P message routing + inbox management + channels.
+// Hub topology: all inter-daemon messages route through the master daemon.
 
 import * as http from "node:http";
 import * as crypto from "node:crypto";
@@ -8,7 +8,7 @@ function persistence() {
   return require("@zana/core").persistence;
 }
 
-// agentId → { hiveId, hivePort, agentName, profileName, profileIcon }
+// agentId → { daemonId, daemonPort, agentName, profileName, profileIcon }
 const routingTable = new Map();
 let routingTableLastRefresh = 0;
 const ROUTING_TABLE_TTL = 30000; // 30 seconds
@@ -81,7 +81,7 @@ export function peekInbox(agentId) {
   return inboxes.get(agentId) || [];
 }
 
-export async function routeMessage(msg, localAgents, subHivePorts) {
+export async function routeMessage(msg, localAgents, subDaemonPorts) {
   if (!VALID_MESSAGE_TYPES.includes(msg.type)) {
     return { ok: false, error: `invalid message type: ${msg.type}. Valid: ${VALID_MESSAGE_TYPES.join(", ")}` };
   }
@@ -98,23 +98,23 @@ export async function routeMessage(msg, localAgents, subHivePorts) {
     return { ok: true, delivered: "local" };
   }
 
-  // Check routing table for sub-hive target
+  // Check routing table for sub-daemon target
   const route = routingTable.get(toAgentId);
   if (route) {
-    const delivered = await postToHive(route.hivePort, "/swarm/inbox", msg);
+    const delivered = await postToDaemon(route.daemonPort, "/swarm/inbox", msg);
     return { ok: delivered, delivered: delivered ? "remote" : "failed" };
   }
 
-  // Try each sub-hive's inbox endpoint
-  for (const port of subHivePorts) {
-    const delivered = await postToHive(port, "/swarm/inbox", msg);
+  // Try each sub-daemon's inbox endpoint
+  for (const port of subDaemonPorts) {
+    const delivered = await postToDaemon(port, "/swarm/inbox", msg);
     if (delivered) return { ok: true, delivered: "remote" };
   }
 
-  return { ok: false, error: "target agent not found in any hive" };
+  return { ok: false, error: "target agent not found in any daemon" };
 }
 
-export async function refreshRoutingTable(localAgents, subHivePorts, force = false) {
+export async function refreshRoutingTable(localAgents, subDaemonPorts, force = false) {
   if (!force && Date.now() - routingTableLastRefresh < ROUTING_TABLE_TTL && routingTable.size > 0) {
     return Array.from(routingTable.entries()).map(([id, info]) => ({ id, ...info }));
   }
@@ -123,16 +123,16 @@ export async function refreshRoutingTable(localAgents, subHivePorts, force = fal
   // Register local agents
   for (const agent of localAgents) {
     routingTable.set(agent.id, {
-      hiveId: "local",
-      hivePort: null,
+      daemonId: "local",
+      daemonPort: null,
       agentName: agent.profileName || agent.id,
       profileName: agent.profileName,
       profileIcon: agent.profileIcon,
     });
     if (agent.terminalId) {
       routingTable.set(agent.terminalId, {
-        hiveId: "local",
-        hivePort: null,
+        daemonId: "local",
+        daemonPort: null,
         agentName: agent.profileName || agent.id,
         profileName: agent.profileName,
         profileIcon: agent.profileIcon,
@@ -140,23 +140,23 @@ export async function refreshRoutingTable(localAgents, subHivePorts, force = fal
     }
   }
 
-  // Query each sub-hive for their agents
-  for (const port of subHivePorts) {
+  // Query each sub-daemon for their agents
+  for (const port of subDaemonPorts) {
     try {
-      const agents = await getFromHive(port, "/swarm/agents");
+      const agents = await getFromDaemon(port, "/swarm/agents");
       if (Array.isArray(agents)) {
         for (const agent of agents) {
           routingTable.set(agent.id, {
-            hiveId: agent.hiveId || "unknown",
-            hivePort: port,
+            daemonId: agent.daemonId || "unknown",
+            daemonPort: port,
             agentName: agent.profileName || agent.id,
             profileName: agent.profileName,
             profileIcon: agent.profileIcon,
           });
           if (agent.terminalId) {
             routingTable.set(agent.terminalId, {
-              hiveId: agent.hiveId || "unknown",
-              hivePort: port,
+              daemonId: agent.daemonId || "unknown",
+              daemonPort: port,
               agentName: agent.profileName || agent.id,
               profileName: agent.profileName,
               profileIcon: agent.profileIcon,
@@ -165,7 +165,7 @@ export async function refreshRoutingTable(localAgents, subHivePorts, force = fal
         }
       }
     } catch (err) {
-      console.warn(`[swarm-router] failed to query sub-hive on port ${port}:`, err.message || err);
+      console.warn(`[swarm-router] failed to query sub-daemon on port ${port}:`, err.message || err);
     }
   }
 
@@ -189,15 +189,15 @@ export function discoverAgents(query) {
   // Deduplicate (terminalId and agentId point to same agent)
   const seen = new Set();
   return results.filter((r) => {
-    if (seen.has(r.agentName + r.hivePort)) return false;
-    seen.add(r.agentName + r.hivePort);
+    if (seen.has(r.agentName + r.daemonPort)) return false;
+    seen.add(r.agentName + r.daemonPort);
     return true;
   });
 }
 
 // HTTP helpers
 
-function postToHive(port, path, body) {
+function postToDaemon(port, path, body) {
   return new Promise((resolve) => {
     const data = JSON.stringify(body);
     const req = http.request({
@@ -219,7 +219,7 @@ function postToHive(port, path, body) {
   });
 }
 
-function getFromHive(port, urlPath) {
+function getFromDaemon(port, urlPath) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       hostname: "127.0.0.1",

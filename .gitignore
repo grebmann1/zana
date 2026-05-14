@@ -9,3 +9,6 @@ dist/
 .env.local
 *.tsbuildinfo
 release/
+.zana/
+.claude-flow/
+.swarm/

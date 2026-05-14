@@ -26,7 +26,7 @@ function matchRoute(method, pathname) {
   return routes.get(`${method} ${pathname}`) || null;
 }
 
-export function setHivemindModules({ router, events, getAgents }) {
+export function setSwarmModules({ router, events, getAgents }) {
   swarmRouter = router;
   swarmEvents = events;
   agentListFn = getAgents;
@@ -301,7 +301,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({
       ok: true,
-      hiveId: process.env.ZANA_ID || null,
+      daemonId: process.env.ZANA_ID || null,
       workspace: process.env.ZANA_WORKSPACE || null,
       pid: process.pid,
     }));
@@ -390,7 +390,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     res.end(JSON.stringify({ ok: true }));
   });
 
-  // POST /swarm/events — receive events from sub-hives
+  // POST /swarm/events — receive events from sub-daemons
   registerRoute("POST", "/swarm/events", (_req, res, data) => {
     if (!swarmEvents) {
       res.statusCode = 503;
@@ -443,7 +443,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
         profileIcon: a.profileIcon,
         state: a.state,
         mode: a.mode,
-        hiveId: process.env.ZANA_ID || "unknown",
+        daemonId: process.env.ZANA_ID || "unknown",
       }));
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");

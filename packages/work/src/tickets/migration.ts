@@ -81,9 +81,9 @@ export function migrateIfNeeded(db) {
 
   const insertSprint = db.prepare(`
     INSERT OR IGNORE INTO sprints (
-      id, name, teamId, hiveId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt
+      id, name, teamId, daemonId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt
     ) VALUES (
-      @id, @name, @teamId, @hiveId, @status, @ticketIds, @startedAt, @endedAt, @createdAt, @updatedAt
+      @id, @name, @teamId, @daemonId, @status, @ticketIds, @startedAt, @endedAt, @createdAt, @updatedAt
     )
   `);
 
@@ -119,7 +119,7 @@ export function migrateIfNeeded(db) {
         id: sprint.id,
         name: sprint.name,
         teamId: sprint.teamId || null,
-        hiveId: sprint.hiveId || null,
+        daemonId: sprint.daemonId || sprint.hiveId || null,
         status: sprint.status || "planning",
         ticketIds: JSON.stringify(sprint.ticketIds || []),
         startedAt: sprint.startedAt || null,
@@ -131,5 +131,55 @@ export function migrateIfNeeded(db) {
   });
 
   migrate();
+}
+
+// Schema migration: rename legacy `hiveId` column on sprints to `daemonId`.
+// Idempotent — safe to run on every getDb().
+export function migrateSchemaIfNeeded(db) {
+  let cols;
+  try {
+    cols = db.prepare("PRAGMA table_info(sprints)").all();
+  } catch {
+    return;
+  }
+  if (!cols || cols.length === 0) return;
+
+  const hasLegacy = cols.some((c) => c.name === "hiveId");
+  const hasNew = cols.some((c) => c.name === "daemonId");
+
+  if (!hasLegacy) return;
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sprints_new (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      teamId TEXT,
+      daemonId TEXT,
+      status TEXT NOT NULL DEFAULT 'planning',
+      ticketIds TEXT,
+      startedAt TEXT,
+      endedAt TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+  `);
+
+  if (hasNew) {
+    // Both columns coexist (shouldn't normally happen). Coalesce.
+    db.exec(`
+      INSERT OR IGNORE INTO sprints_new (id, name, teamId, daemonId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt)
+        SELECT id, name, teamId, COALESCE(daemonId, hiveId), status, ticketIds, startedAt, endedAt, createdAt, updatedAt FROM sprints;
+    `);
+  } else {
+    db.exec(`
+      INSERT OR IGNORE INTO sprints_new (id, name, teamId, daemonId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt)
+        SELECT id, name, teamId, hiveId, status, ticketIds, startedAt, endedAt, createdAt, updatedAt FROM sprints;
+    `);
+  }
+
+  db.exec(`
+    DROP TABLE sprints;
+    ALTER TABLE sprints_new RENAME TO sprints;
+  `);
 }
 

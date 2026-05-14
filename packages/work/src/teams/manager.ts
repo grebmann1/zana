@@ -64,9 +64,9 @@ export function onTeamsChange(cb) {
 function buildTeamLeadDisallowedTools(team, baseProfile) {
   const disallowed = new Set(baseProfile.disallowedTools || []);
 
-  // hive-mind-master delegates via zana_swarm_spawn (MCP), not Write/Edit/Bash
+  // swarm-master delegates via zana_swarm_spawn (MCP), not Write/Edit/Bash
   // Don't restrict it — its prompt already forbids direct coding
-  if (baseProfile.id === "hive-mind-master") {
+  if (baseProfile.id === "swarm-master") {
     return [...disallowed];
   }
 
@@ -147,7 +147,7 @@ RULES:
   if (team.dynamicSpawning) {
     const allProfiles = profileStore.listProfiles();
     const profileCatalog = allProfiles
-      .filter(p => !p.id.includes("orchestrator") && !p.id.includes("hive-mind"))
+      .filter(p => !p.id.includes("orchestrator") && !p.id.includes("swarm-orchestrator"))
       .map(p => `- ${p.icon || "◆"} **${p.displayName}** (id: \`${p.id}\`): ${p.description || "No description"}`)
       .join("\n");
 

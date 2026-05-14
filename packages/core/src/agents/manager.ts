@@ -88,7 +88,7 @@ function notifyChange() {
 
 export function spawnInteractive(profile, options = {}) {
   const agentId = crypto.randomUUID();
-  const terminalId = options.terminalId || `hive-${agentId.slice(0, 8)}`;
+  const terminalId = options.terminalId || `zana-${agentId.slice(0, 8)}`;
   const cwd = options.cwd || profile.defaultCwd || process.env.HOME;
 
   const { command, args } = buildInteractiveCommand(profile, {
@@ -224,7 +224,7 @@ export function onAgentsChange(cb) {
 
 export function spawnHeadlessAgent(profile, options = {}) {
   const agentId = crypto.randomUUID();
-  const terminalId = options.terminalId || `hive-hl-${agentId.slice(0, 8)}`;
+  const terminalId = options.terminalId || `zana-hl-${agentId.slice(0, 8)}`;
   const cwd = options.cwd || profile.defaultCwd || process.env.HOME;
 
   // 3-tier model routing: auto-select cheapest capable model
@@ -658,11 +658,11 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return await _checkpointResume().resume(params.checkpointId, { spawnHeadlessAgent, getAgent }, profileStore);
     }
 
-    // --- Hive Mind P2P ---
+    // --- Swarm P2P ---
     case "discover_agents": {
       const localAgents = listAgents();
-      const subHivePorts = swarmSpawner.getSubHivePorts();
-      const all = await swarmRouter.refreshRoutingTable(localAgents, subHivePorts);
+      const subDaemonPorts = swarmSpawner.getSubDaemonPorts();
+      const all = await swarmRouter.refreshRoutingTable(localAgents, subDaemonPorts);
       if (params.query) {
         return swarmRouter.discoverAgents(params.query);
       }
@@ -671,7 +671,7 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
     case "ask_agent": {
       const msg = {
         fromAgentId: params.fromAgentId || params.fromTerminalId || "unknown",
-        fromHiveId: process.env.ZANA_ID || "local",
+        fromDaemonId: process.env.ZANA_ID || "local",
         fromAgentName: params.fromAgentName || "Agent",
         toAgentId: params.toAgentId,
         type: "question",
@@ -679,8 +679,8 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
         replyTo: params.replyTo || undefined,
       };
       const localAgents = listAgents();
-      const subHivePorts = swarmSpawner.getSubHivePorts();
-      return await swarmRouter.routeMessage(msg, localAgents, subHivePorts);
+      const subDaemonPorts = swarmSpawner.getSubDaemonPorts();
+      return await swarmRouter.routeMessage(msg, localAgents, subDaemonPorts);
     }
     case "check_inbox": {
       const agentId = params.agentId || params.terminalId;
@@ -693,7 +693,7 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
         id: swarmRouter.generateMessageId(),
         sentAt: Date.now(),
         fromAgentId: params.fromAgentId,
-        fromHiveId: process.env.ZANA_ID || "local",
+        fromDaemonId: process.env.ZANA_ID || "local",
         fromAgentName: params.fromAgentName || "Agent",
         toAgentId: params.toAgentId,
         type: params.type,
@@ -703,16 +703,16 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
         requiresAck: params.requiresAck || false,
       };
       if (msg.requiresAck) swarmRouter.requestAck(msg.id);
-      const subHivePorts = swarmSpawner.listSubHives()
+      const subDaemonPorts = swarmSpawner.listSubDaemons()
         .filter((h) => h.status === "running" && h.port)
         .map((h) => h.port);
-      const result = await swarmRouter.routeMessage(msg, listAgents(), subHivePorts);
+      const result = await swarmRouter.routeMessage(msg, listAgents(), subDaemonPorts);
       return { ...result, messageId: msg.id };
     }
     case "publish_channel": {
       const msg = {
         fromAgentId: params.fromAgentId,
-        fromHiveId: process.env.ZANA_ID || "local",
+        fromDaemonId: process.env.ZANA_ID || "local",
         fromAgentName: params.fromAgentName || "Agent",
         type: params.type,
         payload: params.payload,
@@ -735,7 +735,7 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
     // --- Swarm (multi-daemon coordination) ---
     case "swarm_spawn": {
       const masterPort = process.env.ZANA_HOOK_PORT || "47400";
-      const result = swarmSpawner.spawnSubHive({
+      const result = swarmSpawner.spawnSubDaemon({
         teamId: params.teamId,
         workspace: params.workspace || getWorkspaceFn(),
         prompt: params.prompt,
@@ -745,20 +745,20 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return result;
     }
     case "swarm_list": {
-      return swarmSpawner.listSubHives();
+      return swarmSpawner.listSubDaemons();
     }
     case "swarm_instruct": {
-      return await swarmSpawner.instructSubHive(params.daemonId, params.message);
+      return await swarmSpawner.instructSubDaemon(params.daemonId, params.message);
     }
     case "swarm_stop": {
-      return swarmSpawner.stopSubHive(params.daemonId);
+      return swarmSpawner.stopSubDaemon(params.daemonId);
     }
     case "swarm_broadcast": {
-      const daemons = swarmSpawner.listSubHives().filter((h) => h.status === "running");
+      const daemons = swarmSpawner.listSubDaemons().filter((h) => h.status === "running");
       const results = [];
       for (const h of daemons) {
-        const r = await swarmSpawner.instructSubHive(h.daemonId || h.hiveId, params.message);
-        results.push({ daemonId: h.daemonId || h.hiveId, ...r });
+        const r = await swarmSpawner.instructSubDaemon(h.daemonId || h.daemonId, params.message);
+        results.push({ daemonId: h.daemonId || h.daemonId, ...r });
       }
       return { ok: true, results };
     }

@@ -212,6 +212,16 @@ export function listSprints(filter = {}) {
   for (const f of files) {
     try {
       const sprint = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
+      // Migrate legacy `hiveId` field to `daemonId` on read; persist if needed.
+      if (sprint && sprint.hiveId !== undefined && sprint.daemonId === undefined) {
+        sprint.daemonId = sprint.hiveId;
+        delete sprint.hiveId;
+        try {
+          fs.writeFileSync(path.join(dir, f), JSON.stringify(sprint, null, 2));
+        } catch {
+          // best-effort; skip if read-only
+        }
+      }
       sprints.push(sprint);
     } catch {
       // skip malformed
@@ -219,7 +229,7 @@ export function listSprints(filter = {}) {
   }
 
   if (filter.teamId) sprints = sprints.filter((s) => s.teamId === filter.teamId);
-  if (filter.hiveId) sprints = sprints.filter((s) => s.hiveId === filter.hiveId);
+  if (filter.daemonId) sprints = sprints.filter((s) => s.daemonId === filter.daemonId);
   if (filter.status) sprints = sprints.filter((s) => s.status === filter.status);
 
   return sprints.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());

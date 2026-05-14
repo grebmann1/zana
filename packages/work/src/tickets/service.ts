@@ -247,13 +247,13 @@ export function getSprintBoard(sprintId) {
   return board;
 }
 
-export function createSprint({ name, teamId, hiveId, ticketIds }) {
+export function createSprint({ name, teamId, daemonId, ticketIds }) {
   const now = new Date().toISOString();
   const sprint = {
     id: crypto.randomUUID(),
     name,
     teamId: teamId || null,
-    hiveId: hiveId || null,
+    daemonId: daemonId || null,
     status: "planning",
     ticketIds: ticketIds || [],
     startedAt: null,

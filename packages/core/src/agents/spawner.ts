@@ -86,15 +86,15 @@ export function buildClaudeArgs(profile, options = {}) {
   if (profile.appendSystemPrompt) {
     const instructions = skillStore.getInstructionsForProfile(profile.id);
     if (instructions.length > 0) {
-      const hiveBlock = "\n\n--- HIVE SKILLS ---\n" + instructions.join("\n\n");
-      args.push("--append-system-prompt", profile.appendSystemPrompt + hiveBlock);
+      const skillsBlock = "\n\n--- ZANA SKILLS ---\n" + instructions.join("\n\n");
+      args.push("--append-system-prompt", profile.appendSystemPrompt + skillsBlock);
     } else {
       args.push("--append-system-prompt", profile.appendSystemPrompt);
     }
   } else {
     const instructions = skillStore.getInstructionsForProfile(profile.id);
     if (instructions.length > 0) {
-      args.push("--append-system-prompt", "--- HIVE SKILLS ---\n" + instructions.join("\n\n"));
+      args.push("--append-system-prompt", "--- ZANA SKILLS ---\n" + instructions.join("\n\n"));
     }
   }
 
@@ -172,7 +172,7 @@ function writeTempMcpConfig(profile, options = {}) {
       if (process.env.ZANA_MASTER_PORT) {
         server.env.ZANA_MASTER_PORT = process.env.ZANA_MASTER_PORT;
       }
-      // Only master hive's agents get master mode tools
+      // Only master daemon's agents get master mode tools
       if (!process.env.ZANA_ROLE || process.env.ZANA_ROLE !== "sub") {
         server.env.ZANA_MASTER_MODE = "true";
       }
@@ -229,7 +229,7 @@ export function spawnHeadless(profile, options = {}) {
   const workspaceEnv = {};
   if (workspaceContext.isInitialized()) {
     workspaceEnv.ZANA_WORKSPACE = workspaceContext.getWorkspaceRoot();
-    workspaceEnv.ZANA_DIR = workspaceContext.getHiveDir();
+    workspaceEnv.ZANA_DIR = workspaceContext.getProjectDir();
   }
 
   const child = spawn(claudePath, args, {
@@ -266,7 +266,7 @@ export function spawnOneShot(profile, prompt, options = {}) {
   const workspaceEnv = {};
   if (workspaceContext.isInitialized()) {
     workspaceEnv.ZANA_WORKSPACE = workspaceContext.getWorkspaceRoot();
-    workspaceEnv.ZANA_DIR = workspaceContext.getHiveDir();
+    workspaceEnv.ZANA_DIR = workspaceContext.getProjectDir();
   }
 
   return new Promise((resolve) => {

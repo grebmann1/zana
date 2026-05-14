@@ -1,4 +1,4 @@
-// Hive Mind Events — ring buffer for sub-hive → master event reporting.
+// Swarm Events — ring buffer for sub-daemon → master event reporting.
 
 import * as crypto from "node:crypto";
 
@@ -25,14 +25,14 @@ export function addEvent(event) {
   }
 }
 
-export function query({ since, hiveId, type, limit } = {}) {
+export function query({ since, daemonId, type, limit } = {}) {
   let result = events;
 
   if (since) {
     result = result.filter((e) => e.timestamp > since);
   }
-  if (hiveId) {
-    result = result.filter((e) => e.hiveId === hiveId);
+  if (daemonId) {
+    result = result.filter((e) => e.daemonId === daemonId);
   }
   if (type) {
     result = result.filter((e) => e.type === type);

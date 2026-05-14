@@ -31,7 +31,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   // (e.g. for `config` only) does not eagerly pull in 4 sibling packages.
   const serverPkg = _serverPkg();
   const startHookServer = serverPkg.hooks.server.startHookServer;
-  const setHivemindModules = serverPkg.hooks.server.setHivemindModules;
+  const setSwarmModules = serverPkg.hooks.server.setSwarmModules;
   const hookInstaller = serverPkg.hooks.installer;
   const healthMonitor = serverPkg.api.healthMonitor;
   const swarmPkg = _swarmPkg();
@@ -97,7 +97,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   });
 
   // Wire up swarm modules for hook-server GET/POST routes
-  setHivemindModules({
+  setSwarmModules({
     router: swarmRouter,
     events: swarmEvents,
     getAgents: () => agentManager.listAgents(),
