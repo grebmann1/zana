@@ -121,7 +121,7 @@ function topoSort(discovered) {
 function buildContext(moduleId, manifest) {
   const eventBusService = require("../events/service");
   const workspace = require("../project/workspace-context");
-  const { ZANA_DIR } = require("./config");
+  const { ZANA_DIR } = require("../config");
 
   const projectStoreDir = path.join(workspace.getProjectDir(), moduleId);
   const globalStoreDir = path.join(ZANA_DIR, "modules", moduleId);

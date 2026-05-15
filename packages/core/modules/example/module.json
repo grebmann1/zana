@@ -1,0 +1,18 @@
+{
+  "id": "example",
+  "name": "Example Module",
+  "version": "0.1.0",
+  "main": "index.js",
+  "description": "Example Zana module showing the lifecycle hooks (init, recover, suspend, shutdown). Safe to leave enabled — does nothing on its own.",
+  "events": {
+    "emits": ["example:initialized"],
+    "subscribes": []
+  },
+  "configSchema": {
+    "greeting": {
+      "type": "string",
+      "default": "hello",
+      "description": "Greeting message logged on init"
+    }
+  }
+}
