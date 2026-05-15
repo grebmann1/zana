@@ -574,6 +574,32 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return _ticketService().endSprint(params.sprintId);
     }
 
+    // --- Teams ---
+    case "list_teams": {
+      return require("@zana/work").teams.store.listTeams();
+    }
+    case "get_team": {
+      const team = require("@zana/work").teams.store.getTeam(params.teamId);
+      if (!team) return { error: `team not found: ${params.teamId}` };
+      return team;
+    }
+    case "start_team": {
+      const teamMod = require("@zana/work").teams.manager;
+      const cwd = params.cwd || (getWorkspaceFn ? getWorkspaceFn() : process.env.HOME);
+      return teamMod.startTeam(params.teamId, { prompt: params.prompt, cwd, headless: true });
+    }
+    case "stop_team": {
+      return require("@zana/work").teams.manager.stopTeam(params.teamId);
+    }
+    case "team_status": {
+      const status = require("@zana/work").teams.manager.getTeamStatus(params.teamId);
+      if (!status) return { error: `team not running: ${params.teamId}` };
+      return status;
+    }
+    case "list_running_teams": {
+      return require("@zana/work").teams.manager.listRunningTeams();
+    }
+
     // --- Artifacts ---
     case "artifact_create": {
       return _artifactStore().createArtifact(params);
