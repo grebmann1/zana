@@ -287,8 +287,17 @@ export function spawnHeadlessAgent(profile, options = {}) {
             agent.result = textBlocks.map((b) => b.text).join("\n");
           }
         }
-        if (msg.type === "result" && msg.result) {
-          agent.result = msg.result;
+        if (msg.type === "result") {
+          if (msg.result) agent.result = msg.result;
+          if (msg.usage) {
+            agent.tokensIn = msg.usage.input_tokens || 0;
+            agent.tokensOut = msg.usage.output_tokens || 0;
+            agent.tokensCacheRead = msg.usage.cache_read_input_tokens || 0;
+            agent.tokensCacheWrite = msg.usage.cache_creation_input_tokens || 0;
+          }
+          if (typeof msg.total_cost_usd === "number") agent.costUsd = msg.total_cost_usd;
+          if (typeof msg.duration_ms === "number") agent.durationMs = msg.duration_ms;
+          if (typeof msg.num_turns === "number") agent.numTurns = msg.num_turns;
         }
       } catch (err) {
         // Non-JSON lines from stdout are normal (e.g. progress indicators)
