@@ -263,6 +263,17 @@ export function createSprint({ name, teamId, daemonId, ticketIds }) {
   };
 
   ticketStore.saveSprint(sprint);
+
+  // Backfill sprintId on each member ticket (bidirectional link)
+  for (const ticketId of sprint.ticketIds) {
+    const ticket = ticketStore.getTicket(ticketId);
+    if (!ticket) continue;
+    ticket.sprintId = sprint.id;
+    ticket.updatedAt = now;
+    addAuditEntry(ticket, "added_to_sprint", "system", { sprintId: sprint.id });
+    ticketStore.saveTicket(ticket);
+  }
+
   bus.emit("sprint:created", { sprintId: sprint.id, name: sprint.name });
   return sprint;
 }

@@ -288,11 +288,18 @@ function runMigrate(restArgs) {
   console.log(`\x1b[36m--- Summary ---\x1b[0m`);
   console.log(`  Copied:  ${result.copied}`);
   console.log(`  Skipped: ${result.skipped}`);
+  console.log(`  Errors:  ${result.errors.length}`);
 
   if (result.errors.length > 0) {
-    console.log(`  Errors:  ${result.errors.length}`);
     for (const err of result.errors) {
       console.log(`    \x1b[31m!\x1b[0m ${err}`);
+    }
+  }
+
+  if (result.notes && result.notes.length > 0) {
+    console.log(`  Notes:`);
+    for (const note of result.notes) {
+      console.log(`    - ${note}`);
     }
   }
 

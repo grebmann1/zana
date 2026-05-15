@@ -48,11 +48,11 @@ export function dryRun(workspaceRoot) {
 export function migrate(workspaceRoot, options = {}) {
   const { dryRun: isDryRun = false, force = false, verbose = false } = options;
 
-  const summary = { copied: 0, skipped: 0, errors: [] };
+  const summary = { copied: 0, skipped: 0, errors: [], notes: [] };
 
   // 1. Verify ~/.zana/ exists and has data
   if (!fs.existsSync(GLOBAL_ZANA_DIR)) {
-    summary.errors.push(`Global zana directory not found: ${GLOBAL_ZANA_DIR}`);
+    summary.notes.push(`Global zana directory not found: ${GLOBAL_ZANA_DIR}`);
     return summary;
   }
 
@@ -66,7 +66,7 @@ export function migrate(workspaceRoot, options = {}) {
   });
 
   if (!hasData) {
-    summary.errors.push("No tickets, sprints, or artifacts found in global directory.");
+    summary.notes.push("No tickets, sprints, or artifacts found in global directory.");
     return summary;
   }
 
