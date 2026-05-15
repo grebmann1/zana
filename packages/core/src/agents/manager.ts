@@ -222,6 +222,18 @@ export function onAgentsChange(cb) {
   };
 }
 
+/**
+ * Spawn an agent in headless mode (one-shot, no PTY).
+ * The agent record is stored internally and accessible via getAgent(agentId).
+ *
+ * @param {Object} profile - Profile object (use profileStore.getProfile)
+ * @param {Object} options
+ * @param {string} options.prompt - Initial prompt for the agent
+ * @param {string} [options.cwd] - Working directory (defaults to profile.defaultCwd or HOME)
+ * @param {string} [options.terminalId] - Override terminal ID
+ * @param {boolean} [options.multiTurn=false] - Enable multi-turn stream-json input
+ * @returns {{ agentId: string, terminalId: string }} Agent identifier; query state via getAgent(agentId)
+ */
 export function spawnHeadlessAgent(profile, options = {}) {
   const agentId = crypto.randomUUID();
   const terminalId = options.terminalId || `zana-hl-${agentId.slice(0, 8)}`;
