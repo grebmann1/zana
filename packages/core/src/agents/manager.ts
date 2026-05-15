@@ -222,6 +222,18 @@ export function onAgentsChange(cb) {
   };
 }
 
+/**
+ * Spawn an agent in headless mode (one-shot, no PTY).
+ * The agent record is stored internally and accessible via getAgent(agentId).
+ *
+ * @param {Object} profile - Profile object (use profileStore.getProfile)
+ * @param {Object} options
+ * @param {string} options.prompt - Initial prompt for the agent
+ * @param {string} [options.cwd] - Working directory (defaults to profile.defaultCwd or HOME)
+ * @param {string} [options.terminalId] - Override terminal ID
+ * @param {boolean} [options.multiTurn=false] - Enable multi-turn stream-json input
+ * @returns {{ agentId: string, terminalId: string }} Agent identifier; query state via getAgent(agentId)
+ */
 export function spawnHeadlessAgent(profile, options = {}) {
   const agentId = crypto.randomUUID();
   const terminalId = options.terminalId || `zana-hl-${agentId.slice(0, 8)}`;
@@ -287,8 +299,17 @@ export function spawnHeadlessAgent(profile, options = {}) {
             agent.result = textBlocks.map((b) => b.text).join("\n");
           }
         }
-        if (msg.type === "result" && msg.result) {
-          agent.result = msg.result;
+        if (msg.type === "result") {
+          if (msg.result) agent.result = msg.result;
+          if (msg.usage) {
+            agent.tokensIn = msg.usage.input_tokens || 0;
+            agent.tokensOut = msg.usage.output_tokens || 0;
+            agent.tokensCacheRead = msg.usage.cache_read_input_tokens || 0;
+            agent.tokensCacheWrite = msg.usage.cache_creation_input_tokens || 0;
+          }
+          if (typeof msg.total_cost_usd === "number") agent.costUsd = msg.total_cost_usd;
+          if (typeof msg.duration_ms === "number") agent.durationMs = msg.duration_ms;
+          if (typeof msg.num_turns === "number") agent.numTurns = msg.num_turns;
         }
       } catch (err) {
         // Non-JSON lines from stdout are normal (e.g. progress indicators)
@@ -572,6 +593,32 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
     }
     case "sprint_end": {
       return _ticketService().endSprint(params.sprintId);
+    }
+
+    // --- Teams ---
+    case "list_teams": {
+      return require("@zana/work").teams.store.listTeams();
+    }
+    case "get_team": {
+      const team = require("@zana/work").teams.store.getTeam(params.teamId);
+      if (!team) return { error: `team not found: ${params.teamId}` };
+      return team;
+    }
+    case "start_team": {
+      const teamMod = require("@zana/work").teams.manager;
+      const cwd = params.cwd || (getWorkspaceFn ? getWorkspaceFn() : process.env.HOME);
+      return teamMod.startTeam(params.teamId, { prompt: params.prompt, cwd, headless: true });
+    }
+    case "stop_team": {
+      return require("@zana/work").teams.manager.stopTeam(params.teamId);
+    }
+    case "team_status": {
+      const status = require("@zana/work").teams.manager.getTeamStatus(params.teamId);
+      if (!status) return { error: `team not running: ${params.teamId}` };
+      return status;
+    }
+    case "list_running_teams": {
+      return require("@zana/work").teams.manager.listRunningTeams();
     }
 
     // --- Artifacts ---

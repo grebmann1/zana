@@ -1,0 +1,15 @@
+{
+  "id": "autopilot",
+  "name": "Goal-Driven Autopilot",
+  "version": "0.1.0",
+  "main": "index.js",
+  "description": "Spawns sequenced agents toward a goal. After each step, an evaluator agent judges if criteria are met. On failure, restarts from step 0 with feedback. Limited iteration count.",
+  "events": {
+    "emits": ["autopilot:goal_started", "autopilot:step_completed", "autopilot:goal_completed", "autopilot:goal_failed"],
+    "subscribes": []
+  },
+  "configSchema": {
+    "maxIterations": { "type": "number", "default": 5, "description": "Max times to loop the full step sequence before giving up" },
+    "evaluatorProfile": { "type": "string", "default": "code-reviewer", "description": "Profile ID to use for evaluating criteria" }
+  }
+}

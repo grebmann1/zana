@@ -499,6 +499,60 @@ const TICKET_TOOLS = [
   },
 ];
 
+// --- Team tools ---
+const TEAM_TOOLS = [
+  {
+    name: "zana_list_teams",
+    description: "List all configured team templates (name, orchestrator profile, worker profiles, slot counts).",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "zana_get_team",
+    description: "Get full configuration of a specific team.",
+    inputSchema: {
+      type: "object",
+      properties: { teamId: { type: "string", description: "Team ID" } },
+      required: ["teamId"],
+    },
+  },
+  {
+    name: "zana_start_team",
+    description: "Start a team — spawn the orchestrator + workers per the team's slot config. Returns the run ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        teamId: { type: "string", description: "Team ID to start" },
+        prompt: { type: "string", description: "Initial task/prompt for the orchestrator" },
+        cwd: { type: "string", description: "Working directory (defaults to current workspace)" },
+      },
+      required: ["teamId", "prompt"],
+    },
+  },
+  {
+    name: "zana_stop_team",
+    description: "Stop a running team — kills the orchestrator and all workers.",
+    inputSchema: {
+      type: "object",
+      properties: { teamId: { type: "string", description: "Team ID to stop" } },
+      required: ["teamId"],
+    },
+  },
+  {
+    name: "zana_team_status",
+    description: "Get status of a running team — orchestrator state, worker states, run ID.",
+    inputSchema: {
+      type: "object",
+      properties: { teamId: { type: "string", description: "Team ID" } },
+      required: ["teamId"],
+    },
+  },
+  {
+    name: "zana_list_running_teams",
+    description: "List all currently running teams with their statuses.",
+    inputSchema: { type: "object", properties: {} },
+  },
+];
+
 // --- Scheduler tools ---
 const SCHEDULER_TOOLS = [
   {
@@ -1089,9 +1143,62 @@ function loadToolSkills() {
   }
 }
 
+const AUTOPILOT_TOOLS = [
+  {
+    name: "zana_autopilot_goal_driven",
+    description: "Start a goal-driven task that loops a sequence of agent steps until success criteria are met. Returns the goal ID immediately; run autopilot_goal_status to check progress.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title — what you want to achieve" },
+        criteria: { type: "string", description: "Success conditions — what must be true for the goal to be 'done'. The evaluator agent judges these." },
+        steps: {
+          type: "array",
+          description: "Ordered list of agent invocations. Each step spawns one agent. On failure, the loop restarts from step 0 with feedback.",
+          items: {
+            type: "object",
+            properties: {
+              prompt: { type: "string", description: "Prompt for this step's agent" },
+              profile: { type: "string", description: "Profile ID to use" },
+            },
+            required: ["prompt", "profile"],
+          },
+        },
+      },
+      required: ["title", "criteria", "steps"],
+    },
+  },
+  {
+    name: "zana_autopilot_goal_status",
+    description: "Get the status of a goal-driven task by ID. Returns: status (running/completed/failed/exhausted/cancelled), iteration count, latest evaluation result.",
+    inputSchema: {
+      type: "object",
+      properties: { goalId: { type: "string" } },
+      required: ["goalId"],
+    },
+  },
+  {
+    name: "zana_autopilot_goal_list",
+    description: "List all autopilot goals (filterable by status).",
+    inputSchema: {
+      type: "object",
+      properties: { status: { type: "string", description: "Filter by status: running, completed, failed, exhausted, cancelled" } },
+    },
+  },
+  {
+    name: "zana_autopilot_goal_cancel",
+    description: "Cancel a running goal.",
+    inputSchema: {
+      type: "object",
+      properties: { goalId: { type: "string" } },
+      required: ["goalId"],
+    },
+  },
+];
+
 const toolSkills = loadToolSkills();
 const DYNAMIC_TOOLS = toolSkills.map((t) => t.schema);
-const STATIC_TOOLS = [...TOOLS, ...TICKET_TOOLS, ...INTELLIGENCE_TOOLS, ...CHECKPOINT_TOOLS, ...WORKFLOW_TOOLS, ...ARTIFACT_TOOLS, ...SCHEDULER_TOOLS, ...EVENT_BUS_TOOLS, ...P2P_TOOLS, ...MASTER_TOOLS, ...DYNAMIC_TOOLS];
+const STATIC_TOOLS = [...TOOLS, ...TICKET_TOOLS, ...TEAM_TOOLS, ...INTELLIGENCE_TOOLS, ...CHECKPOINT_TOOLS, ...WORKFLOW_TOOLS, ...ARTIFACT_TOOLS, ...SCHEDULER_TOOLS, ...EVENT_BUS_TOOLS, ...P2P_TOOLS, ...MASTER_TOOLS, ...AUTOPILOT_TOOLS, ...DYNAMIC_TOOLS];
 
 // Module tool registry (tools contributed by modules via api.mcp in module.json)
 let moduleToolRegistry = null;
@@ -1282,6 +1389,20 @@ async function handleToolCall(name, args, callerAgentId) {
     case "zana_sprint_end":
       return await callCore("sprint_end", { sprintId: args.sprintId });
 
+    // Team tools
+    case "zana_list_teams":
+      return await callCore("list_teams");
+    case "zana_get_team":
+      return await callCore("get_team", { teamId: args.teamId });
+    case "zana_start_team":
+      return await callCore("start_team", { teamId: args.teamId, prompt: args.prompt, cwd: args.cwd });
+    case "zana_stop_team":
+      return await callCore("stop_team", { teamId: args.teamId });
+    case "zana_team_status":
+      return await callCore("team_status", { teamId: args.teamId });
+    case "zana_list_running_teams":
+      return await callCore("list_running_teams");
+
     // Scheduler tools
     case "zana_schedule_create":
       return await callCore("schedule_create", { name: args.name, description: args.description, cron: args.cron, intervalMs: args.intervalMs, action: args.action, enabled: args.enabled, ownerId: process.env.ZANA_TERMINAL_ID || "agent", ownerName: process.env.ZANA_AGENT_NAME || "Agent" });
@@ -1380,6 +1501,32 @@ async function handleToolCall(name, args, callerAgentId) {
       return await callCore("swarm_broadcast", { message: args.message });
     case "zana_swarm_poll_events":
       return await callCore("swarm_poll_events", { since: args.since });
+
+    // Goal-driven autopilot
+    case "zana_autopilot_goal_driven": {
+      const ml = require("@zana/core").modules.loader;
+      const ap = ml.getModule?.("autopilot");
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return await ap.api.setGoal(args);
+    }
+    case "zana_autopilot_goal_status": {
+      const ml = require("@zana/core").modules.loader;
+      const ap = ml.getModule?.("autopilot");
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return ap.api.getGoal(args.goalId) || { error: "unknown goalId" };
+    }
+    case "zana_autopilot_goal_list": {
+      const ml = require("@zana/core").modules.loader;
+      const ap = ml.getModule?.("autopilot");
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return ap.api.listGoals(args || {});
+    }
+    case "zana_autopilot_goal_cancel": {
+      const ml = require("@zana/core").modules.loader;
+      const ap = ml.getModule?.("autopilot");
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return ap.api.cancelGoal(args.goalId);
+    }
 
     default: {
       // Check dynamic swarm tool skills
