@@ -1506,29 +1506,26 @@ async function handleToolCall(name, args, callerAgentId) {
     case "zana_autopilot_goal_driven": {
       const ml = require("@zana/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
-      if (!ap?.api) return { content: [{ type: "text", text: JSON.stringify({ error: "autopilot module not available" }) }] };
-      const result = await ap.api.setGoal(args);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return await ap.api.setGoal(args);
     }
     case "zana_autopilot_goal_status": {
       const ml = require("@zana/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
-      if (!ap?.api) return { content: [{ type: "text", text: JSON.stringify({ error: "autopilot module not available" }) }] };
-      const goal = ap.api.getGoal(args.goalId);
-      return { content: [{ type: "text", text: JSON.stringify(goal || { error: "unknown goalId" }) }] };
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return ap.api.getGoal(args.goalId) || { error: "unknown goalId" };
     }
     case "zana_autopilot_goal_list": {
       const ml = require("@zana/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
-      if (!ap?.api) return { content: [{ type: "text", text: JSON.stringify({ error: "autopilot module not available" }) }] };
-      const goals = ap.api.listGoals(args || {});
-      return { content: [{ type: "text", text: JSON.stringify(goals) }] };
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return ap.api.listGoals(args || {});
     }
     case "zana_autopilot_goal_cancel": {
       const ml = require("@zana/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
-      if (!ap?.api) return { content: [{ type: "text", text: JSON.stringify({ error: "autopilot module not available" }) }] };
-      return { content: [{ type: "text", text: JSON.stringify(ap.api.cancelGoal(args.goalId)) }] };
+      if (!ap?.api) return { error: "autopilot module not available" };
+      return ap.api.cancelGoal(args.goalId);
     }
 
     default: {
