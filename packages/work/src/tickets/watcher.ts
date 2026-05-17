@@ -207,9 +207,19 @@ function executeAutomation(rule, ticket) {
   log(`Auto-spawning ${profileId} for ticket ${ticket.id} (status=${ticket.status}, phase=${ticket.reviewPhase})`);
 
   try {
-    spawnFn(profileId, prompt, ticket.id);
+    Promise.resolve(spawnFn(profileId, prompt, ticket.id))
+      .then((result) => {
+        if (result && result.error) {
+          log(`Spawn for ticket ${ticket.id} returned error: ${result.error}`);
+        } else if (result && result.agentId) {
+          log(`Spawn for ticket ${ticket.id} → agent ${result.agentId}`);
+        }
+      })
+      .catch((err) => {
+        log(`Spawn failed for ticket ${ticket.id}: ${err.message || err}`);
+      });
   } catch (err) {
-    log(`Spawn failed: ${err.message}`);
+    log(`Spawn failed (sync): ${err.message}`);
   }
 
   setTimeout(() => {
