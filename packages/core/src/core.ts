@@ -145,6 +145,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     const projectPaths = workspaceContext.getProjectPaths();
     ticketWatcher.init({
       ticketsDirectory: projectPaths.ticketsDir,
+      configPath: path.join(projectPaths.projectDir, "automation.json"),
       spawnAgent: (profileId, prompt, ticketId) => {
         return agentManager.handleOrchestratorCommand(
           { action: "spawn_agent", profileId, prompt, parentAgentId: null },
