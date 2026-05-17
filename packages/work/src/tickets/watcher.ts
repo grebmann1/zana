@@ -120,7 +120,10 @@ function scheduleCheck(ticketId) {
   }, DEBOUNCE_MS));
 }
 
+let readTicketOverride: ((id: string) => any) | null = null;
+
 function readTicket(ticketId) {
+  if (readTicketOverride) return readTicketOverride(ticketId);
   // Goes through the ticket-service abstraction layer, which dispatches to
   // sqlite-backed or JSON-backed storage as appropriate.
   try {
@@ -129,6 +132,11 @@ function readTicket(ticketId) {
   } catch {
     return null;
   }
+}
+
+// Test-only: override the ticket reader. Production code never sets this.
+export function _setReadTicketOverride(fn: ((id: string) => any) | null) {
+  readTicketOverride = fn;
 }
 
 function checkTicket(ticketId) {
