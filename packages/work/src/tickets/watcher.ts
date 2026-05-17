@@ -16,6 +16,10 @@ let activeAutomations = 0;
 let queue = [];
 let rules = [];
 let busSubscriptions = [];
+// Map agentId → { ticket, rule } for spawns we initiated. When an
+// agent:terminated event fires for one of these, we parse its output for a
+// VERDICT line and apply the corresponding ticket state transition.
+let inFlightSpawns = new Map();
 
 export function init({ ticketsDirectory, spawnAgent, configPath }) {
   ticketsDir = ticketsDirectory;
@@ -47,6 +51,32 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
     () => bus.off("ticket:created", listener),
   );
 
+  // Listen for agent termination so we can parse VERDICT lines from review
+  // agents we spawned and apply the resulting ticket state transitions.
+  const onAgentTerminated = (msg: any) => {
+    if (!msg || !msg.agentId) return;
+    const tracked = inFlightSpawns.get(msg.agentId);
+    if (!tracked) return; // not one of ours
+    inFlightSpawns.delete(msg.agentId);
+    let result: string = msg.output || "";
+    if (!result) {
+      // Fallback: agent:terminated may not include output for some exit paths;
+      // pull the result text directly from the agent record.
+      try {
+        const agentManager = require("@zana/core").agents.manager;
+        const agent = agentManager.getAgent(msg.agentId);
+        result = agent?.result || "";
+      } catch {}
+    }
+    try {
+      applyVerdict(tracked.ticket, tracked.rule, result);
+    } catch (err: any) {
+      log(`applyVerdict failed for ticket ${tracked.ticket.id}: ${err.message || err}`);
+    }
+  };
+  bus.on("agent:terminated", onAgentTerminated);
+  busSubscriptions.push(() => bus.off("agent:terminated", onAgentTerminated));
+
   log(`Subscribed to ticket bus events (${rules.length} rules loaded)`);
 }
 
@@ -54,17 +84,17 @@ const DEFAULT_RULES = [
   {
     trigger: { status: "review", reviewPhase: "qa" },
     action: { spawnProfile: "code-reviewer" },
-    promptTemplate: "QA/Code Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nYou are performing a QA CODE REVIEW. Check the implementation for correctness, security, and code quality. Read the plan.md and files-changed.json in the ticket directory.\n\nWhen done, call zana_ticket_update with:\n- If PASS: set reviewPhase to \"architecture\" (next: architecture review)\n- If FAIL: set status to \"rework\" with detailed issues in progress field",
+    promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = issues remain; ticket should go to rework with your findings as the reason.\n\nBe terse. Lead with the verdict reasoning, end with the VERDICT line.",
   },
   {
     trigger: { status: "review", reviewPhase: "architecture" },
     action: { spawnProfile: "architect" },
-    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the overall architecture, design docs, and coding conventions. Read shared artifacts for architecture context. Review plan.md and files in files-changed.json.\n\nWhen done, call zana_ticket_update with:\n- If PASS: set status to \"done\" with resultSummary (architectural approval)\n- If FAIL: set status to \"rework\" with architectural issues in progress field",
+    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = ticket is done.\nFAIL = architectural issues; ticket should go to rework.\n\nBe terse.",
   },
   {
     trigger: { status: "rework" },
     action: { spawnProfile: "{{assigneeProfileId}}" },
-    promptTemplate: "REWORK needed on ticket \"{{title}}\" (ID: {{id}}).\n\nYour previous work was reviewed and needs changes. Read the latest ticket comments for reviewer feedback. Fix the identified issues and move the ticket back to \"review\" when done.\n\nOriginal description: {{description}}",
+    promptTemplate: "REWORK needed on ticket \"{{title}}\" (ID: {{id}}).\n\nYour previous work was reviewed and needs changes. Read the latest ticket comments for reviewer feedback and fix the identified issues.\n\nWhen fixes are complete, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: READY  — fixes complete, ready for re-review\nVERDICT: BLOCKED — <reason; ticket will be marked blocked>\n\nOriginal description: {{description}}",
   },
 ];
 
@@ -211,8 +241,10 @@ function executeAutomation(rule, ticket) {
       .then((result) => {
         if (result && result.error) {
           log(`Spawn for ticket ${ticket.id} returned error: ${result.error}`);
+          // Don't track — there's no agent to wait for.
         } else if (result && result.agentId) {
           log(`Spawn for ticket ${ticket.id} → agent ${result.agentId}`);
+          inFlightSpawns.set(result.agentId, { ticket, rule });
         }
       })
       .catch((err) => {
@@ -250,6 +282,96 @@ function executeWorkflowAction(rule, ticket) {
   });
 }
 
+// Parse a VERDICT line from agent output and apply the corresponding state
+// transition. Verdicts:
+//   "VERDICT: PASS"             → advance reviewPhase or complete ticket
+//   "VERDICT: FAIL — reason"    → set status=rework with reason
+//   "VERDICT: READY"            → set status=review (rework finished, re-review)
+//   "VERDICT: BLOCKED — reason" → set status=blocked with reason
+// Match the LAST occurrence on its own line (anchored end of text or line)
+// to avoid being fooled by example/quoted verdicts earlier in the body.
+const VERDICT_RE = /^VERDICT:\s*(PASS|FAIL|READY|BLOCKED)\b\s*(?:[—–-]\s*(.+?))?\s*$/im;
+
+export function parseVerdict(text: string): { kind: string; reason: string | null } | null {
+  if (!text || typeof text !== "string") return null;
+  // Search lines from bottom up to honor "must end with" contract.
+  const lines = text.split(/\r?\n/);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const m = /^VERDICT:\s*(PASS|FAIL|READY|BLOCKED)\b\s*(?:[—–-]\s*(.+))?$/i.exec(line);
+    if (m) return { kind: m[1].toUpperCase(), reason: (m[2] || "").trim() || null };
+    // Stop scanning once we hit a non-blank, non-verdict line — the contract
+    // says the verdict must be the last line.
+    break;
+  }
+  // Fallback: a global search in case the agent appended trailing whitespace
+  // or extra punctuation we didn't anticipate.
+  const fallback = VERDICT_RE.exec(text);
+  if (fallback) return { kind: fallback[1].toUpperCase(), reason: (fallback[2] || "").trim() || null };
+  return null;
+}
+
+// Test-only: allow integration tests to swap in a stub ticket service so
+// applyVerdict's state transitions can be observed without booting the real
+// SQLite store.
+let serviceOverride: any = null;
+export function _setServiceOverride(svc: any) { serviceOverride = svc; }
+
+function applyVerdict(ticket: any, rule: any, agentResult: string) {
+  const verdict = parseVerdict(agentResult);
+  const ticketService = serviceOverride || require("./service");
+  const actor = "ticket-watcher";
+  const profileLabel = rule?.action?.spawnProfile || "Automation";
+
+  if (!verdict) {
+    log(`No VERDICT found in agent output for ticket ${ticket.id} — leaving state untouched, adding comment`);
+    ticketService.addComment(
+      ticket.id,
+      actor,
+      "Automation",
+      `⚠️ Review agent (${profileLabel}) did not produce a parseable VERDICT line. Manual intervention needed.\n\nAgent output (first 500 chars):\n${(agentResult || "(empty)").slice(0, 500)}`
+    );
+    return;
+  }
+
+  log(`Verdict for ticket ${ticket.id}: ${verdict.kind}${verdict.reason ? " — " + verdict.reason : ""}`);
+
+  // Add a comment with the agent's full output for the audit trail.
+  ticketService.addComment(
+    ticket.id,
+    actor,
+    profileLabel,
+    `**${verdict.kind}**${verdict.reason ? `: ${verdict.reason}` : ""}\n\n---\n\n${(agentResult || "").slice(0, 4000)}`
+  );
+
+  if (verdict.kind === "PASS") {
+    if (ticket.reviewPhase === "qa") {
+      ticketService.updateReviewPhase(ticket.id, "architecture", actor);
+    } else if (ticket.reviewPhase === "architecture") {
+      ticketService.completeTicket(ticket.id, "Approved by automated review pipeline.", actor);
+    } else {
+      log(`Unexpected reviewPhase ${ticket.reviewPhase} on PASS for ticket ${ticket.id}`);
+    }
+  } else if (verdict.kind === "FAIL") {
+    // updateStatus("rework") increments reworkCount and emits the bus event.
+    ticketService.updateStatus(ticket.id, "rework", actor);
+  } else if (verdict.kind === "READY") {
+    // Rework finished — kick back to review (qa phase). The status transition
+    // map only allows rework→{in-progress,blocked,cancelled}, so we go through
+    // in-progress first to legally reach review again.
+    const toInProgress = ticketService.updateStatus(ticket.id, "in-progress", actor);
+    if (toInProgress && toInProgress.ok) {
+      const toReview = ticketService.updateStatus(ticket.id, "review", actor);
+      if (toReview && toReview.ok) {
+        ticketService.updateReviewPhase(ticket.id, "qa", actor);
+      }
+    }
+  } else if (verdict.kind === "BLOCKED") {
+    ticketService.updateStatus(ticket.id, "blocked", actor);
+  }
+}
+
 function markBlocked(ticket) {
   try {
     const ticketService = require("./service");
@@ -275,6 +397,7 @@ export function stop() {
   busSubscriptions = [];
   for (const timer of debounceTimers.values()) clearTimeout(timer);
   debounceTimers.clear();
+  inFlightSpawns.clear();
   saveProcessedStates();
   log("Stopped");
 }
