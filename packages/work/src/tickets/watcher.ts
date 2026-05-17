@@ -7,7 +7,6 @@ const DEBOUNCE_MS = 150;
 const MAX_CONCURRENT = 3;
 const MAX_REWORK_CYCLES = 3;
 
-let watcher = null;
 let ticketsDir = null;
 let spawnFn = null;
 let processedStates = new Map();
@@ -16,6 +15,7 @@ let debounceTimers = new Map();
 let activeAutomations = 0;
 let queue = [];
 let rules = [];
+let busSubscriptions = [];
 
 export function init({ ticketsDirectory, spawnAgent, configPath }) {
   ticketsDir = ticketsDirectory;
@@ -25,23 +25,29 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
   loadRules(configPath);
   loadProcessedStates();
 
+  // Keep mkdir for compatibility — JSON-fallback ticket store still writes here.
   if (!fs.existsSync(ticketsDir)) {
     fs.mkdirSync(ticketsDir, { recursive: true });
   }
 
-  watcher = fs.watch(ticketsDir, { recursive: true }, (eventType, filename) => {
-    if (!filename) return;
-    if (filename.endsWith("ticket.json") || (filename.endsWith(".json") && !filename.includes("/"))) {
-      const ticketId = filename.includes("/") ? filename.split("/")[0] : filename.replace(".json", "");
-      scheduleCheck(ticketId);
-    }
-  });
+  // Subscribe to ticket lifecycle events on the in-process bus.
+  // This replaces the old fs.watch approach: the SQLite-backed ticket store
+  // doesn't write JSON files, so fs.watch never fired. Bus events fire on
+  // every state change regardless of the underlying store.
+  const { bus } = require("@zana/core").events.bus;
+  const listener = (msg) => {
+    if (msg && msg.ticketId) scheduleCheck(msg.ticketId);
+  };
+  bus.on("ticket:statusChanged", listener);
+  bus.on("ticket:reviewPhaseChanged", listener);
+  bus.on("ticket:created", listener);
+  busSubscriptions.push(
+    () => bus.off("ticket:statusChanged", listener),
+    () => bus.off("ticket:reviewPhaseChanged", listener),
+    () => bus.off("ticket:created", listener),
+  );
 
-  watcher.on("error", (err) => {
-    if (err.code !== "ENOENT") log(`Error: ${err.message}`);
-  });
-
-  log(`Monitoring ${ticketsDir} (${rules.length} rules loaded)`);
+  log(`Subscribed to ticket bus events (${rules.length} rules loaded)`);
 }
 
 const DEFAULT_RULES = [
@@ -114,16 +120,19 @@ function scheduleCheck(ticketId) {
   }, DEBOUNCE_MS));
 }
 
-function readTicketFromDisk(ticketId) {
-  const dirPath = path.join(ticketsDir, ticketId, "ticket.json");
-  try { return JSON.parse(fs.readFileSync(dirPath, "utf8")); } catch {}
-  const flatPath = path.join(ticketsDir, `${ticketId}.json`);
-  try { return JSON.parse(fs.readFileSync(flatPath, "utf8")); } catch {}
-  return null;
+function readTicket(ticketId) {
+  // Goes through the ticket-service abstraction layer, which dispatches to
+  // sqlite-backed or JSON-backed storage as appropriate.
+  try {
+    const ticketService = require("./service");
+    return ticketService.getTicket(ticketId);
+  } catch {
+    return null;
+  }
 }
 
 function checkTicket(ticketId) {
-  const ticket = readTicketFromDisk(ticketId);
+  const ticket = readTicket(ticketId);
   if (!ticket) return;
 
   const currentKey = JSON.stringify({ status: ticket.status, reviewPhase: ticket.reviewPhase || null });
@@ -242,14 +251,20 @@ function markBlocked(ticket) {
 }
 
 export function stop() {
-  if (watcher) { watcher.close(); watcher = null; }
+  for (const unsub of busSubscriptions) {
+    try { unsub(); } catch {}
+  }
+  busSubscriptions = [];
   for (const timer of debounceTimers.values()) clearTimeout(timer);
   debounceTimers.clear();
   saveProcessedStates();
   log("Stopped");
 }
 
-export function isRunning() { return watcher !== null; }
+export function isRunning() { return busSubscriptions.length > 0; }
 
 export function getRules() { return rules; }
 
+// Test-only: expose the processedStates map so integration tests can verify
+// in-process bus delivery without coupling to internal implementation.
+export function _getProcessedStates() { return processedStates; }
