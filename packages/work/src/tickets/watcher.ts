@@ -312,9 +312,15 @@ export function parseVerdict(text: string): { kind: string; reason: string | nul
   return null;
 }
 
+// Test-only: allow integration tests to swap in a stub ticket service so
+// applyVerdict's state transitions can be observed without booting the real
+// SQLite store.
+let serviceOverride: any = null;
+export function _setServiceOverride(svc: any) { serviceOverride = svc; }
+
 function applyVerdict(ticket: any, rule: any, agentResult: string) {
   const verdict = parseVerdict(agentResult);
-  const ticketService = require("./service");
+  const ticketService = serviceOverride || require("./service");
   const actor = "ticket-watcher";
   const profileLabel = rule?.action?.spawnProfile || "Automation";
 
