@@ -54,17 +54,17 @@ const DEFAULT_RULES = [
   {
     trigger: { status: "review", reviewPhase: "qa" },
     action: { spawnProfile: "code-reviewer" },
-    promptTemplate: "QA/Code Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nYou are performing a QA CODE REVIEW. Check the implementation for correctness, security, and code quality. Read the plan.md and files-changed.json in the ticket directory.\n\nWhen done, call zana_ticket_update with:\n- If PASS: set reviewPhase to \"architecture\" (next: architecture review)\n- If FAIL: set status to \"rework\" with detailed issues in progress field",
+    promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = issues remain; ticket should go to rework with your findings as the reason.\n\nBe terse. Lead with the verdict reasoning, end with the VERDICT line.",
   },
   {
     trigger: { status: "review", reviewPhase: "architecture" },
     action: { spawnProfile: "architect" },
-    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the overall architecture, design docs, and coding conventions. Read shared artifacts for architecture context. Review plan.md and files in files-changed.json.\n\nWhen done, call zana_ticket_update with:\n- If PASS: set status to \"done\" with resultSummary (architectural approval)\n- If FAIL: set status to \"rework\" with architectural issues in progress field",
+    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = ticket is done.\nFAIL = architectural issues; ticket should go to rework.\n\nBe terse.",
   },
   {
     trigger: { status: "rework" },
     action: { spawnProfile: "{{assigneeProfileId}}" },
-    promptTemplate: "REWORK needed on ticket \"{{title}}\" (ID: {{id}}).\n\nYour previous work was reviewed and needs changes. Read the latest ticket comments for reviewer feedback. Fix the identified issues and move the ticket back to \"review\" when done.\n\nOriginal description: {{description}}",
+    promptTemplate: "REWORK needed on ticket \"{{title}}\" (ID: {{id}}).\n\nYour previous work was reviewed and needs changes. Read the latest ticket comments for reviewer feedback and fix the identified issues.\n\nWhen fixes are complete, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: READY  — fixes complete, ready for re-review\nVERDICT: BLOCKED — <reason; ticket will be marked blocked>\n\nOriginal description: {{description}}",
   },
 ];
 
