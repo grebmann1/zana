@@ -109,12 +109,16 @@ function isProcessAlive(pid) {
 }
 
 function isEntryAlive(entry) {
+  // PID is authoritative — a heartbeat that's only seconds old is meaningless
+  // if the process is gone. Check liveness first, then fall back to staleness.
+  if (entry.pid && !isProcessAlive(entry.pid)) return false;
   if (entry.lastHeartbeat) {
     const age = Date.now() - new Date(entry.lastHeartbeat).getTime();
     return age < STALE_THRESHOLD_MS;
   }
-  // Backwards compatibility: no heartbeat field, fall back to PID check
-  return isProcessAlive(entry.pid);
+  // No heartbeat field and PID checked above — if we got here, PID was missing
+  // or alive. Treat as alive (best-effort backward compat).
+  return true;
 }
 
 export function listAlive() {
