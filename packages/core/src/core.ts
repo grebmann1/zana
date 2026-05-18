@@ -25,6 +25,7 @@ function _teamStore(): any { return require("@zana/work").teams.store; }
 function _teamManager(): any { return require("@zana/work").teams.manager; }
 function _runTracker(): any { return require("@zana/work").runs.tracker; }
 function _ticketWatcher(): any { return require("@zana/work").tickets.watcher; }
+function _schedulingService(): any { return require("@zana/work").scheduling.service; }
 
 export async function init({ workspace, headless = false, onHook, preferredPort, skipApiServer = false }) {
   // Resolve cross-package modules lazily inside init(), so importing @zana/core
@@ -157,6 +158,16 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     console.warn("[core] ticket-watcher init failed:", err.message);
   }
 
+  // Hydrate persisted schedules — every <workspace>/.zana/scheduler/*.{yml,json}
+  // with enabled=true gets its trigger registered so cron/interval schedules
+  // survive daemon restarts.
+  try {
+    const schedulingService = _schedulingService();
+    schedulingService.loadFromDisk();
+  } catch (err: any) {
+    console.warn("[core] scheduling.loadFromDisk failed:", err?.message || err);
+  }
+
   // Start health monitor
   healthMonitor.init(() => agentManager.listAgents());
 
@@ -204,6 +215,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     backgroundWorkers.shutdown();
     vectorMemory.shutdown();
     ticketWatcher.stop();
+    try { _schedulingService().stopAll(); } catch {}
     healthMonitor.stop();
     if (apiServerHandle) { try { serverPkg.api.server.stop(); } catch {} }
     bus.emit(EVENTS.ZANA_SHUTDOWN, { daemonId });
