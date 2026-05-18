@@ -1,9 +1,9 @@
 import * as crypto from "node:crypto";
 function _core() { return require("@zana/core"); }
-const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus[p] });
-const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.EVENTS[p] });
+function _bus(): any { return _core().events.bus; }
+function _EVENTS(): any { return _core().events.EVENTS; }
+function _statsEngine(): any { return _core().events.stats; }
 import * as runStore from "./store";
-const statsEngine: any = new Proxy({}, { get: (_t, p) => _core().events.stats[p] });
 
 let currentRun = null;
 let runEvents = [];
@@ -25,7 +25,7 @@ function notifyStats(stats) {
 }
 
 export function init() {
-  bus.on(EVENTS.TEAM_STARTED, (payload) => {
+  _bus().on(_EVENTS().TEAM_STARTED, (payload) => {
     if (!currentRun) {
       startRun({
         teamId: payload.teamId,
@@ -36,13 +36,13 @@ export function init() {
     }
   });
 
-  bus.on(EVENTS.TEAM_STOPPED, (payload) => {
+  _bus().on(_EVENTS().TEAM_STOPPED, (payload) => {
     if (currentRun && currentRun.teamId === payload.teamId) {
       endRun(currentRun.id, payload.reason === "user" ? "aborted" : "completed");
     }
   });
 
-  bus.on(EVENTS.AGENT_SPAWNED, (payload) => {
+  _bus().on(_EVENTS().AGENT_SPAWNED, (payload) => {
     if (!currentRun) return;
     const agentEntry = {
       id: payload.agentId,
@@ -60,7 +60,7 @@ export function init() {
     notifyChange();
   });
 
-  bus.on(EVENTS.AGENT_TERMINATED, (payload) => {
+  _bus().on(_EVENTS().AGENT_TERMINATED, (payload) => {
     if (!currentRun) return;
     const agent = currentRun.agents.find((a) => a.id === payload.agentId);
     if (agent) {
@@ -80,7 +80,7 @@ export function init() {
     }
   });
 
-  bus.on(EVENTS.AGENT_HOOK, (payload) => {
+  _bus().on(_EVENTS().AGENT_HOOK, (payload) => {
     if (!currentRun) return;
     runEvents.push({ type: "agent:hook", timestamp: Date.now(), payload });
 
@@ -102,7 +102,7 @@ export function init() {
     }
   });
 
-  bus.on("ticket:created", (payload) => {
+  _bus().on("ticket:created", (payload) => {
     if (!currentRun) return;
     currentRun.tickets.total++;
     if (payload.ticketId) currentRun.tickets.ids.push(payload.ticketId);
@@ -110,7 +110,7 @@ export function init() {
     notifyChange();
   });
 
-  bus.on("ticket:completed", (payload) => {
+  _bus().on("ticket:completed", (payload) => {
     if (!currentRun) return;
     currentRun.tickets.completed++;
     runEvents.push({ type: "ticket:completed", timestamp: Date.now(), payload });
@@ -151,7 +151,7 @@ export function startRun({ teamId, teamName, workspace, daemonId, orchestratorAg
   runEvents = [];
   runStore.saveRun(currentRun);
 
-  bus.emit(EVENTS.RUN_STARTED, { runId: id, teamId, teamName });
+  _bus().emit(_EVENTS().RUN_STARTED, { runId: id, teamId, teamName });
 
   liveStatsInterval = setInterval(() => {
     if (currentRun) {
@@ -173,15 +173,15 @@ export function endRun(runId, status = "completed") {
 
   // Finalize stats
   currentRun.stats.totalAgents = currentRun.agents.length;
-  currentRun.stats.peakConcurrentAgents = statsEngine.computePeakConcurrentAgents(runEvents);
+  currentRun.stats.peakConcurrentAgents = _statsEngine().computePeakConcurrentAgents(runEvents);
   currentRun.stats.eventCount = runEvents.length;
   currentRun.stats.ticketCompletionRate =
     currentRun.tickets.total > 0 ? currentRun.tickets.completed / currentRun.tickets.total : 0;
-  currentRun.stats.profileBreakdown = statsEngine.computeProfileBreakdown(runEvents);
+  currentRun.stats.profileBreakdown = _statsEngine().computeProfileBreakdown(runEvents);
 
   runStore.saveRun(currentRun);
 
-  bus.emit(EVENTS.RUN_ENDED, { runId, status, durationMs: currentRun.durationMs });
+  _bus().emit(_EVENTS().RUN_ENDED, { runId, status, durationMs: currentRun.durationMs });
 
   if (liveStatsInterval) {
     clearInterval(liveStatsInterval);
@@ -220,9 +220,9 @@ export function getRunStats(runId) {
 export function getRunTimeline(runId) {
   if (currentRun && currentRun.id === runId) {
     return {
-      agentTimeline: statsEngine.computeAgentTimeline(runEvents),
-      ticketFlow: statsEngine.computeTicketFlow(runEvents),
-      throughput: statsEngine.computeThroughput(runEvents),
+      agentTimeline: _statsEngine().computeAgentTimeline(runEvents),
+      ticketFlow: _statsEngine().computeTicketFlow(runEvents),
+      throughput: _statsEngine().computeThroughput(runEvents),
     };
   }
   return { agentTimeline: [], ticketFlow: [], throughput: [] };

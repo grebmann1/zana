@@ -1,18 +1,18 @@
 import * as teamStore from "./store";
 function _core() { return require("@zana/core"); }
-const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
-const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
-const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus[p] });
-const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.EVENTS[p] });
+function _agentManager(): any { return _core().agents.manager; }
+function _profileStore(): any { return _core().agents.profileStore; }
+function _bus(): any { return _core().events.bus; }
+function _EVENTS(): any { return _core().events.EVENTS; }
 import * as checkpointStore from "../runs/checkpoint/store";
 import * as checkpointResume from "../runs/checkpoint/resume";
 
 const runningTeams = new Map();
 let changeListeners = [];
 
-agentManager.onAgentsChange(() => {
+_agentManager().onAgentsChange(() => {
   let changed = false;
-  const allAgents = agentManager.listAgents();
+  const allAgents = _agentManager().listAgents();
 
   for (const [teamId, rt] of runningTeams) {
     if (rt.status !== "running") continue;
@@ -145,7 +145,7 @@ RULES:
 `;
 
   if (team.dynamicSpawning) {
-    const allProfiles = profileStore.listProfiles();
+    const allProfiles = _profileStore().listProfiles();
     const profileCatalog = allProfiles
       .filter(p => !p.id.includes("orchestrator") && !p.id.includes("swarm-orchestrator"))
       .map(p => `- ${p.icon || "◆"} **${p.displayName}** (id: \`${p.id}\`): ${p.description || "No description"}`)
@@ -182,14 +182,14 @@ export function startTeam(teamId, options = {}) {
     return { ok: false, error: "team already running" };
   }
 
-  const orchestratorProfile = profileStore.getProfile(team.orchestratorProfileId);
+  const orchestratorProfile = _profileStore().getProfile(team.orchestratorProfileId);
   if (!orchestratorProfile) {
     return { ok: false, error: `orchestrator profile not found: ${team.orchestratorProfileId}` };
   }
 
   const slots = team.slots || team.workerProfileIds.map((id) => ({ profileId: id, quantity: 1 }));
   const workerProfiles = [...new Set(slots.map((s) => s.profileId))]
-    .map((id) => profileStore.getProfile(id))
+    .map((id) => _profileStore().getProfile(id))
     .filter(Boolean);
 
   const prompt = buildOrchestratorPrompt(team, workerProfiles, options.prompt);
@@ -209,15 +209,15 @@ export function startTeam(teamId, options = {}) {
 
   let result;
   if (headless) {
-    result = agentManager.spawnHeadlessAgent(augmentedProfile, { cwd, multiTurn: true });
+    result = _agentManager().spawnHeadlessAgent(augmentedProfile, { cwd, multiTurn: true });
     setTimeout(() => {
-      agentManager.writeToAgent(result.agentId, {
+      _agentManager().writeToAgent(result.agentId, {
         type: "user",
         message: { role: "user", content: [{ type: "text", text: kickoffMessage }] },
       });
     }, 2000);
   } else {
-    result = agentManager.spawnInteractive(augmentedProfile, { cwd, cols: options.cols, rows: options.rows });
+    result = _agentManager().spawnInteractive(augmentedProfile, { cwd, cols: options.cols, rows: options.rows });
     setTimeout(() => {
       const ptyHost = require("@zana/core").agents.ptyHost;
       ptyHost.writeTerminal(result.terminalId, kickoffMessage + "\n");
@@ -238,7 +238,7 @@ export function startTeam(teamId, options = {}) {
   });
 
   notifyChange();
-  bus.emit(EVENTS.TEAM_STARTED, { teamId, teamName: team.name, orchestratorAgentId: result.agentId });
+  _bus().emit(_EVENTS().TEAM_STARTED, { teamId, teamName: team.name, orchestratorAgentId: result.agentId });
 
   return { ok: true, orchestratorAgentId: result.agentId, terminalId: result.terminalId };
 }
@@ -249,7 +249,7 @@ export function stopTeam(teamId) {
 
   // Snapshot pending workers into checkpoint before killing
   if (running.checkpointId) {
-    const allAgents = agentManager.listAgents();
+    const allAgents = _agentManager().listAgents();
     const activeWorkers = allAgents.filter(
       (a) => a.parentAgentId === running.orchestratorAgentId && a.state === "active"
     );
@@ -265,17 +265,17 @@ export function stopTeam(teamId) {
     checkpointStore.update(running.checkpointId, { status: "stopped" });
   }
 
-  agentManager.killAgent(running.orchestratorAgentId);
+  _agentManager().killAgent(running.orchestratorAgentId);
 
-  const allAgents = agentManager.listAgents();
+  const allAgents = _agentManager().listAgents();
   const children = allAgents.filter((a) => a.parentAgentId === running.orchestratorAgentId);
   for (const child of children) {
-    agentManager.killAgent(child.id);
+    _agentManager().killAgent(child.id);
   }
 
   running.status = "stopped";
   notifyChange();
-  bus.emit(EVENTS.TEAM_STOPPED, { teamId, teamName: running.teamName, reason: "user" });
+  _bus().emit(_EVENTS().TEAM_STOPPED, { teamId, teamName: running.teamName, reason: "user" });
 
   setTimeout(() => {
     runningTeams.delete(teamId);
@@ -289,7 +289,7 @@ export function getTeamStatus(teamId) {
   const running = runningTeams.get(teamId);
   if (!running) return null;
 
-  const allAgents = agentManager.listAgents();
+  const allAgents = _agentManager().listAgents();
   const orchestrator = allAgents.find((a) => a.id === running.orchestratorAgentId);
   const workers = allAgents.filter((a) => a.parentAgentId === running.orchestratorAgentId);
 
@@ -306,7 +306,7 @@ export function getTeamStatus(teamId) {
 }
 
 export function listRunningTeams() {
-  const allAgents = agentManager.listAgents();
+  const allAgents = _agentManager().listAgents();
   return Array.from(runningTeams.values()).map((rt) => {
     const orchestrator = allAgents.find((a) => a.id === rt.orchestratorAgentId);
     const workers = allAgents.filter((a) => a.parentAgentId === rt.orchestratorAgentId);
@@ -315,7 +315,7 @@ export function listRunningTeams() {
 }
 
 export function resumeTeam(checkpointId) {
-  return checkpointResume.resume(checkpointId, agentManager, profileStore);
+  return checkpointResume.resume(checkpointId, _agentManager(), _profileStore());
 }
 
 export function listCheckpoints(filter) {
