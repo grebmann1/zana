@@ -13,6 +13,63 @@ interface ActiveTrigger {
 
 const triggers = new Map<string, ActiveTrigger>();
 
+// agentId → scheduleId, for spawn-agent schedule fires whose result summary
+// hasn't been inlined yet. The schedule history entry is appended at fire
+// time with the agentId; once the agent terminates we patch the same entry
+// with the result summary, tokens, cost, etc.
+const inflightAgents = new Map<string, { scheduleId: string }>();
+let busSubscribed = false;
+
+function ensureAgentTerminationListener() {
+  if (busSubscribed) return;
+  let bus: any, EVENTS: any;
+  try {
+    // core.events.bus is the WHOLE bus module exports (has named .bus
+    // EventEmitter and .EVENTS object) — NOT the EventEmitter itself.
+    const eventsModule =
+      require("@zana/core").events?.bus ??
+      require("@zana/core/src/events/bus");
+    bus = eventsModule?.bus;
+    EVENTS = eventsModule?.EVENTS;
+  } catch (err: any) {
+    // @zana/core isn't loaded yet — try again next time someone calls
+    // executeAction. This keeps the cycle break clean.
+    return;
+  }
+  if (!bus || !EVENTS?.AGENT_TERMINATED) return;
+
+  bus.on(EVENTS.AGENT_TERMINATED, (evt: any) => {
+    const tracked = inflightAgents.get(evt.agentId);
+    if (!tracked) return;
+    inflightAgents.delete(evt.agentId);
+    try {
+      const agentManager = require("@zana/core").agents.manager;
+      const agent = agentManager.getAgent(evt.agentId);
+      const resultText: string =
+        (agent?.result as string) ||
+        (typeof evt.output === "string" ? evt.output : "") ||
+        "";
+      const finalStatus =
+        agent?.state === "terminated" || evt.reason === "completed"
+          ? "success"
+          : "error";
+      schedulerStore.updateRunResult(tracked.scheduleId, evt.agentId, {
+        summary: resultText.slice(0, 500),
+        tokensIn: agent?.tokensIn ?? null,
+        tokensOut: agent?.tokensOut ?? null,
+        costUsd: agent?.costUsd ?? null,
+        durationMs: agent?.durationMs ?? null,
+        finalStatus,
+      });
+    } catch (err: any) {
+      console.warn(
+        `[scheduler] failed to inline agent result for schedule ${tracked.scheduleId} agent ${evt.agentId}: ${err?.message || err}`
+      );
+    }
+  });
+  busSubscribed = true;
+}
+
 /** Normalize legacy flat fields into the nested schedule.{cron,intervalMs,every} block. */
 function normalizeSchedule(raw: any) {
   const s = { ...raw };
@@ -200,6 +257,9 @@ export async function triggerSchedule(id) {
   if (!raw) return { error: "schedule not found" };
   const schedule = normalizeSchedule(raw);
 
+  // Make sure we're subscribed to agent terminations before any spawn races.
+  ensureAgentTerminationListener();
+
   const startedAt = new Date().toISOString();
   let actionResult: any;
 
@@ -210,13 +270,24 @@ export async function triggerSchedule(id) {
   }
 
   const finishedAt = new Date().toISOString();
-  const result = {
+  const result: any = {
     status: actionResult.status,
     startedAt,
     finishedAt,
     actionType: schedule.action?.type,
     ...actionResult,
   };
+
+  // For spawn-agent fires, track the agentId so the agent-terminated
+  // handler can patch this history entry with the result summary later.
+  if (
+    (schedule.action?.type === "spawn-agent" || schedule.action?.type === "prompt") &&
+    typeof actionResult?.agentId === "string"
+  ) {
+    inflightAgents.set(actionResult.agentId, { scheduleId: id });
+    if (result.finalStatus === undefined) result.finalStatus = "pending";
+    if (result.summary === undefined) result.summary = "";
+  }
 
   // Update status block (preferred), keeping legacy flat fields in sync
   // for any consumer still reading them.
