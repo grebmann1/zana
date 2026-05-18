@@ -15,12 +15,13 @@ import * as path from "node:path";
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const ZANA_BIN = path.join(REPO_ROOT, "dist", "bin", "zana.js");
 
-function runCli(args: string[], opts: { cwd?: string } = {}) {
+function runCli(args: string[], opts: { cwd?: string; env?: Record<string, string> } = {}) {
   try {
     const out = execFileSync(process.execPath, [ZANA_BIN, ...args], {
       cwd: opts.cwd || REPO_ROOT,
       stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf8",
+      env: { ...process.env, ...(opts.env || {}) },
     });
     return { stdout: out, stderr: "", code: 0 };
   } catch (err: any) {
@@ -40,6 +41,46 @@ describe("cli list commands: --help", () => {
     expect(result.stdout).toMatch(/run list/);
     expect(result.stdout).toMatch(/schedule list/);
     expect(result.stdout).toMatch(/stop --all/);
+  });
+});
+
+describe("cli stop --all", () => {
+  it("clears the registry and reports the count", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-stop-"));
+    try {
+      // Two fake entries: one with a definitely-dead pid (we never SIGTERM
+      // it because isProcessAlive returns false), the other with our own
+      // PID — but we use a JSON shape that, after SIGTERM, would just be
+      // a no-op signal back to ourselves. To stay safe, both entries use
+      // dead pids; the kill loop will skip them and still clean the dir.
+      fs.writeFileSync(
+        path.join(tmp, "alpha.json"),
+        JSON.stringify({ id: "alpha", port: 47400, pid: 99999, workspace: "/x", headless: true })
+      );
+      fs.writeFileSync(
+        path.join(tmp, "beta.json"),
+        JSON.stringify({ id: "beta", port: 47402, pid: 99998, workspace: "/y", headless: true })
+      );
+
+      const result = runCli(["stop", "--all"], { env: { ZANA_DAEMONS_DIR: tmp } });
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/stopped 2 daemon\(s\)/);
+      expect(fs.readdirSync(tmp)).toEqual([]);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("reports zero when registry dir does not exist", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-stop-"));
+    try {
+      const missing = path.join(tmp, "does-not-exist");
+      const result = runCli(["stop", "--all"], { env: { ZANA_DAEMONS_DIR: missing } });
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/stopped 0 daemon\(s\)/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 

@@ -47,8 +47,21 @@ if (subcommand === "status") {
 }
 
 if (subcommand === "stop") {
-  stopDaemon(args[1]);
-  process.exit(0);
+  if (args.includes("--all")) {
+    stopAllDaemons().then(
+      (n) => {
+        console.log(`stopped ${n} daemon(s)`);
+        process.exit(0);
+      },
+      (err) => {
+        console.error(`zana stop --all: ${err.message || err}`);
+        process.exit(1);
+      }
+    );
+  } else {
+    stopDaemon(args[1]);
+    process.exit(0);
+  }
 }
 
 if (subcommand === "ticket") {
@@ -112,10 +125,11 @@ if (subcommand === "config") {
 
 // Subcommands handled asynchronously elsewhere (they call process.exit on completion).
 const ASYNC_SUBCOMMANDS = new Set(["ticket", "run", "schedule"]);
+const stopAll = subcommand === "stop" && args.includes("--all");
 
 if (subcommand === "headless" || subcommand === "start") {
   launchHeadless(args.slice(1));
-} else if (!ASYNC_SUBCOMMANDS.has(subcommand)) {
+} else if (!ASYNC_SUBCOMMANDS.has(subcommand) && !stopAll) {
   // Default: launch headless for the given workspace
   launchHeadless(args);
 }
@@ -516,6 +530,62 @@ function listRuns(restArgs) {
     const term = r.terminatedAt || "-";
     console.log(`${id} | ${profile} | ${state} | tok=${tokIn}/${tokOut} | $${cost} | ${dur}ms | ${term}`);
   }
+}
+
+// --- stop --all command ---
+
+function getDaemonsDir() {
+  // Allow env override so tests can drive against a tmp registry without
+  // touching the user's real ~/.zana/daemons.
+  return process.env.ZANA_DAEMONS_DIR || path.join(os.homedir(), ".zana", "daemons");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function stopAllDaemons() {
+  const daemonsDir = getDaemonsDir();
+  if (!fs.existsSync(daemonsDir)) return 0;
+
+  const files = fs.readdirSync(daemonsDir).filter((f) => f.endsWith(".json"));
+  const entries = [];
+  for (const f of files) {
+    try {
+      entries.push(JSON.parse(fs.readFileSync(path.join(daemonsDir, f), "utf8")));
+    } catch {
+      // ignore corrupt entries — we'll still try to clean them up below
+    }
+  }
+
+  // First pass: SIGTERM anything that's alive.
+  const aliveAfterTerm = [];
+  for (const e of entries) {
+    if (e?.pid && isProcessAlive(e.pid)) {
+      try { process.kill(e.pid, "SIGTERM"); } catch {}
+      aliveAfterTerm.push(e);
+    }
+  }
+
+  // Give each up to 2s to exit cleanly.
+  if (aliveAfterTerm.length > 0) {
+    await delay(2000);
+    for (const e of aliveAfterTerm) {
+      if (isProcessAlive(e.pid)) {
+        try { process.kill(e.pid, "SIGKILL"); } catch {}
+      }
+    }
+  }
+
+  // Always remove every registry file (whether the kill succeeded or not).
+  let removed = 0;
+  for (const f of files) {
+    try {
+      fs.unlinkSync(path.join(daemonsDir, f));
+      removed++;
+    } catch {}
+  }
+  return removed;
 }
 
 // --- schedule list command ---
