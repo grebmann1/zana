@@ -17,23 +17,51 @@ const triggers = new Map<string, ActiveTrigger>();
 // hasn't been inlined yet. The schedule history entry is appended at fire
 // time with the agentId; once the agent terminates we patch the same entry
 // with the result summary, tokens, cost, etc.
-const inflightAgents = new Map<string, { scheduleId: string }>();
+//
+// Each entry carries `spawnedAt` so a periodic sweep can prune stale entries
+// (hung/SIGKILL'd agents whose AGENT_TERMINATED event never fires). Without
+// the TTL sweep the Map grew linearly with daemon uptime + agent failures.
+const inflightAgents = new Map<string, { scheduleId: string; spawnedAt: number }>();
+// Slightly longer than the default agentTimeoutMinutes (4 min) so we don't
+// prune entries that are still legitimately in flight for a normal-length run.
+const INFLIGHT_TTL_MS = 6 * 60 * 1000;
 let busSubscribed = false;
 
-function ensureAgentTerminationListener() {
-  if (busSubscribed) return;
-  let bus: any, EVENTS: any;
-  try {
-    const events = require("@zana/core").events;
-    bus = events?.bus;
-    EVENTS = events?.EVENTS;
-  } catch {
-    // @zana/core isn't loaded yet — retry on next executeAction call.
-    return;
+/** Remove inflightAgents entries older than INFLIGHT_TTL_MS. Returns count pruned. */
+export function sweepInflightAgents(): number {
+  const now = Date.now();
+  let pruned = 0;
+  for (const [agentId, info] of inflightAgents) {
+    if (now - info.spawnedAt > INFLIGHT_TTL_MS) {
+      inflightAgents.delete(agentId);
+      pruned++;
+    }
   }
-  if (!bus || !EVENTS?.AGENT_TERMINATED) return;
+  return pruned;
+}
 
-  bus.on(EVENTS.AGENT_TERMINATED, (evt: any) => {
+/** Test-only: snapshot the inflight tracking map. */
+export function _getInflightAgentsForTest() {
+  return Array.from(inflightAgents.entries()).map(([agentId, info]) => ({
+    agentId,
+    scheduleId: info.scheduleId,
+    spawnedAt: info.spawnedAt,
+  }));
+}
+
+/** Test-only: insert an inflight tracking entry directly (bypasses spawn). */
+export function _trackAgentForTest(agentId: string, scheduleId: string, spawnedAt?: number) {
+  inflightAgents.set(agentId, {
+    scheduleId,
+    spawnedAt: typeof spawnedAt === "number" ? spawnedAt : Date.now(),
+  });
+}
+
+function attachTerminationListener(bus: any, eventName: string) {
+  bus.on(eventName, (evt: any) => {
+    // Opportunistic sweep: every real termination is a chance to prune stale
+    // entries (hung/SIGKILL'd peers whose own event never fired).
+    sweepInflightAgents();
     const tracked = inflightAgents.get(evt.agentId);
     if (!tracked) return;
     inflightAgents.delete(evt.agentId);
@@ -44,10 +72,16 @@ function ensureAgentTerminationListener() {
         (agent?.result as string) ||
         (typeof evt.output === "string" ? evt.output : "") ||
         "";
-      const finalStatus =
-        agent?.state === "terminated" || evt.reason === "completed"
-          ? "success"
-          : "error";
+      // Use exitCode as source of truth: agent.state === "terminated" is set
+      // for BOTH clean exits and killed/crashed agents (SIGKILL, timeout, OOM),
+      // so it can't distinguish success from failure. The agent record now
+      // persists exitCode in .zana/runs/<id>.json, and the bus event also
+      // carries evt.exitCode. exitCode === 0 ⇒ success; anything else (or
+      // missing) ⇒ error (conservative — better to flag a real success as
+      // error than to silently record a killed agent as a success).
+      const exitCode =
+        typeof evt.exitCode === "number" ? evt.exitCode : agent?.exitCode;
+      const finalStatus = exitCode === 0 ? "success" : "error";
       schedulerStore.updateRunResult(tracked.scheduleId, evt.agentId, {
         summary: resultText.slice(0, 500),
         tokensIn: agent?.tokensIn ?? null,
@@ -62,6 +96,21 @@ function ensureAgentTerminationListener() {
       );
     }
   });
+}
+
+function ensureAgentTerminationListener() {
+  if (busSubscribed) return;
+  let bus: any, EVENTS: any;
+  try {
+    const events = require("@zana/core").events;
+    bus = events?.bus;
+    EVENTS = events?.EVENTS;
+  } catch {
+    // @zana/core isn't loaded yet — retry on next executeAction call.
+    return;
+  }
+  if (!bus || !EVENTS?.AGENT_TERMINATED) return;
+  attachTerminationListener(bus, EVENTS.AGENT_TERMINATED);
   busSubscribed = true;
 }
 
@@ -255,6 +304,11 @@ export async function triggerSchedule(id) {
   // Make sure we're subscribed to agent terminations before any spawn races.
   ensureAgentTerminationListener();
 
+  // Prune stale inflight entries on every fire. Cheap: O(n) over a typically
+  // tiny map. Without this, hung/SIGKILL'd agents leak memory linearly with
+  // daemon uptime since their AGENT_TERMINATED event never fires.
+  sweepInflightAgents();
+
   const startedAt = new Date().toISOString();
   let actionResult: any;
 
@@ -279,7 +333,7 @@ export async function triggerSchedule(id) {
     (schedule.action?.type === "spawn-agent" || schedule.action?.type === "prompt") &&
     typeof actionResult?.agentId === "string"
   ) {
-    inflightAgents.set(actionResult.agentId, { scheduleId: id });
+    inflightAgents.set(actionResult.agentId, { scheduleId: id, spawnedAt: Date.now() });
     if (result.finalStatus === undefined) result.finalStatus = "pending";
     if (result.summary === undefined) result.summary = "";
   }
@@ -399,4 +453,19 @@ export function _getActiveTriggers() {
     scheduleId: t.scheduleId,
     kind: t.kind,
   }));
+}
+
+/**
+ * Test-only helper: attach the AGENT_TERMINATED listener to a bus passed in
+ * by the test. Avoids the require("@zana/core") path which can mis-resolve
+ * under vitest's module loader. Idempotent.
+ */
+export function _ensureBusListenerForTest(bus?: any, eventName: string = "agent:terminated") {
+  if (busSubscribed) return;
+  if (!bus) {
+    ensureAgentTerminationListener();
+    return;
+  }
+  attachTerminationListener(bus, eventName);
+  busSubscribed = true;
 }
