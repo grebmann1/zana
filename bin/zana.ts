@@ -51,6 +51,22 @@ if (subcommand === "stop") {
   process.exit(0);
 }
 
+if (subcommand === "ticket") {
+  const sub = args[1];
+  if (sub === "list") {
+    listTickets(args.slice(2)).then(
+      () => process.exit(0),
+      (err) => {
+        console.error(`zana ticket list: ${err.message || err}`);
+        process.exit(1);
+      }
+    );
+  } else {
+    console.error(`Usage: zana ticket list [--status <s>] [--workspace <path>]`);
+    process.exit(1);
+  }
+}
+
 if (subcommand === "config") {
   const { execFileSync } = require("child_process");
   const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "daemon.js");
@@ -62,9 +78,12 @@ if (subcommand === "config") {
   process.exit(0);
 }
 
+// Subcommands handled asynchronously elsewhere (they call process.exit on completion).
+const ASYNC_SUBCOMMANDS = new Set(["ticket", "run", "schedule"]);
+
 if (subcommand === "headless" || subcommand === "start") {
   launchHeadless(args.slice(1));
-} else {
+} else if (!ASYNC_SUBCOMMANDS.has(subcommand)) {
   // Default: launch headless for the given workspace
   launchHeadless(args);
 }
@@ -76,13 +95,17 @@ function printHelp() {
 Usage: zana [command] [options]
 
 Commands:
-  init [path]          Initialize .zana/ in a project directory
-  init wizard [path]   Guided setup: initialize + register MCP server
-  migrate [path]       Run pending migrations
-  status               Show running daemon instances
-  stop <id|port>       Stop a running daemon
-  config [args...]     Print or modify module configuration
-  headless [path]      Run zana-daemon in foreground (default)
+  init [path]                            Initialize .zana/ in a project directory
+  init wizard [path]                     Guided setup: initialize + register MCP server
+  migrate [path]                         Run pending migrations
+  status                                 Show running daemon instances
+  stop <id|port>                         Stop a running daemon
+  stop --all                             Stop all running daemons and clean registry
+  config [args...]                       Print or modify module configuration
+  ticket list [--status s] [--workspace] List tickets in the active daemon's workspace
+  run list [--limit N]                   List recent agent runs from .zana/runs/
+  schedule list                          List schedules in .zana/scheduler/
+  headless [path]                        Run zana-daemon in foreground (default)
 
 Options:
   --repair-mcp         With init wizard, overwrite stale zana MCP config
@@ -318,6 +341,84 @@ function isProcessAlive(pid) {
     return true;
   } catch {
     return false;
+  }
+}
+
+function readAuthToken() {
+  const authFile = path.join(os.homedir(), ".zana", "auth.json");
+  try {
+    const raw = JSON.parse(fs.readFileSync(authFile, "utf8"));
+    return raw.token;
+  } catch {
+    return null;
+  }
+}
+
+function getFlagValue(restArgs, flag) {
+  const idx = restArgs.indexOf(flag);
+  if (idx === -1 || idx === restArgs.length - 1) return null;
+  return restArgs[idx + 1];
+}
+
+function httpGetJson(port, pathname, token) {
+  return new Promise((resolve, reject) => {
+    const headers = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const req = http.request(
+      { host: "127.0.0.1", port, path: pathname, method: "GET", headers },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try { resolve(JSON.parse(body)); }
+            catch (err) { reject(new Error(`bad JSON from ${pathname}: ${err.message}`)); }
+          } else {
+            reject(new Error(`HTTP ${res.statusCode} from ${pathname}: ${body.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+// --- ticket list command ---
+
+async function listTickets(restArgs) {
+  const { findRunningDaemon } = require(path.join(appRoot, "packages", "core", "dist", "src", "daemon", "registry.js"));
+  const statusFilter = getFlagValue(restArgs, "--status");
+  const workspaceArg = getFlagValue(restArgs, "--workspace");
+  const workspace = workspaceArg ? path.resolve(workspaceArg) : process.cwd();
+
+  const daemon = findRunningDaemon(workspace);
+  if (!daemon) {
+    console.error("no daemon running for this workspace");
+    process.exit(1);
+  }
+
+  // Hook server is at `port`; HTTP API is at `port + 1` (see core.ts).
+  const apiPort = daemon.port + 1;
+  const token = readAuthToken();
+
+  const tickets = await httpGetJson(apiPort, "/tickets", token);
+  if (!Array.isArray(tickets)) {
+    console.error(`unexpected /tickets response: ${JSON.stringify(tickets).slice(0, 200)}`);
+    process.exit(1);
+  }
+
+  const filtered = statusFilter
+    ? tickets.filter((t) => t && t.status === statusFilter)
+    : tickets;
+
+  for (const t of filtered) {
+    const id = String(t.id || "").slice(0, 8);
+    const status = t.status || "?";
+    const priority = t.priority || "?";
+    const title = t.title || "";
+    console.log(`${id} | ${status} | ${priority} | ${title}`);
   }
 }
 
