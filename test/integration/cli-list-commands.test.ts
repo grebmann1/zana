@@ -56,6 +56,48 @@ describe("cli ticket list", () => {
   });
 });
 
+describe("cli schedule list", () => {
+  it("emits '(no scheduler directory)' for a fresh workspace", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-sched-"));
+    try {
+      const result = runCli(["schedule", "list", "--workspace", tmp]);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/no scheduler directory/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("renders YAML schedules with status fields", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-sched-"));
+    try {
+      const schedDir = path.join(tmp, ".zana", "scheduler");
+      fs.mkdirSync(schedDir, { recursive: true });
+      const future = new Date(Date.now() + 5 * 60_000).toISOString();
+      const yaml = [
+        "id: my-task",
+        "name: Daily audit",
+        "enabled: true",
+        "schedule:",
+        "  every: 10m",
+        "  intervalMs: 600000",
+        "status:",
+        `  nextRunAt: ${future}`,
+        "  lastRunResult: success",
+        "  runCount: 7",
+        "",
+      ].join("\n");
+      fs.writeFileSync(path.join(schedDir, "my-task.yml"), yaml);
+
+      const result = runCli(["schedule", "list", "--workspace", tmp]);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/^my-task \| enabled \| every 10m \| next in \d+m \| runCount 7 \| Daily audit last=success/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("cli run list", () => {
   it("emits '(no runs directory)' for a fresh workspace", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-run-"));

@@ -83,6 +83,22 @@ if (subcommand === "run") {
   }
 }
 
+if (subcommand === "schedule") {
+  const sub = args[1];
+  if (sub === "list") {
+    try {
+      listSchedules(args.slice(2));
+      process.exit(0);
+    } catch (err) {
+      console.error(`zana schedule list: ${err.message || err}`);
+      process.exit(1);
+    }
+  } else {
+    console.error(`Usage: zana schedule list [--workspace <path>]`);
+    process.exit(1);
+  }
+}
+
 if (subcommand === "config") {
   const { execFileSync } = require("child_process");
   const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "daemon.js");
@@ -499,6 +515,86 @@ function listRuns(restArgs) {
     const dur = r.durationMs ?? 0;
     const term = r.terminatedAt || "-";
     console.log(`${id} | ${profile} | ${state} | tok=${tokIn}/${tokOut} | $${cost} | ${dur}ms | ${term}`);
+  }
+}
+
+// --- schedule list command ---
+
+function formatRelativeFuture(iso) {
+  if (!iso) return "?";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "?";
+  const diff = t - Date.now();
+  if (diff <= 0) return "due";
+  const sec = Math.round(diff / 1000);
+  if (sec < 60) return `in ${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `in ${min}m`;
+  const hr = Math.round(min / 60);
+  if (hr < 48) return `in ${hr}h`;
+  const day = Math.round(hr / 24);
+  return `in ${day}d`;
+}
+
+function listSchedules(restArgs) {
+  const workspaceArg = getFlagValue(restArgs, "--workspace");
+  const workspace = workspaceArg ? path.resolve(workspaceArg) : process.cwd();
+  const projectDir = resolveProjectDir(workspace);
+  const schedulerDir = path.join(projectDir, "scheduler");
+
+  if (!fs.existsSync(schedulerDir)) {
+    console.log("(no scheduler directory)");
+    return;
+  }
+
+  const { parseYaml } = require(path.join(
+    appRoot, "packages", "work", "dist", "src", "scheduling", "yaml-format.js"
+  ));
+
+  const files = fs.readdirSync(schedulerDir);
+  const byId = new Map();
+
+  // YAML files first (preferred); JSON fills in only if no YAML for that id.
+  for (const f of files) {
+    if (!f.endsWith(".yml") && !f.endsWith(".yaml")) continue;
+    if (f.endsWith(".yml.example") || f.endsWith(".yaml.example")) continue;
+    try {
+      const content = fs.readFileSync(path.join(schedulerDir, f), "utf8");
+      const parsed = parseYaml(content);
+      if (parsed && parsed.id) byId.set(parsed.id, parsed);
+    } catch {}
+  }
+  for (const f of files) {
+    if (!f.endsWith(".json") || f.endsWith(".history.json")) continue;
+    try {
+      const content = fs.readFileSync(path.join(schedulerDir, f), "utf8");
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.id && !byId.has(parsed.id)) byId.set(parsed.id, parsed);
+    } catch {}
+  }
+
+  const schedules = Array.from(byId.values());
+  if (schedules.length === 0) {
+    console.log("(no schedules)");
+    return;
+  }
+
+  for (const s of schedules) {
+    const id = s.id;
+    const enabled = s.enabled ? "enabled" : "disabled";
+    const ms = s.schedule?.intervalMs;
+    const everyMin = typeof ms === "number" && ms > 0
+      ? Math.round(ms / 60000)
+      : (s.schedule?.every ? s.schedule.every : "?");
+    const next = formatRelativeFuture(s.status?.nextRunAt);
+    const runCount = s.status?.runCount ?? 0;
+    const name = s.name || "";
+    const lastResult = s.status?.lastRunResult;
+    const lastResultStr = lastResult ? ` last=${lastResult}` : "";
+    const everyStr = typeof everyMin === "number" ? `every ${everyMin}m` : `every ${everyMin}`;
+    console.log(
+      `${id} | ${enabled} | ${everyStr} | next ${next} | runCount ${runCount} | ${name}${lastResultStr}`
+    );
   }
 }
 
