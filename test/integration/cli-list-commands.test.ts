@@ -55,3 +55,59 @@ describe("cli ticket list", () => {
     }
   });
 });
+
+describe("cli run list", () => {
+  it("emits '(no runs directory)' for a fresh workspace", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-run-"));
+    try {
+      const result = runCli(["run", "list", "--workspace", tmp]);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/no runs directory/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("formats run entries from .zana/runs/*.json sorted by terminatedAt desc", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-run-"));
+    try {
+      const runsDir = path.join(tmp, ".zana", "runs");
+      fs.mkdirSync(runsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(runsDir, "older.json"),
+        JSON.stringify({
+          id: "older-run-id",
+          profileId: "tester",
+          state: "terminated",
+          tokensIn: 5,
+          tokensOut: 9,
+          costUsd: 0.0123,
+          durationMs: 1234,
+          terminatedAt: "2026-01-01T00:00:00.000Z",
+        })
+      );
+      fs.writeFileSync(
+        path.join(runsDir, "newer.json"),
+        JSON.stringify({
+          id: "newer-run-id",
+          profileId: "coder",
+          state: "terminated",
+          tokensIn: 10,
+          tokensOut: 20,
+          costUsd: 0.05,
+          durationMs: 999,
+          terminatedAt: "2026-05-01T00:00:00.000Z",
+        })
+      );
+
+      const result = runCli(["run", "list", "--limit", "5", "--workspace", tmp]);
+      expect(result.code).toBe(0);
+      const lines = result.stdout.trim().split("\n");
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toMatch(/^newer-ru \| coder \| terminated \| tok=10\/20 \| \$0\.0500 \| 999ms \| 2026-05-01/);
+      expect(lines[1]).toMatch(/^older-ru \| tester \| terminated \| tok=5\/9 \| \$0\.0123 \| 1234ms \| 2026-01-01/);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

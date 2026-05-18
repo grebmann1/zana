@@ -67,6 +67,22 @@ if (subcommand === "ticket") {
   }
 }
 
+if (subcommand === "run") {
+  const sub = args[1];
+  if (sub === "list") {
+    try {
+      listRuns(args.slice(2));
+      process.exit(0);
+    } catch (err) {
+      console.error(`zana run list: ${err.message || err}`);
+      process.exit(1);
+    }
+  } else {
+    console.error(`Usage: zana run list [--limit N] [--workspace <path>]`);
+    process.exit(1);
+  }
+}
+
 if (subcommand === "config") {
   const { execFileSync } = require("child_process");
   const daemonBin = path.join(appRoot, "packages", "core", "dist", "bin", "daemon.js");
@@ -419,6 +435,70 @@ async function listTickets(restArgs) {
     const priority = t.priority || "?";
     const title = t.title || "";
     console.log(`${id} | ${status} | ${priority} | ${title}`);
+  }
+}
+
+// --- run list command ---
+
+function resolveProjectDir(workspace) {
+  // Mirror packages/core/src/project/workspace-context.ts:resolveProjectDir
+  // — walk up looking for an existing .zana/, stopping at .git or fs root.
+  let current = path.resolve(workspace);
+  while (true) {
+    const candidate = path.join(current, ".zana");
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+    const gitDir = path.join(current, ".git");
+    if (fs.existsSync(gitDir)) break;
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return path.join(workspace, ".zana");
+}
+
+function listRuns(restArgs) {
+  const limitArg = getFlagValue(restArgs, "--limit");
+  const workspaceArg = getFlagValue(restArgs, "--workspace");
+  const limit = limitArg ? Math.max(1, parseInt(limitArg, 10) || 0) : 20;
+  const workspace = workspaceArg ? path.resolve(workspaceArg) : process.cwd();
+
+  const projectDir = resolveProjectDir(workspace);
+  const runsDir = path.join(projectDir, "runs");
+
+  if (!fs.existsSync(runsDir)) {
+    console.log("(no runs directory)");
+    return;
+  }
+
+  const files = fs.readdirSync(runsDir).filter((f) => f.endsWith(".json"));
+  const entries = [];
+  for (const f of files) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(path.join(runsDir, f), "utf8"));
+      entries.push(raw);
+    } catch {
+      // Skip unreadable / corrupt files quietly.
+    }
+  }
+
+  entries.sort((a, b) => {
+    const aT = a.terminatedAt ? new Date(a.terminatedAt).getTime() : 0;
+    const bT = b.terminatedAt ? new Date(b.terminatedAt).getTime() : 0;
+    return bT - aT;
+  });
+
+  for (const r of entries.slice(0, limit)) {
+    const id = String(r.id || "").slice(0, 8);
+    const profile = r.profileId || "?";
+    const state = r.state || "?";
+    const tokIn = r.tokensIn ?? 0;
+    const tokOut = r.tokensOut ?? 0;
+    const cost = typeof r.costUsd === "number" ? r.costUsd.toFixed(4) : "0.0000";
+    const dur = r.durationMs ?? 0;
+    const term = r.terminatedAt || "-";
+    console.log(`${id} | ${profile} | ${state} | tok=${tokIn}/${tokOut} | $${cost} | ${dur}ms | ${term}`);
   }
 }
 
