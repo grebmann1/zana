@@ -181,3 +181,35 @@ export function appendRunResult(id, result) {
   );
   return history;
 }
+
+/**
+ * Patch an existing schedule run-history entry in place. Used by the
+ * scheduler service to inline an agent's result summary onto the run
+ * record once the agent terminates (the schedule fire is non-blocking,
+ * so the entry is appended with a stub and patched here later).
+ *
+ * Matches the most recent history entry whose agentId equals the given
+ * agentId. Returns the updated entry, or null if no match was found.
+ */
+export function updateRunResult(scheduleId, agentId, fields) {
+  ensureDir();
+  const history = getRunHistory(scheduleId);
+  if (!Array.isArray(history) || history.length === 0) return null;
+
+  let idx = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i] && history[i].agentId === agentId) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx === -1) return null;
+
+  history[idx] = { ...history[idx], ...fields };
+  fs.writeFileSync(
+    path.join(getSchedulerDir(), `${scheduleId}.history.json`),
+    JSON.stringify(history, null, 2) + "\n",
+    "utf8"
+  );
+  return history[idx];
+}
