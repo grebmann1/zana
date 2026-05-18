@@ -24,9 +24,13 @@ function ensureAgentTerminationListener() {
   if (busSubscribed) return;
   let bus: any, EVENTS: any;
   try {
-    const core = require("@zana/core");
-    bus = core.events?.bus ?? require("@zana/core/src/events/bus").bus;
-    EVENTS = core.events?.EVENTS ?? require("@zana/core/src/events/bus").EVENTS;
+    // core.events.bus is the WHOLE bus module exports (has named .bus
+    // EventEmitter and .EVENTS object) — NOT the EventEmitter itself.
+    const eventsModule =
+      require("@zana/core").events?.bus ??
+      require("@zana/core/src/events/bus");
+    bus = eventsModule?.bus;
+    EVENTS = eventsModule?.EVENTS;
   } catch (err: any) {
     // @zana/core isn't loaded yet — try again next time someone calls
     // executeAction. This keeps the cycle break clean.
