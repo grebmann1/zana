@@ -90,7 +90,10 @@ schedule:
 
 action:
   type: command
-  command: npm run build:runtime
+  # command MUST be an array (no shell). First element is the binary,
+  # rest are args. Shell strings are rejected for safety.
+  command: ["npm", "run", "build:runtime"]
+  cwd: .
 `,
   },
 ];

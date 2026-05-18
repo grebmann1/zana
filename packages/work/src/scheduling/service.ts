@@ -154,11 +154,29 @@ async function executeAction(action) {
   }
 
   if (type === "command") {
+    // Two safe forms accepted:
+    //   action.command: ["binary", "arg1", "arg2"]  → execFile binary directly
+    //   action.argv:    ["binary", "arg1", "arg2"]  → alias of the above
+    // Legacy string form is rejected: it required /bin/sh -c which is a
+    // shell-injection vector for any user-supplied schedule.
+    let argv: string[] | null = null;
+    if (Array.isArray(action.command)) argv = action.command;
+    else if (Array.isArray(action.argv)) argv = action.argv;
+
+    if (!argv || argv.length === 0 || typeof argv[0] !== "string") {
+      return {
+        status: "error",
+        error:
+          "command action requires `command` or `argv` as a non-empty array of strings (e.g. command: [\"npm\", \"run\", \"build\"]). Shell strings are rejected as a security measure.",
+      };
+    }
+
+    const [bin, ...args] = argv;
     return new Promise((resolve) => {
       execFile(
-        "/bin/sh",
-        ["-c", action.command],
-        { cwd: action.cwd || process.env.HOME },
+        bin,
+        args,
+        { cwd: action.cwd || process.env.HOME, shell: false },
         (err: any, stdout, stderr) => {
           if (err) {
             resolve({ status: "error", error: err.message, exitCode: err.code, stdout, stderr });
