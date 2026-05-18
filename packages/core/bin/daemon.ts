@@ -374,6 +374,26 @@ async function main() {
   console.log(`\x1b[36m[zana-daemon]\x1b[0m workspace: ${workspace}`);
   console.log(`\x1b[36m[zana-daemon]\x1b[0m pid: ${process.pid}`);
 
+  // Concurrent-daemon guard. Multiple daemons against the same workspace cause
+  // duplicate scheduler triggers (8 daemons → 8 simultaneous fires per schedule).
+  // Drop stale registry entries first, then refuse to start if a live one matches.
+  try {
+    const registry = require("../src/daemon/registry.js");
+    registry.cleanStale();
+    const existing = registry.findRunningDaemon(workspace);
+    if (existing) {
+      console.error(
+        `[zana-daemon] another daemon is already running for ${workspace} ` +
+        `(id=${existing.id} pid=${existing.pid} port=${existing.port}). ` +
+        `Exiting. Use 'zana stop ${existing.id}' to stop it first.`
+      );
+      try { fs.unlinkSync(pidFile); } catch {}
+      process.exit(2);
+    }
+  } catch (err: any) {
+    console.warn(`[zana-daemon] concurrent-daemon guard skipped: ${err?.message || err}`);
+  }
+
   const hive = await core.init({
     workspace,
     headless: true,
