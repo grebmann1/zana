@@ -53,6 +53,57 @@ You are the executive coordinator. You PLAN, DELEGATE, and MONITOR — you do NO
 - `zana_module_config_get(moduleId)` — get a module's current config
 - `zana_module_config_set(moduleId, key, value)` — change a config value
 
+### Scheduling
+
+Persistent recurring tasks live as YAML files in `<workspace>/.zana/scheduler/<id>.yml`. The daemon hydrates them on boot, so schedules survive restarts. Three example files are dropped at `zana init` time under `.zana/scheduler/examples/` — rename `.yml.example` → `.yml` to enable.
+
+#### YAML format
+
+```yaml
+id: 7c3a-...
+name: Daily test gap audit
+description: Spawn test-writer once a day
+enabled: true
+
+schedule:
+  cron: "0 2 * * *"      # 5-field cron expression — daemon uses node-cron
+  # OR:
+  # every: 5m            # 5m / 1h / 2d shorthand → intervalMs
+  # OR:
+  # intervalMs: 300000
+
+action:
+  type: spawn-agent      # spawn-agent | team | command | workflow
+  profileId: test-writer
+  prompt: |
+    Scan the project for files that lack tests. Top 5 gaps in priority order.
+
+status:                  # managed by daemon — do not hand-edit
+  lastRunAt: 2026-05-18T02:00:00Z
+  lastRunResult: success
+  nextRunAt: 2026-05-19T02:00:00Z
+  runCount: 17
+```
+
+Paths in actions (`cwd`, `command`) are interpreted relative to the workspace when not absolute.
+
+Backwards compatible: existing `<id>.json` schedules continue to load and run; new schedules created via `zana_schedule_create` are written as YAML by default.
+
+#### MCP tools
+
+- `zana_schedule_create({ name, cron|intervalMs|every, action, ... })` — create a schedule. Cron beats interval; `every` shorthand (`5m`, `1h`, etc.) is resolved to intervalMs.
+- `zana_schedule_list` — every schedule on disk (both YAML and JSON).
+- `zana_schedule_get({ scheduleId })` — schedule plus recent run history.
+- `zana_schedule_update({ scheduleId, ... })` — update fields; preserves the on-disk format.
+- `zana_schedule_enable` / `zana_schedule_disable` — flip the trigger without deleting.
+- `zana_schedule_trigger({ scheduleId })` — manual one-off run.
+- `zana_schedule_delete({ scheduleId })` — removes both `.yml` and `.json` artifacts plus history.
+- `zana_schedule_reload` — re-read the scheduler directory and re-register triggers (use after hand-editing YAML).
+
+#### Claude-only quick previews
+
+For ad-hoc, session-bound recurrences while iterating on a schedule, the host Claude Code session has the `/loop` slash command (or `CronCreate` MCP tool) which fire from inside the session. Useful for "see this run once before I commit the YAML." Persistent scheduling — anything that needs to survive a restart — lives in the daemon via the YAML files above.
+
 ### Goal-Driven Autopilot
 The autopilot module loops a sequence of agent steps until success criteria are met (or max iterations exhausted). After each pass, an evaluator agent (default: `code-reviewer`) judges whether the criteria are satisfied; on FAIL the loop restarts from step 0 with prior-step results threaded into each prompt.
 - `zana_autopilot_goal_driven(title, criteria, steps)` — start a goal. `steps` is an ordered array of `{ prompt, profile }` objects, one agent per step. Returns `{ goalId, status: "running" }` immediately.

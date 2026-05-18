@@ -557,19 +557,21 @@ const TEAM_TOOLS = [
 const SCHEDULER_TOOLS = [
   {
     name: "zana_schedule_create",
-    description: "Create a scheduled recurring action. Supports cron expressions or simple intervals.",
+    description:
+      "Create a scheduled recurring action. New schedules are persisted as YAML in <workspace>/.zana/scheduler/<id>.yml. Supports a 5-field cron expression OR an intervalMs OR an `every` shorthand (e.g. '5m', '1h', '2d'). Cron schedules fire via node-cron in the daemon and survive restarts.",
     inputSchema: {
       type: "object",
       properties: {
         name: { type: "string", description: "Name for this schedule" },
         description: { type: "string" },
-        cron: { type: "string", description: "5-field cron expression (min hour dom mon dow)" },
+        cron: { type: "string", description: "5-field cron expression (min hour dom mon dow). Takes precedence over intervalMs/every." },
         intervalMs: { type: "number", description: "Simple interval in milliseconds (alternative to cron)" },
+        every: { type: "string", description: "Shorthand interval, e.g. '5m', '1h', '30s', '2d'. Resolved to intervalMs internally." },
         action: {
           type: "object",
-          description: "Action to execute",
+          description: "Action to execute when the schedule fires",
           properties: {
-            type: { type: "string", enum: ["prompt", "team", "command", "mcp_tool"] },
+            type: { type: "string", enum: ["prompt", "spawn-agent", "team", "command", "workflow", "mcp_tool"] },
             profileId: { type: "string" },
             prompt: { type: "string" },
             teamId: { type: "string" },
@@ -654,6 +656,12 @@ const SCHEDULER_TOOLS = [
       properties: { scheduleId: { type: "string" } },
       required: ["scheduleId"],
     },
+  },
+  {
+    name: "zana_schedule_reload",
+    description:
+      "Re-read all <workspace>/.zana/scheduler/*.{yml,json} files from disk and re-register triggers for the enabled ones. Use after hand-editing schedule YAML files so the daemon picks up the changes without a restart. Idempotent.",
+    inputSchema: { type: "object", properties: {} },
   },
 ];
 
@@ -1405,7 +1413,7 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Scheduler tools
     case "zana_schedule_create":
-      return await callCore("schedule_create", { name: args.name, description: args.description, cron: args.cron, intervalMs: args.intervalMs, action: args.action, enabled: args.enabled, ownerId: process.env.ZANA_TERMINAL_ID || "agent", ownerName: process.env.ZANA_AGENT_NAME || "Agent" });
+      return await callCore("schedule_create", { name: args.name, description: args.description, cron: args.cron, intervalMs: args.intervalMs, every: args.every, action: args.action, enabled: args.enabled, ownerId: process.env.ZANA_TERMINAL_ID || "agent", ownerName: process.env.ZANA_AGENT_NAME || "Agent" });
     case "zana_schedule_list":
       return await callCore("schedule_list");
     case "zana_schedule_get":
@@ -1420,6 +1428,8 @@ async function handleToolCall(name, args, callerAgentId) {
       return await callCore("schedule_disable", { id: args.scheduleId });
     case "zana_schedule_trigger":
       return await callCore("schedule_trigger", { id: args.scheduleId });
+    case "zana_schedule_reload":
+      return await callCore("schedule_reload");
 
     // Event Bus tools
     case "zana_event_emit":
