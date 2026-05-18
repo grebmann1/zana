@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import * as ticketStore from "./db";
-const bus: any = new Proxy({}, { get: (_t, p) => require("@zana/core").events.bus.bus[p] });
+function _bus(): any { return require("@zana/core").events.bus; }
 
 const VALID_STATUSES = ["backlog", "in-progress", "review", "rework", "blocked", "done", "cancelled"];
 const VALID_PRIORITIES = ["critical", "high", "medium", "low"];
@@ -56,7 +56,7 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
 
   addAuditEntry(ticket, "created", createdBy, { title, priority: ticket.priority });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:created", { ticketId: ticket.id, title: ticket.title, priority: ticket.priority });
+  _bus().emit("ticket:created", { ticketId: ticket.id, title: ticket.title, priority: ticket.priority });
   return ticket;
 }
 
@@ -78,7 +78,7 @@ export function claimTicket(ticketId, agentId, agentName, profileId?) {
   addAuditEntry(ticket, "claimed", agentId, { agentName: ticket.assigneeName, profileId });
   addAuditEntry(ticket, "status_changed", agentId, { from: oldStatus, to: "in-progress" });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:claimed", { ticketId, agentId, agentName: ticket.assigneeName, profileId });
+  _bus().emit("ticket:claimed", { ticketId, agentId, agentName: ticket.assigneeName, profileId });
   return { ok: true, ticket };
 }
 
@@ -108,7 +108,7 @@ export function updateStatus(ticketId, newStatus, updatedBy) {
 
   addAuditEntry(ticket, "status_changed", updatedBy, { from: oldStatus, to: newStatus });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:statusChanged", { ticketId, oldStatus, newStatus, updatedBy });
+  _bus().emit("ticket:statusChanged", { ticketId, oldStatus, newStatus, updatedBy });
   return { ok: true, ticket };
 }
 
@@ -125,7 +125,7 @@ export function completeTicket(ticketId, resultSummary, completedBy) {
   addAuditEntry(ticket, "status_changed", completedBy, { from: oldStatus, to: "done" });
   addAuditEntry(ticket, "completed", completedBy, { resultSummary });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:completed", { ticketId, completedBy, resultSummary });
+  _bus().emit("ticket:completed", { ticketId, completedBy, resultSummary });
   return { ok: true, ticket };
 }
 
@@ -146,7 +146,7 @@ export function addComment(ticketId, authorId, authorName, body) {
 
   addAuditEntry(ticket, "commented", authorId, { commentId: comment.id, body: body.slice(0, 100) });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:commented", { ticketId, commentId: comment.id, authorId });
+  _bus().emit("ticket:commented", { ticketId, commentId: comment.id, authorId });
   return { ok: true, comment };
 }
 
@@ -198,7 +198,7 @@ export function updateTicket(ticketId, fields, updatedBy) {
   ticket.updatedAt = new Date().toISOString();
   addAuditEntry(ticket, "updated", updatedBy, { fields: changedFields });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:updated", { ticketId, fields: Object.keys(fields), updatedBy });
+  _bus().emit("ticket:updated", { ticketId, fields: Object.keys(fields), updatedBy });
   return { ok: true, ticket };
 }
 
@@ -223,7 +223,7 @@ export function addTicketToSprint(ticketId, sprintId) {
   addAuditEntry(ticket, "updated", "system", { fields: ["sprintId"] });
   ticketStore.saveTicket(ticket);
 
-  bus.emit("ticket:updated", { ticketId, fields: ["sprintId"], updatedBy: "system" });
+  _bus().emit("ticket:updated", { ticketId, fields: ["sprintId"], updatedBy: "system" });
   return { ok: true, ticket, sprint };
 }
 
@@ -274,7 +274,7 @@ export function createSprint({ name, teamId, daemonId, ticketIds }) {
     ticketStore.saveTicket(ticket);
   }
 
-  bus.emit("sprint:created", { sprintId: sprint.id, name: sprint.name });
+  _bus().emit("sprint:created", { sprintId: sprint.id, name: sprint.name });
   return sprint;
 }
 
@@ -288,7 +288,7 @@ export function startSprint(sprintId) {
   sprint.updatedAt = sprint.startedAt;
 
   ticketStore.saveSprint(sprint);
-  bus.emit("sprint:started", { sprintId, name: sprint.name });
+  _bus().emit("sprint:started", { sprintId, name: sprint.name });
   return { ok: true, sprint };
 }
 
@@ -302,7 +302,7 @@ export function endSprint(sprintId) {
   sprint.updatedAt = sprint.endedAt;
 
   ticketStore.saveSprint(sprint);
-  bus.emit("sprint:ended", { sprintId, name: sprint.name });
+  _bus().emit("sprint:ended", { sprintId, name: sprint.name });
   return { ok: true, sprint };
 }
 
@@ -320,7 +320,7 @@ export function updateReviewPhase(ticketId, phase, updatedBy) {
 
   addAuditEntry(ticket, "review_phase_changed", updatedBy, { from: oldPhase, to: phase });
   ticketStore.saveTicket(ticket);
-  bus.emit("ticket:reviewPhaseChanged", { ticketId, oldPhase, newPhase: phase, updatedBy });
+  _bus().emit("ticket:reviewPhaseChanged", { ticketId, oldPhase, newPhase: phase, updatedBy });
   return { ok: true, ticket };
 }
 

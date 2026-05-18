@@ -2,8 +2,8 @@ import * as teamStore from "./store";
 function _core() { return require("@zana/core"); }
 const agentManager: any = new Proxy({}, { get: (_t, p) => _core().agents.manager[p] });
 const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
-const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
-const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.bus.EVENTS[p] });
+const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus[p] });
+const EVENTS: any = new Proxy({}, { get: (_t, p) => _core().events.EVENTS[p] });
 import * as checkpointStore from "../runs/checkpoint/store";
 import * as checkpointResume from "../runs/checkpoint/resume";
 

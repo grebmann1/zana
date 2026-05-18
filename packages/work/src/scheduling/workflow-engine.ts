@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 function _core() { return require("@zana/core"); }
-const bus: any = new Proxy({}, { get: (_t, p) => _core().events.bus.bus[p] });
-const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
+function _bus() { return _core().events.bus; }
+function _workspaceContext() { return _core().project.workspaceContext; }
 
 export const MAX_STEPS = 10;
 export const MAX_CONCURRENT_RUNS = 3;
@@ -11,7 +11,7 @@ export const MAX_CONCURRENT_RUNS = 3;
 const activeRuns = new Map();
 
 function getWorkflowsDir() {
-  const paths = workspaceContext.getProjectPaths();
+  const paths = _workspaceContext().getProjectPaths();
   const dir = path.join(paths.projectDir, "workflows");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -157,7 +157,7 @@ async function executeStep(step, context) {
       if (!profile) return { error: `profile not found: ${profileId}` };
 
       const prompt = interpolatePrompt(step.prompt || "", context);
-      const cwd = workspaceContext.isInitialized() ? workspaceContext.getWorkspaceRoot() : process.env.HOME;
+      const cwd = _workspaceContext().isInitialized() ? _workspaceContext().getWorkspaceRoot() : process.env.HOME;
       const { agentId } = agentManager.spawnHeadlessAgent(profile, { prompt, cwd });
       return { agentId, profileId, prompt: prompt.slice(0, 100) };
     }
