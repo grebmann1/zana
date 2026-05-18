@@ -107,4 +107,96 @@ describe("daemon-concurrency: registry guard semantics", () => {
     registry.cleanStale();
     expect(fs.existsSync(livePath)).toBe(true);
   });
+
+  // Auditor finding 6fcb24e6: findRunningDaemon must NOT cross workspaces.
+  // When the caller asks "is a daemon running for /repo-A?", a daemon for
+  // /repo-B must never come back as the answer — that triggers a false
+  // positive in the concurrent-daemon guard at startup.
+  describe("findRunningDaemon cross-workspace isolation", () => {
+    it("returns null when workspace is given but only a different-workspace daemon is alive", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A`);
+      const repoB = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-B`);
+      // Daemon alive for /repo-B only.
+      writeEntry({
+        id: `${TEST_PREFIX}-only-b`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoB,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      const found = registry.findRunningDaemon(repoA);
+      expect(found).toBeNull();
+    });
+
+    it("returns the matching entry when workspace is given and a daemon for that workspace is alive", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A-match`);
+      writeEntry({
+        id: `${TEST_PREFIX}-a-match`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoA,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      const found = registry.findRunningDaemon(repoA);
+      expect(found).not.toBeNull();
+      expect(found.id).toBe(`${TEST_PREFIX}-a-match`);
+      expect(found.workspace).toBe(repoA);
+    });
+
+    it("returns any alive daemon when no workspace is specified (workspace-agnostic search still works)", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A-nospec`);
+      writeEntry({
+        id: `${TEST_PREFIX}-any-a`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoA,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      // No workspace argument — function should return SOME alive daemon.
+      // We can't assert it's our test entry because a real local daemon may
+      // also be in the registry; the contract is "non-null when something is
+      // alive", which is exactly what was broken for the workspace=null path.
+      const found = registry.findRunningDaemon(undefined);
+      expect(found).not.toBeNull();
+      // And it must NOT be filtered out by an erroneous workspace check.
+      expect(found.headless).toBe(true);
+    });
+
+    it("returns the workspace-matched daemon when daemons for both workspaces are alive", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A-both`);
+      const repoB = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-B-both`);
+      writeEntry({
+        id: `${TEST_PREFIX}-both-a`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoA,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+      writeEntry({
+        id: `${TEST_PREFIX}-both-b`,
+        port: 47403,
+        pid: process.pid,
+        workspace: repoB,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      const found = registry.findRunningDaemon(repoA);
+      expect(found).not.toBeNull();
+      expect(found.id).toBe(`${TEST_PREFIX}-both-a`);
+      expect(found.workspace).toBe(repoA);
+    });
+  });
 });
