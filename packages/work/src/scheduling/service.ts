@@ -1,29 +1,74 @@
 import * as crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import * as schedulerStore from "./store";
+import { pickBackend, computeNextRunAt } from "./triggers";
+import { everShorthandToMs } from "./yaml-format";
 
-const timers = new Map();
+interface ActiveTrigger {
+  scheduleId: string;
+  kind: "cron" | "interval";
+  handle: any;
+  stop: (handle: any) => void;
+}
+
+const triggers = new Map<string, ActiveTrigger>();
+
+/** Normalize legacy flat fields into the nested schedule.{cron,intervalMs,every} block. */
+function normalizeSchedule(raw: any) {
+  const s = { ...raw };
+  if (!s.schedule || typeof s.schedule !== "object") s.schedule = {};
+  if (s.cron && !s.schedule.cron) s.schedule.cron = s.cron;
+  if (s.intervalMs != null && s.schedule.intervalMs == null) s.schedule.intervalMs = s.intervalMs;
+  if (s.every && !s.schedule.every) s.schedule.every = s.every;
+  // If `every` is set, project it to intervalMs for runtime convenience.
+  if (s.schedule.every && s.schedule.intervalMs == null) {
+    try {
+      s.schedule.intervalMs = everShorthandToMs(s.schedule.every);
+    } catch {
+      // keep as-is; pickBackend will return null
+    }
+  }
+  return s;
+}
 
 export function createSchedule(params) {
-  const schedule = {
-    id: crypto.randomUUID(),
+  const cronExpr = params.cron || params.schedule?.cron || null;
+  let intervalMs = params.intervalMs ?? params.schedule?.intervalMs ?? null;
+  const every = params.every || params.schedule?.every || null;
+  if (intervalMs == null && typeof every === "string") {
+    try {
+      intervalMs = everShorthandToMs(every);
+    } catch {
+      // leave null
+    }
+  }
+
+  const schedule: any = {
+    id: params.id || crypto.randomUUID(),
     name: params.name,
     description: params.description || "",
-    cron: params.cron || null,
-    intervalMs: params.intervalMs || null,
-    action: params.action,
     enabled: params.enabled !== false,
+    schedule: {
+      ...(cronExpr ? { cron: cronExpr } : {}),
+      ...(every ? { every } : {}),
+      ...(intervalMs != null ? { intervalMs } : {}),
+    },
+    action: params.action,
     ownerId: params.ownerId || null,
     ownerName: params.ownerName || null,
-    lastRunAt: null,
-    lastRunResult: null,
-    nextRunAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    status: {
+      lastRunAt: null,
+      lastRunResult: null,
+      nextRunAt: null,
+      runCount: 0,
+    },
   };
 
-  schedulerStore.saveSchedule(schedule);
-  if (schedule.enabled) startTimer(schedule);
+  // Default new schedules to YAML.
+  schedulerStore.saveScheduleYaml(schedule);
+  if (schedule.enabled) startTrigger(schedule);
   return schedule;
 }
 
@@ -44,16 +89,17 @@ export function updateSchedule(id, fields) {
   if (!schedule) return { error: "schedule not found" };
 
   const updated = { ...schedule, ...fields, id, updatedAt: new Date().toISOString() };
-  schedulerStore.saveSchedule(updated);
+  // Preserve the original on-disk format.
+  schedulerStore.saveScheduleSameFormat(updated);
 
-  stopTimer(id);
-  if (updated.enabled) startTimer(updated);
+  stopTrigger(id);
+  if (updated.enabled) startTrigger(updated);
 
   return { ok: true, schedule: updated };
 }
 
 export function deleteSchedule(id) {
-  stopTimer(id);
+  stopTrigger(id);
   return schedulerStore.deleteSchedule(id);
 }
 
@@ -62,8 +108,8 @@ export function enableSchedule(id) {
   if (!schedule) return { error: "schedule not found" };
   schedule.enabled = true;
   schedule.updatedAt = new Date().toISOString();
-  schedulerStore.saveSchedule(schedule);
-  startTimer(schedule);
+  schedulerStore.saveScheduleSameFormat(schedule);
+  startTrigger(schedule);
   return { ok: true, schedule };
 }
 
@@ -72,15 +118,15 @@ export function disableSchedule(id) {
   if (!schedule) return { error: "schedule not found" };
   schedule.enabled = false;
   schedule.updatedAt = new Date().toISOString();
-  schedulerStore.saveSchedule(schedule);
-  stopTimer(id);
+  schedulerStore.saveScheduleSameFormat(schedule);
+  stopTrigger(id);
   return { ok: true, schedule };
 }
 
 async function executeAction(action) {
-  const type = action.type;
+  const type = action?.type;
 
-  if (type === "prompt") {
+  if (type === "prompt" || type === "spawn-agent") {
     const agentManager = require("@zana/core").agents.manager;
     const profileStore = require("@zana/core").agents.profileStore;
     const profile = profileStore.getProfile(action.profileId);
@@ -103,15 +149,24 @@ async function executeAction(action) {
     return { status: "success", orchestratorAgentId: result.orchestratorAgentId };
   }
 
+  if (type === "workflow") {
+    return { status: "skipped", error: "workflow action type not yet wired" };
+  }
+
   if (type === "command") {
     return new Promise((resolve) => {
-      execFile("/bin/sh", ["-c", action.command], { cwd: action.cwd || process.env.HOME }, (err, stdout, stderr) => {
-        if (err) {
-          resolve({ status: "error", error: err.message, exitCode: err.code, stdout, stderr });
-        } else {
-          resolve({ status: "success", stdout, stderr });
+      execFile(
+        "/bin/sh",
+        ["-c", action.command],
+        { cwd: action.cwd || process.env.HOME },
+        (err: any, stdout, stderr) => {
+          if (err) {
+            resolve({ status: "error", error: err.message, exitCode: err.code, stdout, stderr });
+          } else {
+            resolve({ status: "success", stdout, stderr });
+          }
         }
-      });
+      );
     });
   }
 
@@ -123,16 +178,17 @@ async function executeAction(action) {
 }
 
 export async function triggerSchedule(id) {
-  const schedule = schedulerStore.getSchedule(id);
-  if (!schedule) return { error: "schedule not found" };
+  const raw = schedulerStore.getSchedule(id);
+  if (!raw) return { error: "schedule not found" };
+  const schedule = normalizeSchedule(raw);
 
   const startedAt = new Date().toISOString();
-  let actionResult;
+  let actionResult: any;
 
   try {
     actionResult = await executeAction(schedule.action);
-  } catch (err) {
-    actionResult = { status: "error", error: err.message || String(err) };
+  } catch (err: any) {
+    actionResult = { status: "error", error: err?.message || String(err) };
   }
 
   const finishedAt = new Date().toISOString();
@@ -140,42 +196,123 @@ export async function triggerSchedule(id) {
     status: actionResult.status,
     startedAt,
     finishedAt,
-    actionType: schedule.action.type,
+    actionType: schedule.action?.type,
     ...actionResult,
   };
 
-  schedule.lastRunAt = startedAt;
-  schedule.lastRunResult = actionResult.status === "success" ? "success" : `error: ${actionResult.error}`;
+  // Update status block (preferred), keeping legacy flat fields in sync
+  // for any consumer still reading them.
+  const status = (schedule.status && typeof schedule.status === "object") ? { ...schedule.status } : {};
+  status.lastRunAt = startedAt;
+  status.lastRunResult = actionResult.status === "success" ? "success" : `error: ${actionResult.error}`;
+  status.runCount = (typeof status.runCount === "number" ? status.runCount : 0) + 1;
+  status.nextRunAt = computeNextRunAt(schedule, new Date(finishedAt));
+
+  schedule.status = status;
+  schedule.lastRunAt = status.lastRunAt;
+  schedule.lastRunResult = status.lastRunResult;
+  schedule.nextRunAt = status.nextRunAt;
   schedule.updatedAt = new Date().toISOString();
-  schedulerStore.saveSchedule(schedule);
+
+  schedulerStore.saveScheduleSameFormat(schedule);
   schedulerStore.appendRunResult(id, result);
 
   return { ok: true, schedule, result };
 }
 
-function startTimer(schedule) {
-  if (!schedule.intervalMs) return;
-  stopTimer(schedule.id);
-  const timer = setInterval(() => {
-    triggerSchedule(schedule.id).catch((err) => {
-      console.error(`[scheduler] timer trigger failed for ${schedule.id}:`, err.message || err);
+function startTrigger(rawSchedule: any) {
+  const schedule = normalizeSchedule(rawSchedule);
+  if (!schedule.enabled) return;
+  stopTrigger(schedule.id);
+
+  const picked = pickBackend(schedule);
+  if (!picked) {
+    console.warn(`[scheduler] no backend matched for schedule ${schedule.id} — skipping start`);
+    return;
+  }
+
+  let handle: any;
+  try {
+    handle = picked.start(schedule.id, picked.arg, () => {
+      triggerSchedule(schedule.id).catch((err: any) => {
+        console.error(`[scheduler] trigger fire failed for ${schedule.id}:`, err?.message || err);
+      });
     });
-  }, schedule.intervalMs);
-  timer.unref();
-  timers.set(schedule.id, timer);
+  } catch (err: any) {
+    console.error(`[scheduler] failed to start trigger for ${schedule.id}:`, err?.message || err);
+    return;
+  }
+
+  triggers.set(schedule.id, {
+    scheduleId: schedule.id,
+    kind: picked.kind,
+    handle,
+    stop: picked.stop,
+  });
+
+  // Persist nextRunAt on start so `zana schedule list` is accurate.
+  const next = computeNextRunAt(schedule);
+  if (next) {
+    const updated = { ...schedule };
+    updated.status = { ...(schedule.status || {}), nextRunAt: next };
+    updated.nextRunAt = next;
+    try {
+      schedulerStore.saveScheduleSameFormat(updated);
+    } catch {
+      // best-effort
+    }
+  }
 }
 
-function stopTimer(id) {
-  const timer = timers.get(id);
-  if (timer) {
-    clearInterval(timer);
-    timers.delete(id);
+function stopTrigger(id: string) {
+  const entry = triggers.get(id);
+  if (entry) {
+    try {
+      entry.stop(entry.handle);
+    } catch {
+      // ignore
+    }
+    triggers.delete(id);
   }
 }
 
 export function stopAll() {
-  for (const [id] of timers) {
-    stopTimer(id);
-  }
+  for (const id of Array.from(triggers.keys())) stopTrigger(id);
 }
 
+/**
+ * Read every schedule from disk and start triggers for the enabled ones.
+ * Idempotent — re-running stops then restarts triggers.
+ */
+export function loadFromDisk() {
+  let started = 0;
+  let skipped = 0;
+  const all = schedulerStore.listSchedules();
+  for (const s of all) {
+    if (!s || !s.id) {
+      skipped++;
+      continue;
+    }
+    if (!s.enabled) {
+      skipped++;
+      continue;
+    }
+    try {
+      startTrigger(s);
+      started++;
+    } catch (err: any) {
+      console.warn(`[scheduler] loadFromDisk: failed to start ${s.id}:`, err?.message || err);
+      skipped++;
+    }
+  }
+  console.log(`[scheduler] loadFromDisk: started=${started} skipped=${skipped} total=${all.length}`);
+  return { started, skipped, total: all.length };
+}
+
+/** Test-only helper: snapshot the active triggers map. */
+export function _getActiveTriggers() {
+  return Array.from(triggers.values()).map((t) => ({
+    scheduleId: t.scheduleId,
+    kind: t.kind,
+  }));
+}

@@ -672,6 +672,9 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
     case "schedule_trigger": {
       return _schedulerService().triggerSchedule(params.id);
     }
+    case "schedule_reload": {
+      return _schedulerService().loadFromDisk();
+    }
 
     // --- Event Bus ---
     case "event_emit": {
