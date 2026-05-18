@@ -575,7 +575,7 @@ const SCHEDULER_TOOLS = [
             profileId: { type: "string" },
             prompt: { type: "string" },
             teamId: { type: "string" },
-            command: { type: "string" },
+            command: { type: "array", items: { type: "string" }, description: "argv array — first element is the binary, rest are args. Shell strings are rejected for safety. Example: [\"npm\", \"run\", \"build\"]" },
             cwd: { type: "string" },
             toolName: { type: "string" },
             toolArgs: { type: "object" },
