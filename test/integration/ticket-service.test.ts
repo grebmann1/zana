@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 
 const TICKETS_DIR = path.join(os.homedir(), ".zana", "tickets");
 const SPRINTS_DIR = path.join(os.homedir(), ".zana", "sprints");
@@ -41,10 +42,14 @@ function cleanupTestFiles(prefix) {
   } catch {}
 }
 
-const PREFIX = `test-${Date.now()}`;
+const BASE_PREFIX = `test-${Date.now()}`;
+let PREFIX = BASE_PREFIX;
 
 describe("ticket-service", () => {
   beforeEach(() => {
+    // Unique per-test PREFIX to avoid cross-test contamination from
+    // leftover tickets, recurring schedulers, or partial cleanups.
+    PREFIX = `${BASE_PREFIX}-${crypto.randomUUID()}`;
     cleanupTestFiles(PREFIX);
   });
 
