@@ -357,6 +357,38 @@ export function spawnHeadlessAgent(profile, options = {}) {
       const resilienceMod = require("../modules/loader").getModule?.("resilience");
       resilienceMod?.api?.recordSuccess?.("agent-spawn");
     }
+    // Persist the terminated agent's record to <projectDir>/runs/<agentId>.json
+    // so it survives daemon restarts. Without this, the schedule history's
+    // agentId pointer dangles after a restart.
+    try {
+      const fsMod = require("node:fs");
+      const pathMod = require("node:path");
+      const workspaceContext = require("../project/workspace-context");
+      const runsDir = workspaceContext.getProjectPaths().runsDir;
+      fsMod.mkdirSync(runsDir, { recursive: true });
+
+      // Truncate runaway result text (e.g. an agent stuck in a loop) before serializing.
+      const MAX_RESULT_BYTES = 100 * 1024;
+      const { childProcess: _omit, ...serializable } = agent as any;
+      const trimmedResult =
+        typeof serializable.result === "string" && serializable.result.length > MAX_RESULT_BYTES
+          ? serializable.result.slice(0, MAX_RESULT_BYTES) + `\n…[truncated ${serializable.result.length - MAX_RESULT_BYTES} chars]`
+          : serializable.result;
+
+      const record = {
+        ...serializable,
+        result: trimmedResult,
+        terminatedAt: new Date().toISOString(),
+        exitCode: code,
+      };
+      fsMod.writeFileSync(
+        pathMod.join(runsDir, `${agentId}.json`),
+        JSON.stringify(record, null, 2),
+        "utf8"
+      );
+    } catch (err: any) {
+      console.warn(`[agent-manager] failed to persist run record for ${agentId}: ${err?.message || err}`);
+    }
   });
 
   return { agentId, terminalId };
