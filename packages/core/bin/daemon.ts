@@ -377,21 +377,33 @@ async function main() {
   // Concurrent-daemon guard. Multiple daemons against the same workspace cause
   // duplicate scheduler triggers (8 daemons → 8 simultaneous fires per schedule).
   // Drop stale registry entries first, then refuse to start if a live one matches.
+  //
+  // Strict mode: this guard is the source of truth. If the registry module
+  // itself fails to load (partial build, missing module, transitive import
+  // error) we MUST refuse to start — silently swallowing the error is exactly
+  // how we got duplicate-scheduler bugs in the first place. Better to fail
+  // loudly than to double-spawn.
+  let registry: any;
   try {
-    const registry = require("../src/daemon/registry.js");
-    registry.cleanStale();
-    const existing = registry.findRunningDaemon(workspace);
-    if (existing) {
-      console.error(
-        `[zana-daemon] another daemon is already running for ${workspace} ` +
-        `(id=${existing.id} pid=${existing.pid} port=${existing.port}). ` +
-        `Exiting. Use 'zana stop ${existing.id}' to stop it first.`
-      );
-      try { fs.unlinkSync(pidFile); } catch {}
-      process.exit(2);
-    }
+    registry = require("../src/daemon/registry.js");
   } catch (err: any) {
-    console.warn(`[zana-daemon] concurrent-daemon guard skipped: ${err?.message || err}`);
+    console.error(
+      `[zana-daemon] FATAL: cannot load daemon registry — refusing to start ` +
+      `to prevent duplicate scheduling: ${err?.message || err}`
+    );
+    try { fs.unlinkSync(pidFile); } catch {}
+    process.exit(3);
+  }
+  registry.cleanStale();
+  const existing = registry.findRunningDaemon(workspace);
+  if (existing) {
+    console.error(
+      `[zana-daemon] another daemon is already running for ${workspace} ` +
+      `(id=${existing.id} pid=${existing.pid} port=${existing.port}). ` +
+      `Exiting. Use 'zana stop ${existing.id}' to stop it first.`
+    );
+    try { fs.unlinkSync(pidFile); } catch {}
+    process.exit(2);
   }
 
   const hive = await core.init({

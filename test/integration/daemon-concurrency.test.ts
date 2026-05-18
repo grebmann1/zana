@@ -107,4 +107,132 @@ describe("daemon-concurrency: registry guard semantics", () => {
     registry.cleanStale();
     expect(fs.existsSync(livePath)).toBe(true);
   });
+
+  // Auditor finding 6fcb24e6: findRunningDaemon must NOT cross workspaces.
+  // When the caller asks "is a daemon running for /repo-A?", a daemon for
+  // /repo-B must never come back as the answer — that triggers a false
+  // positive in the concurrent-daemon guard at startup.
+  describe("findRunningDaemon cross-workspace isolation", () => {
+    it("returns null when workspace is given but only a different-workspace daemon is alive", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A`);
+      const repoB = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-B`);
+      // Daemon alive for /repo-B only.
+      writeEntry({
+        id: `${TEST_PREFIX}-only-b`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoB,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      const found = registry.findRunningDaemon(repoA);
+      expect(found).toBeNull();
+    });
+
+    it("returns the matching entry when workspace is given and a daemon for that workspace is alive", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A-match`);
+      writeEntry({
+        id: `${TEST_PREFIX}-a-match`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoA,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      const found = registry.findRunningDaemon(repoA);
+      expect(found).not.toBeNull();
+      expect(found.id).toBe(`${TEST_PREFIX}-a-match`);
+      expect(found.workspace).toBe(repoA);
+    });
+
+    it("returns any alive daemon when no workspace is specified (workspace-agnostic search still works)", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A-nospec`);
+      writeEntry({
+        id: `${TEST_PREFIX}-any-a`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoA,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      // No workspace argument — function should return SOME alive daemon.
+      // We can't assert it's our test entry because a real local daemon may
+      // also be in the registry; the contract is "non-null when something is
+      // alive", which is exactly what was broken for the workspace=null path.
+      const found = registry.findRunningDaemon(undefined);
+      expect(found).not.toBeNull();
+      // And it must NOT be filtered out by an erroneous workspace check.
+      expect(found.headless).toBe(true);
+    });
+
+    it("returns the workspace-matched daemon when daemons for both workspaces are alive", () => {
+      const repoA = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-A-both`);
+      const repoB = path.join(os.tmpdir(), `${TEST_PREFIX}-repo-B-both`);
+      writeEntry({
+        id: `${TEST_PREFIX}-both-a`,
+        port: 47402,
+        pid: process.pid,
+        workspace: repoA,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+      writeEntry({
+        id: `${TEST_PREFIX}-both-b`,
+        port: 47403,
+        pid: process.pid,
+        workspace: repoB,
+        headless: true,
+        startedAt: new Date().toISOString(),
+        lastHeartbeat: new Date().toISOString(),
+      });
+
+      const found = registry.findRunningDaemon(repoA);
+      expect(found).not.toBeNull();
+      expect(found.id).toBe(`${TEST_PREFIX}-both-a`);
+      expect(found.workspace).toBe(repoA);
+    });
+  });
+
+  // Auditor finding 04d83c61: the daemon entrypoint previously wrapped the
+  // registry require in a try/catch that printed a console.warn and continued
+  // — meaning a broken registry module would silently bypass the guard and
+  // re-introduce duplicate scheduling. Lock the strict-mode behavior in via a
+  // structural assertion against bin/daemon.ts. Brittle by design.
+  it("daemon.ts refuses to start when the registry fails to load (no silent swallow)", () => {
+    const daemonSrcPath = path.resolve(
+      __dirname,
+      "..",
+      "..",
+      "packages",
+      "core",
+      "bin",
+      "daemon.ts",
+    );
+    const src = fs.readFileSync(daemonSrcPath, "utf8");
+
+    // The registry-load failure path must terminate the process. Match the
+    // FATAL message wording up to a process.exit() call so a future refactor
+    // that reverts to console.warn + continue will fail this test.
+    expect(src).toMatch(/cannot load daemon registry[\s\S]+?process\.exit\(/);
+
+    // The catch block for the registry require must NOT downgrade to a
+    // warning — that's the regression we're guarding against. Slice from the
+    // registry require through the next process.exit and assert that window
+    // both terminates the process AND does not contain console.warn.
+    const requireIdx = src.indexOf('require("../src/daemon/registry');
+    expect(requireIdx).toBeGreaterThan(-1);
+    const tail = src.slice(requireIdx);
+    const exitIdx = tail.indexOf("process.exit");
+    expect(exitIdx).toBeGreaterThan(-1);
+    const window = tail.slice(0, exitIdx + "process.exit(3)".length);
+    expect(window).toMatch(/catch[\s\S]*FATAL[\s\S]*process\.exit/);
+    expect(window).not.toMatch(/console\.warn/);
+  });
 });

@@ -81,6 +81,79 @@ describe("scheduler result-summary capture", () => {
     expect(updated.finalStatus).toBe("success");
   });
 
+  it("marks finalStatus='error' when agent terminates with non-zero exitCode (SIGKILL)", async () => {
+    const sched = svc.createSchedule({
+      name: "killed-agent-test",
+      intervalMs: 60000,
+      enabled: false,
+      action: { type: "spawn-agent", profileId: "code-reviewer", prompt: "x" },
+    });
+
+    const fakeAgentId = "agent-killed-137";
+    store.appendRunResult(sched.id, {
+      status: "success",
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      actionType: "spawn-agent",
+      agentId: fakeAgentId,
+      finalStatus: "pending",
+      summary: "",
+    });
+
+    svc._ensureBusListenerForTest(bus, "agent:terminated");
+    svc._trackAgentForTest(fakeAgentId, sched.id);
+
+    // Simulate SIGKILL: exitCode 137, reason "killed"
+    bus.emit("agent:terminated", {
+      agentId: fakeAgentId,
+      reason: "killed",
+      exitCode: 137,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const history = store.getRunHistory(sched.id);
+    const updated = history.find((r: any) => r.agentId === fakeAgentId);
+    expect(updated).toBeTruthy();
+    // The bug: previously this would be "success" because the listener
+    // looked at agent.state === "terminated" rather than exitCode.
+    expect(updated.finalStatus).toBe("error");
+  });
+
+  it("marks finalStatus='success' when agent terminates with exitCode === 0", async () => {
+    const sched = svc.createSchedule({
+      name: "clean-exit-test",
+      intervalMs: 60000,
+      enabled: false,
+      action: { type: "spawn-agent", profileId: "code-reviewer", prompt: "x" },
+    });
+
+    const fakeAgentId = "agent-clean-exit";
+    store.appendRunResult(sched.id, {
+      status: "success",
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      actionType: "spawn-agent",
+      agentId: fakeAgentId,
+      finalStatus: "pending",
+      summary: "",
+    });
+
+    svc._ensureBusListenerForTest(bus, "agent:terminated");
+    svc._trackAgentForTest(fakeAgentId, sched.id);
+
+    bus.emit("agent:terminated", {
+      agentId: fakeAgentId,
+      reason: "completed",
+      exitCode: 0,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const history = store.getRunHistory(sched.id);
+    const updated = history.find((r: any) => r.agentId === fakeAgentId);
+    expect(updated).toBeTruthy();
+    expect(updated.finalStatus).toBe("success");
+  });
+
   it("updateRunResult is a no-op for unknown agentId", () => {
     const sched = svc.createSchedule({
       name: "noop-test",

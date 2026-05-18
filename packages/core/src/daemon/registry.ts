@@ -155,10 +155,13 @@ export function findRunningDaemon(workspace) {
   const alive = listAlive();
   if (alive.length === 0) return null;
   if (workspace) {
-    const match = alive.find((e) => e.workspace === workspace && e.headless);
-    if (match) return match;
+    // Caller specified a workspace — only return a daemon for THAT workspace.
+    // Falling through to "any headless daemon" here causes false positives in
+    // the concurrent-daemon guard: a stale daemon for /repo-A would block a
+    // legitimate startup for /repo-B (auditor finding 6fcb24e6).
+    return alive.find((e) => e.workspace === workspace && e.headless) || null;
   }
-  const headless = alive.find((e) => e.headless);
-  return headless || alive[0];
+  // No workspace specified — caller wants any running daemon.
+  return alive.find((e) => e.headless) || alive[0];
 }
 
