@@ -199,4 +199,40 @@ describe("daemon-concurrency: registry guard semantics", () => {
       expect(found.workspace).toBe(repoA);
     });
   });
+
+  // Auditor finding 04d83c61: the daemon entrypoint previously wrapped the
+  // registry require in a try/catch that printed a console.warn and continued
+  // — meaning a broken registry module would silently bypass the guard and
+  // re-introduce duplicate scheduling. Lock the strict-mode behavior in via a
+  // structural assertion against bin/daemon.ts. Brittle by design.
+  it("daemon.ts refuses to start when the registry fails to load (no silent swallow)", () => {
+    const daemonSrcPath = path.resolve(
+      __dirname,
+      "..",
+      "..",
+      "packages",
+      "core",
+      "bin",
+      "daemon.ts",
+    );
+    const src = fs.readFileSync(daemonSrcPath, "utf8");
+
+    // The registry-load failure path must terminate the process. Match the
+    // FATAL message wording up to a process.exit() call so a future refactor
+    // that reverts to console.warn + continue will fail this test.
+    expect(src).toMatch(/cannot load daemon registry[\s\S]+?process\.exit\(/);
+
+    // The catch block for the registry require must NOT downgrade to a
+    // warning — that's the regression we're guarding against. Slice from the
+    // registry require through the next process.exit and assert that window
+    // both terminates the process AND does not contain console.warn.
+    const requireIdx = src.indexOf('require("../src/daemon/registry');
+    expect(requireIdx).toBeGreaterThan(-1);
+    const tail = src.slice(requireIdx);
+    const exitIdx = tail.indexOf("process.exit");
+    expect(exitIdx).toBeGreaterThan(-1);
+    const window = tail.slice(0, exitIdx + "process.exit(3)".length);
+    expect(window).toMatch(/catch[\s\S]*FATAL[\s\S]*process\.exit/);
+    expect(window).not.toMatch(/console\.warn/);
+  });
 });
