@@ -10,7 +10,9 @@
   "engines": { "node": ">=20.0.0" },
   "dependencies": {
     "@zana/core": "*",
-    "@zana/extras": "*"
+    "@zana/extras": "*",
+    "node-cron": "^3.0.3",
+    "yaml": "^2.5.0"
   },
   "files": ["dist/"]
 }
