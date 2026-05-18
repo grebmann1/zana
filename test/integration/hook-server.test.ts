@@ -4,6 +4,7 @@ import { startHookServer, setSwarmModules } from "@zana/server/src/hooks/server.
 
 let server;
 let port;
+let onHookImpl: (data: any) => any = () => {};
 
 // Mock swarm modules
 const mockRouter = {
@@ -20,7 +21,7 @@ const mockGetAgents = () => [
 
 beforeAll(async () => {
   setSwarmModules({ router: mockRouter, events: mockEvents, getAgents: mockGetAgents });
-  server = await startHookServer(() => {}, async () => ({ ok: true }), 47900);
+  server = await startHookServer((data) => onHookImpl(data), async () => ({ ok: true }), 47900);
   port = server.port;
 });
 
@@ -110,6 +111,24 @@ describe("hook-server", () => {
       const res = await httpPost("/swarm/inbox", { body: "hello" });
       expect(res.status).toBe(400);
     });
+
+    it("rejects invalid toAgentId format (path traversal)", async () => {
+      const res = await httpPost("/swarm/inbox", {
+        toAgentId: "../../../etc/passwd",
+        body: "hello",
+      });
+      expect(res.status).toBe(400);
+      expect(JSON.parse(res.body).error).toContain("invalid agentId format");
+    });
+
+    it("accepts valid toAgentId", async () => {
+      const res = await httpPost("/swarm/inbox", {
+        toAgentId: "agent-abc",
+        body: "hello",
+      });
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body).ok).toBe(true);
+    });
   });
 
   describe("POST /swarm/events", () => {
@@ -126,8 +145,22 @@ describe("hook-server", () => {
 
   describe("POST /hook", () => {
     it("returns 204 on valid hook payload", async () => {
+      onHookImpl = () => {};
       const res = await httpPost("/hook", { hook_event_name: "PreToolUse", tool_name: "Read" });
       expect(res.status).toBe(204);
+    });
+
+    it("returns 500 with error JSON when onHook throws", async () => {
+      onHookImpl = () => { throw new Error("boom from onHook"); };
+      try {
+        const res = await httpPost("/hook", { hook_event_name: "PreToolUse" });
+        expect(res.status).toBe(500);
+        const parsed = JSON.parse(res.body);
+        expect(parsed.error).toBe("hook handler failed");
+        expect(parsed.message).toContain("boom from onHook");
+      } finally {
+        onHookImpl = () => {};
+      }
     });
   });
 

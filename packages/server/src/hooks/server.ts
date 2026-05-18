@@ -10,6 +10,34 @@ const eventBusService: any = new Proxy({}, { get: (_t, p) => _core().events.serv
 function DEFAULT_PORT() { return _core().config.DEFAULT_HOOK_PORT; }
 const MAX_BODY_BYTES = 256 * 1024;
 const AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const HANDLER_TIMEOUT_MS = 30_000;
+const SHUTDOWN_DRAIN_MS = 5_000;
+
+async function dispatchWithTimeout(handler, req, res, ...args) {
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (!res.writableEnded) {
+      res.statusCode = 503;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "handler timeout (30s)" }));
+    }
+  }, HANDLER_TIMEOUT_MS);
+  try {
+    await Promise.resolve(handler(req, res, ...args));
+  } catch (err: any) {
+    if (!res.writableEnded) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "handler error", message: err?.message || String(err) }));
+    } else {
+      console.warn("[hook-server] handler threw after response:", err?.message || err);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+  return timedOut;
+}
 
 let swarmRouter = null;
 let swarmEvents = null;
@@ -41,7 +69,7 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
     let port = preferredPort;
     let attempts = 0;
 
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
       const remote = req.socket.remoteAddress;
       const loopback =
         remote === "127.0.0.1" ||
@@ -58,22 +86,24 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
 
       if (handler) {
         if (req.method === "GET") {
-          handler(req, res, parsed);
+          await dispatchWithTimeout(handler, req, res, parsed);
         } else {
-          readBody(req, (err, body) => {
+          readBody(req, async (err, body) => {
             if (err) {
               res.statusCode = err === "too_large" ? 413 : 400;
               res.end();
               return;
             }
+            let data;
             try {
-              const data = JSON.parse(body);
-              handler(req, res, data);
-            } catch (parseErr) {
+              data = JSON.parse(body);
+            } catch (parseErr: any) {
               console.warn("[hook-server] JSON parse error:", parseErr.message || parseErr);
               res.statusCode = 400;
               res.end();
+              return;
             }
+            await dispatchWithTimeout(handler, req, res, data);
           });
         }
         return;
@@ -81,6 +111,13 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
 
       res.statusCode = 404;
       res.end();
+    });
+
+    // Track active sockets for graceful shutdown drain
+    const sockets = new Set<any>();
+    server.on("connection", (sock) => {
+      sockets.add(sock);
+      sock.on("close", () => sockets.delete(sock));
     });
 
     server.on("error", (err) => {
@@ -107,9 +144,26 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
       resolve({
         port,
         stop() {
-          try { server.close(); } catch (err) {
-            console.warn("[hook-server] error closing server:", err.message || err);
-          }
+          return new Promise<void>((resolveStop) => {
+            let done = false;
+            const finish = () => { if (!done) { done = true; resolveStop(); } };
+            try {
+              server.close(() => finish());
+            } catch (err: any) {
+              console.warn("[hook-server] error closing server:", err?.message || err);
+              finish();
+              return;
+            }
+            setTimeout(() => {
+              if (!done) {
+                // Force-close any sockets that didn't drain within the deadline
+                for (const s of sockets) {
+                  try { s.destroy(); } catch {}
+                }
+                finish();
+              }
+            }, SHUTDOWN_DRAIN_MS);
+          });
         },
       });
     });
@@ -320,12 +374,18 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
   });
 
   // POST /hook — Claude hook events
-  registerRoute("POST", "/hook", (_req, res, data) => {
-    try { onHook(data); } catch (err) {
-      console.warn("[hook-server] onHook threw:", err);
+  registerRoute("POST", "/hook", async (_req, res, data) => {
+    try {
+      await Promise.resolve(onHook(data));
+    } catch (err: any) {
+      console.warn(`[hook-server] onHook threw: ${err?.message || err}`);
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "hook handler failed", message: err?.message || String(err) }));
+      return;
     }
 
-    // Audit trail for agent lifecycle events
+    // Audit trail for agent lifecycle events (best-effort)
     try {
       const hookEvent = data.hook_event_name;
       if (hookEvent === "SessionEnd" || hookEvent === "Stop") {
@@ -334,7 +394,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
           appendAudit({ action: "agent_completed", agentId, hookEvent, result: data.stop_reason || null });
         }
       }
-    } catch (auditErr) {
+    } catch (auditErr: any) {
       console.warn("[hook-server] audit write failed:", auditErr.message || auditErr);
     }
 
@@ -382,6 +442,12 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ error: "toAgentId required" }));
+      return;
+    }
+    if (!AGENT_ID_PATTERN.test(toAgentId)) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "invalid agentId format" }));
       return;
     }
     swarmRouter.deliverLocal(toAgentId, data);
