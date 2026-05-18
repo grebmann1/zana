@@ -2,8 +2,8 @@ import * as crypto from "node:crypto";
 function _core() { return require("@zana/core"); }
 function _agentManager(): any { return _core().agents.manager; }
 function _profileStore(): any { return _core().agents.profileStore; }
-function _bus(): any { return _core().events.bus.bus; }
-function _EVENTS(): any { return _core().events.bus.EVENTS; }
+function _bus(): any { return _core().events.bus; }
+function _EVENTS(): any { return _core().events.EVENTS; }
 
 const plans = new Map();
 const actionRegistry = new Map();

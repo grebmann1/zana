@@ -58,7 +58,10 @@ module.exports = {
     terminalRelay: require("./agents/terminal-relay"),
   },
   events: {
-    bus: require("./events/bus"),
+    // Flat shape on purpose: bus IS the EventEmitter, EVENTS IS the constants.
+    // Don't access .bus.bus — that's the wrong (legacy) shape.
+    bus: require("./events/bus").bus,
+    EVENTS: require("./events/bus").EVENTS,
     service: require("./events/service"),
     store: require("./events/store"),
     log: require("./events/log"),

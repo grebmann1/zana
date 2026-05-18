@@ -1,12 +1,12 @@
 {
   "version": 1,
   "name": "zana",
-  "createdAt": "2026-05-14T13:38:38.875Z",
-  "createdBy": "hive-init",
-  "settings": {
-    "maxConcurrentAgents": 10,
-    "hookPort": 47400,
-    "autoArchiveSessions": true,
-    "archiveAfterDays": 30
-  }
+  "createdAt": "2026-05-18T00:00:00.000Z",
+  "createdBy": "zana-init",
+  "system": {
+    "cpuLoadThreshold": 9.99,
+    "minFreeMemoryPct": 0,
+    "agentTimeoutMinutes": 4
+  },
+  "modules": {}
 }

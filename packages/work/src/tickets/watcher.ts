@@ -38,7 +38,7 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
   // This replaces the old fs.watch approach: the SQLite-backed ticket store
   // doesn't write JSON files, so fs.watch never fired. Bus events fire on
   // every state change regardless of the underlying store.
-  const { bus } = require("@zana/core").events.bus;
+  const { bus } = require("@zana/core").events;
   const listener = (msg) => {
     if (msg && msg.ticketId) scheduleCheck(msg.ticketId);
   };
@@ -382,7 +382,7 @@ function markBlocked(ticket) {
       "Automation",
       `⚠️ BLOCKED: This ticket has failed review ${ticket.reworkCount} times. Automatic rework cycles exhausted. Human intervention required.\n\nPlease review the comment history, identify the root issue, and either:\n- Provide guidance and move back to "in-progress" manually\n- Reassign to a different agent profile\n- Break into smaller tickets`
     );
-    const { bus } = require("@zana/core").events.bus;
+    const { bus } = require("@zana/core").events;
     bus.emit("ticket:blocked", { ticketId: ticket.id, reason: "max_rework_cycles", reworkCount: ticket.reworkCount });
     log(`Ticket ${ticket.id} marked as blocked — human intervention required`);
   } catch (err) {

@@ -43,7 +43,7 @@ describe("ticket-watcher in-process bus delivery", () => {
 
     watcher = await import("@zana/work/src/tickets/watcher.ts");
     const core: any = await import("@zana/core");
-    const bus = core.events.bus.bus;
+    const bus = core.events.bus;
 
     // Inject a fake ticket reader so we don't depend on the real store
     // (in vitest, module isolation means require("./service") inside the
@@ -140,7 +140,7 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
 
     watcher = await import("@zana/work/src/tickets/watcher.ts");
     const core: any = await import("@zana/core");
-    const bus = core.events.bus.bus;
+    const bus = core.events.bus;
 
     const fakeTicket = {
       id: "t-pass-" + Date.now(),
@@ -233,7 +233,7 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
 
     watcher = await import("@zana/work/src/tickets/watcher.ts");
     const core: any = await import("@zana/core");
-    const bus = core.events.bus.bus;
+    const bus = core.events.bus;
 
     const fakeTicket = {
       id: "t-fail-" + Date.now(),
