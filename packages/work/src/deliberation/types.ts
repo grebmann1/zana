@@ -115,4 +115,34 @@ export interface Deliberation {
   // helpers; mismatch throws StaleDeliberationError so the caller can reload
   // and retry. New deliberations start at version: 0.
   version: number;
+
+  // T6-FU-3 — append-only audit trail of voters dropped during (re)assembly.
+  // One entry per assembleCouncil/reassembleCouncil call that resulted in a
+  // READY transition AND dropped at least one voter. The event log
+  // (deliberation:degraded) carries the same payload, but persisting here
+  // means audit consumers can answer "why is voter X missing from this
+  // round?" by reading the deliberation alone.
+  degradation?: DegradationEntry[];
+}
+
+export interface DroppedVoterAudit {
+  profileId: string;
+  // Mirrors ProbeFailureKind from @zana/core's deliberation-events.ts.
+  // Kept as a string union here to avoid a hard import edge.
+  reason:
+    | "timeout"
+    | "validation"
+    | "misconfig"
+    | "auth"
+    | "rate_limit"
+    | "quota"
+    | "transport"
+    | "spawn";
+  detail?: string;
+}
+
+export interface DegradationEntry {
+  round: number;                 // round at the time of (re)assembly
+  dropped: DroppedVoterAudit[];
+  ts: string;                    // ISO
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -24,6 +24,16 @@ describe("checkpoint store: kind + expiresAt TTL", () => {
   });
 
   afterEach(() => {
+    // T5x-cross-proc — ordinary ops must not leave .tmp.* or .lock orphans.
+    try {
+      const entries = readdirSync(join(tmpRoot, "checkpoints"));
+      const tmp = entries.filter((f) => f.includes(".tmp."));
+      const lock = entries.filter((f) => f.endsWith(".lock"));
+      expect(tmp).toEqual([]);
+      expect(lock).toEqual([]);
+    } catch {
+      // checkpoints dir may not exist for some early-failure paths; ignore.
+    }
     try { rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
   });
 

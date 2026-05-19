@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as manager from "@zana/core/src/agents/manager.ts";
 import * as probeConfig from "@zana/core/src/agents/probe-config.ts";
+import * as probeCache from "@zana/core/src/agents/probe-cache.ts";
 import { bus, EVENTS } from "@zana/core/src/events/bus.ts";
 import type { AgentProbedPayload } from "@zana/core/src/events/deliberation-events.ts";
 
@@ -97,6 +98,13 @@ function makeFakeDeps(
 }
 
 describe("probeAgent", () => {
+  // T6-FU-2 — clear the (profileId, modelId) cache between tests so a passing
+  // probe in test N doesn't short-circuit a re-spawn assertion in test N+1.
+  // (The default probe-config TTL is 5min, well over any single test run.)
+  beforeEach(() => {
+    probeCache.clearProbeCache();
+  });
+
   it("returns ok:true when all three legs pass", async () => {
     const { deps } = makeFakeDeps((prompt) => {
       if (prompt.includes("42")) return { result: "The answer is 42." };
@@ -363,6 +371,260 @@ describe("probeAgent", () => {
       const factualFailure = out.failures.find((f) => f.leg === "factual");
       expect(factualFailure).toBeDefined();
       expect(factualFailure!.raw).toBe(longString.slice(0, 8));
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // FU-T3a-3 — classifySpawnError splits the legacy "spawn" bucket into
+  // typed retry-policy buckets (auth/rate_limit/quota/transport).
+  // ---------------------------------------------------------------------
+  describe("classifySpawnError (FU-T3a-3)", () => {
+    it("HTTP 401/403/unauthorized strings → 'auth'", () => {
+      expect(manager.classifySpawnError("HTTP 401 unauthorized")).toBe("auth");
+      expect(manager.classifySpawnError("403 forbidden")).toBe("auth");
+      expect(manager.classifySpawnError("invalid_token: bad cred")).toBe("auth");
+    });
+
+    it("rate-limit signals → 'rate_limit'", () => {
+      expect(manager.classifySpawnError("rate limited (429)")).toBe("rate_limit");
+      expect(manager.classifySpawnError("too many requests")).toBe("rate_limit");
+    });
+
+    it("payment/quota signals → 'quota'", () => {
+      expect(manager.classifySpawnError("payment required")).toBe("quota");
+      expect(manager.classifySpawnError("HTTP 402")).toBe("quota");
+      expect(manager.classifySpawnError("quota exhausted for org X")).toBe("quota");
+    });
+
+    it("network/DNS/TLS signals → 'transport'", () => {
+      expect(manager.classifySpawnError("ENOTFOUND api.foo")).toBe("transport");
+      expect(manager.classifySpawnError("ECONNREFUSED 127.0.0.1:443")).toBe("transport");
+      expect(manager.classifySpawnError("TLS certificate verify failed")).toBe("transport");
+    });
+
+    it("ENOENT/EACCES on the spawned binary → 'spawn' (legacy)", () => {
+      expect(manager.classifySpawnError("ENOENT spawn /bin/x")).toBe("spawn");
+      expect(manager.classifySpawnError("EACCES: permission denied")).toBe("spawn");
+    });
+
+    it("nondescript error → 'spawn' (legacy fallback)", () => {
+      expect(manager.classifySpawnError("nondescript blow-up")).toBe("spawn");
+      expect(manager.classifySpawnError("")).toBe("spawn");
+      expect(manager.classifySpawnError(undefined)).toBe("spawn");
+    });
+
+    it("Error objects: matches on .message and .code", () => {
+      const e1: any = new Error("HTTP 429 rate limit");
+      expect(manager.classifySpawnError(e1)).toBe("rate_limit");
+      const e2: any = new Error("nope");
+      e2.code = "ENOTFOUND";
+      expect(manager.classifySpawnError(e2)).toBe("transport");
+    });
+
+    it("probe with simulated 429 spawn error gets kind:'rate_limit', not 'spawn'", async () => {
+      // Drive the spawn-error branch in _runProbeLeg by making the FACTUAL leg
+      // throw with a 429 message. The other legs run normally.
+      const { deps } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) {
+          // marker — we inject the throw via a wrapper below
+          return { result: "" };
+        }
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+      const realSpawn = deps.spawnHeadlessAgent;
+      let calls = 0;
+      deps.spawnHeadlessAgent = (profile: any, options: any) => {
+        calls++;
+        if (calls === 1) {
+          throw new Error("upstream gateway: HTTP 429 rate limit hit");
+        }
+        return realSpawn(profile, options);
+      };
+
+      const out = await manager.probeAgent(makeProfile(), undefined, deps);
+      const factualFailure = out.failures.find((f) => f.leg === "factual");
+      expect(factualFailure).toBeDefined();
+      expect(factualFailure!.kind).toBe("rate_limit");
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // T6-FU-2 — probe-result cache by (profileId, modelId)
+  // ---------------------------------------------------------------------
+  describe("probeAgent (profileId, modelId) cache (T6-FU-2)", () => {
+    afterEach(() => {
+      probeCache.clearProbeCache();
+      probeConfig.resetProbeConfig();
+    });
+
+    it("caches a successful probe; second call within TTL is a cache hit (no re-spawn)", async () => {
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { result: "42" };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+
+      const profile = makeProfile();
+      const first = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      expect(first.ok).toBe(true);
+      expect(first.cached).toBe(false);
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+      expect(spawnsAfterFirst).toBeGreaterThan(0);
+
+      const second = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      expect(second.ok).toBe(true);
+      expect(second.cached).toBe(true);
+      // No additional spawns on the cache hit.
+      expect(spawnHeadlessAgent.mock.calls.length).toBe(spawnsAfterFirst);
+      // Probe IDs differ even though the underlying result is shared.
+      expect(second.probeId).not.toBe(first.probeId);
+    });
+
+    it("does NOT cache transient failures (timeout)", async () => {
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { neverResolve: true };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+
+      const profile = makeProfile();
+      const first = await manager.probeAgent(profile, { timeoutMs: 60 }, { ...deps, probeCacheTtlMs: 60_000 });
+      expect(first.ok).toBe(false);
+      expect(first.failures.some((f) => f.kind === "timeout")).toBe(true);
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+
+      const second = await manager.probeAgent(profile, { timeoutMs: 60 }, { ...deps, probeCacheTtlMs: 60_000 });
+      // Transient → not cached → re-spawn happens.
+      expect(spawnHeadlessAgent.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
+      expect(second.cached).toBe(false);
+    });
+
+    it("does NOT cache transient failures (rate_limit)", async () => {
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { result: "42" };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+      const realSpawn = deps.spawnHeadlessAgent;
+      let calls = 0;
+      deps.spawnHeadlessAgent = (profile: any, options: any) => {
+        calls++;
+        if (calls === 1) {
+          throw new Error("upstream gateway: HTTP 429 rate limit hit");
+        }
+        return realSpawn(profile, options);
+      };
+
+      const profile = makeProfile();
+      const first = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      expect(first.failures.some((f) => f.kind === "rate_limit")).toBe(true);
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+
+      const second = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      // rate_limit is transient → not cached → second call re-spawns.
+      expect(spawnHeadlessAgent.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
+      expect(second.cached).toBe(false);
+    });
+
+    it("DOES cache structural failures (auth) — second call hits cache, no re-spawn", async () => {
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { result: "42" };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+      const realSpawn = deps.spawnHeadlessAgent;
+      let calls = 0;
+      deps.spawnHeadlessAgent = (profile: any, options: any) => {
+        calls++;
+        if (calls === 1) {
+          throw new Error("HTTP 401 unauthorized: invalid_token");
+        }
+        return realSpawn(profile, options);
+      };
+
+      const profile = makeProfile();
+      const first = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      expect(first.failures.some((f) => f.kind === "auth")).toBe(true);
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+
+      const second = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      // auth is structural → cached → second call short-circuits.
+      expect(spawnHeadlessAgent.mock.calls.length).toBe(spawnsAfterFirst);
+      expect(second.cached).toBe(true);
+      expect(second.failures.some((f) => f.kind === "auth")).toBe(true);
+    });
+
+    it("with ttlMs=0 always re-spawns (cache disabled)", async () => {
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { result: "42" };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+
+      const profile = makeProfile();
+      await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 0 });
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+      const second = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 0 });
+      expect(spawnHeadlessAgent.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
+      expect(second.cached).toBe(false);
+    });
+
+    it("cache hit emits agent:probed with cached:true; cache miss emits cached:false", async () => {
+      const captured: AgentProbedPayload[] = [];
+      const listener = (p: AgentProbedPayload) => { captured.push(p); };
+      bus.on(EVENTS.AGENT_PROBED, listener);
+      try {
+        const { deps } = makeFakeDeps((prompt) => {
+          if (prompt.includes("42")) return { result: "42" };
+          if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+          return { result: "PROBE_REFUSAL_OK" };
+        });
+        const profile = makeProfile();
+        await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+        await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+
+        expect(captured).toHaveLength(2);
+        expect(captured[0].cached).toBe(false);
+        expect(captured[1].cached).toBe(true);
+        // probeIds still distinct even on the cache-hit emit.
+        expect(captured[0].probeId).not.toBe(captured[1].probeId);
+      } finally {
+        bus.off(EVENTS.AGENT_PROBED, listener);
+      }
+    });
+
+    it("probeCacheTtlMs honored from probe-config when deps does not override", async () => {
+      probeConfig.setProbeConfig({ probeCacheTtlMs: 60_000 });
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { result: "42" };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+      const profile = makeProfile();
+      await manager.probeAgent(profile, undefined, deps);
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+      const second = await manager.probeAgent(profile, undefined, deps);
+      // Cache active via probe-config → no extra spawns on call 2.
+      expect(spawnHeadlessAgent.mock.calls.length).toBe(spawnsAfterFirst);
+      expect(second.cached).toBe(true);
+    });
+
+    it("cache key isolates by modelId — different model on same profile re-spawns", async () => {
+      const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
+        if (prompt.includes("42")) return { result: "42" };
+        if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
+        return { result: "PROBE_REFUSAL_OK" };
+      });
+
+      const profileA = makeProfile({ model: "claude-sonnet-4-7" });
+      const profileB = makeProfile({ model: "claude-haiku-4-5" });
+      await manager.probeAgent(profileA, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
+      const second = await manager.probeAgent(profileB, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      // Different modelId → cache miss → re-spawn.
+      expect(spawnHeadlessAgent.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
+      expect(second.cached).toBe(false);
     });
   });
 });

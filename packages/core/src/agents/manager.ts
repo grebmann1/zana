@@ -1,6 +1,7 @@
 import { buildInteractiveCommand, spawnHeadless } from "./spawner";
 import { selectModel } from "./model-router";
 import { getProbeConfig } from "./probe-config";
+import { lookupProbeResult, recordProbeResult } from "./probe-cache";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 
@@ -440,10 +441,65 @@ export interface ProbeResult {
   modelId: string;
   probeId: string;
   legs: ProbeLegResult[];
+  // T6-FU-2 — true when this result was returned from the (profileId, modelId)
+  // cache rather than a fresh probe. Absent / false on a real probe. Audit
+  // consumers use this to know latencyMs reflects the original probe, not the
+  // cache lookup.
+  cached?: boolean;
 }
 
 // Re-export ProbeFailure types so consumers can import from agents/manager.
 export type { ProbeFailure, ProbeFailureKind } from "../events/deliberation-events";
+
+// FU-T3a-3 — classify a spawn-path error message into a typed retry-policy
+// bucket. T9 will key retry policy off this: transient (timeout/rate_limit/
+// transport) get retried with backoff; structural (auth/quota/misconfig)
+// escalate. Heuristic on err.message + err.code — real-world error shapes
+// vary, so we match on common substrings rather than exact codes. Anything
+// unrecognized falls through to "spawn" (legacy bucket) so the contract is
+// strictly additive: no message previously bucketed as "spawn" will
+// silently retarget unless it actually matches a more-specific pattern.
+//
+// Caveat for callers: the heuristics are intentionally generous (e.g.
+// "401" matches but so does "/v1/401-handler" — false-positive risk).
+// Real-world error shapes vary widely across SDKs; if T9 finds the
+// classifier mis-buckets a real failure, tighten the regex here. Exported
+// for unit testing.
+export function classifySpawnError(err: unknown): ProbeFailureKind {
+  const msg = (() => {
+    if (err == null) return "";
+    if (typeof err === "string") return err;
+    if (typeof err === "object") {
+      const anyErr = err as any;
+      const parts: string[] = [];
+      if (typeof anyErr.code === "string") parts.push(anyErr.code);
+      if (typeof anyErr.message === "string") parts.push(anyErr.message);
+      if (parts.length === 0) parts.push(String(err));
+      return parts.join(" ");
+    }
+    return String(err);
+  })();
+  if (!msg) return "spawn";
+
+  // Order matters: match the most specific buckets first. Auth before
+  // transport so "TLS 401 cert error" buckets to auth (the gateway rejected
+  // creds), not transport.
+  if (/\b401\b|\b403\b|unauthor|forbidden|invalid[\s._-]*token/i.test(msg)) {
+    return "auth";
+  }
+  if (/\b429\b|rate[\s._-]*limit|too[\s._-]*many[\s._-]*requests?/i.test(msg)) {
+    return "rate_limit";
+  }
+  if (/\b402\b|payment[\s._-]*required|quota|exhausted|usage[\s._-]*limit/i.test(msg)) {
+    return "quota";
+  }
+  if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|TLS|certificate|SSL/i.test(msg)) {
+    return "transport";
+  }
+  // Process-level: ENOENT (binary not found), EACCES (perm-denied on binary).
+  // Fall through to "spawn" anyway so the legacy bucket holds the line.
+  return "spawn";
+}
 
 // Truncate raw output captured for debugging. Bound is config-driven via
 // probe-config (default 1024); tests can override with setProbeConfig().
@@ -460,6 +516,9 @@ export interface ProbeDeps {
   spawnHeadlessAgent?: typeof spawnHeadlessAgent;
   getAgent?: typeof getAgent;
   killAgent?: typeof killAgent;
+  // T6-FU-2 — override probe-config.probeCacheTtlMs for this call only.
+  // 0 disables caching; undefined falls back to probe-config.
+  probeCacheTtlMs?: number;
 }
 
 const DEFAULT_PROBE_FACTUAL = "Reply with exactly the number 42.";
@@ -527,7 +586,8 @@ async function _runProbeLeg(
   } catch (err: any) {
     const failure: ProbeFailure = {
       leg: legName,
-      kind: "spawn",
+      // FU-T3a-3 — classify auth/rate_limit/quota/transport vs legacy "spawn".
+      kind: classifySpawnError(err),
       reason: `spawn error: ${err?.message || String(err)}`,
     };
     return { leg: legName, ok: false, failure, latencyMs: Date.now() - started, modelId };
@@ -552,10 +612,14 @@ async function _runProbeLeg(
   }
 
   if (state === "errored" || state === "error" || state === "missing") {
+    // FU-T3a-3 — classify by the agent's lastAction text (which carries the
+    // upstream error message from the spawner's error handler). Falls back
+    // to "spawn" (legacy bucket) when no message is recoverable.
+    const errMsg = typeof ag?.lastAction === "string" ? ag.lastAction : "";
     const failure: ProbeFailure = {
       leg: legName,
-      kind: "spawn",
-      reason: `agent ${state}`,
+      kind: classifySpawnError(errMsg || `agent ${state}`),
+      reason: `agent ${state}${errMsg ? `: ${errMsg}` : ""}`,
     };
     return { leg: legName, ok: false, failure, latencyMs, modelId };
   }
@@ -583,11 +647,11 @@ export async function probeAgent(
   deps?: ProbeDeps,
 ): Promise<ProbeResult> {
   const probeId = crypto.randomUUID();
-  const resolved: Required<ProbeDeps> = {
+  const resolved = {
     spawnHeadlessAgent: deps?.spawnHeadlessAgent ?? spawnHeadlessAgent,
     getAgent: deps?.getAgent ?? getAgent,
     killAgent: deps?.killAgent ?? killAgent,
-  };
+  } as Required<Pick<ProbeDeps, "spawnHeadlessAgent" | "getAgent" | "killAgent">>;
 
   // No declared model = real misconfiguration; bypass-routing means we have
   // no fallback and audit attribution would be meaningless either way.
@@ -606,9 +670,34 @@ export async function probeAgent(
       modelId: "unknown",
       probeId,
       legs: [],
+      cached: false,
     };
     _emitAgentProbed(profile, result);
     return result;
+  }
+
+  // T6-FU-2 — consult cache before spawning. Key by (profileId, modelId);
+  // skip when no profileId is available (anonymous profiles can't be cached
+  // safely — they may differ leg-by-leg).
+  const ttlMs: number = (() => {
+    if (typeof deps?.probeCacheTtlMs === "number") return deps.probeCacheTtlMs;
+    const v = getProbeConfig().probeCacheTtlMs;
+    return typeof v === "number" && v >= 0 ? v : 0;
+  })();
+  const profileId: string | null =
+    typeof profile?.id === "string" && profile.id.length > 0 ? profile.id : null;
+  const cacheKey = profileId ? `${profileId}:${declaredModel}` : null;
+
+  if (ttlMs > 0 && cacheKey) {
+    const cached = lookupProbeResult(cacheKey, ttlMs);
+    if (cached) {
+      // Mint a fresh probeId so audit can distinguish lookups from real
+      // probes. Re-emit AGENT_PROBED so the audit chain still records the
+      // attempt with cached:true (caller knows latency is stale).
+      const hit: ProbeResult = { ...cached, probeId, cached: true };
+      _emitAgentProbed(profile, hit);
+      return hit;
+    }
   }
 
   const configuredTimeoutMs = (() => {
@@ -672,9 +761,43 @@ export async function probeAgent(
     modelId: declaredModel,
     probeId,
     legs: results,
+    cached: false,
   };
+
+  // T6-FU-2 — store the result if caching is enabled AND the failure mix is
+  // not transient. Transient failures (timeout/rate_limit/transport/quota)
+  // can self-heal on the next call, so caching them would prolong an outage.
+  // Structural failures (auth/misconfig) plus legacy buckets (validation/
+  // spawn) are stable enough to cache — and caching them prevents 9N spawns
+  // per round for a misbehaving voter.
+  if (ttlMs > 0 && cacheKey) {
+    if (_shouldCacheProbeResult(result)) {
+      recordProbeResult(cacheKey, result);
+    }
+  }
+
   _emitAgentProbed(profile, result);
   return result;
+}
+
+// Per FU-T2 caching rules. Returns true when this result is safe to memoize.
+// Successful probes always cache. Failures cache only when EVERY kind is a
+// known-stable bucket: auth | misconfig | validation. Transient kinds
+// (timeout | rate_limit | transport | quota) explicitly skip cache so the next
+// call can retry. The legacy "spawn" bucket is ALSO skipped: classifySpawnError
+// falls through to "spawn" for anything it can't classify, and the
+// agent.lastAction read in _runProbeLeg's errored branch is truncated to 80
+// chars (FU-S26-b) — a clipped 429/ECONNRESET would be misclassified "spawn"
+// and poison the cache for 5 min. Once FU-S26-b plumbs structured errors,
+// "spawn" can be re-added to the cache-eligible set.
+function _shouldCacheProbeResult(result: ProbeResult): boolean {
+  if (result.ok) return true;
+  for (const f of result.failures) {
+    if (f.kind !== "auth" && f.kind !== "misconfig" && f.kind !== "validation") {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Emit agent:probed for audit attribution (FU-T3b). Fired exactly once per
@@ -689,6 +812,10 @@ function _emitAgentProbed(profile: any, result: ProbeResult): void {
     failures: result.failures,
     latencyMs: result.latencyMs,
     ts: new Date().toISOString(),
+    // T6-FU-2 — explicit boolean so audit consumers don't have to distinguish
+    // missing-field vs false. Real probes set cached:false on the result;
+    // cache-hit branch sets cached:true.
+    cached: result.cached === true,
   };
   bus.emit(EVENTS.AGENT_PROBED, payload);
 }

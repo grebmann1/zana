@@ -23,6 +23,7 @@
     "occMaxRetries": { "type": "number", "default": 3, "description": "Max stale-retry attempts on StaleDeliberationError in assembleCouncil and applyDecision" },
     "probeTimeoutMs": { "type": "number", "default": 30000, "description": "Default per-leg timeout for probeAgent" },
     "probeRawMaxBytes": { "type": "number", "default": 1024, "description": "Max bytes of raw probe response captured in ProbeFailure.raw" },
+    "probeCacheTtlMs": { "type": "number", "default": 300000, "description": "TTL (ms) on probeAgent result cache, keyed by profileId+modelId. 0 disables." },
     "synthesisSimilarityThreshold": { "type": "number", "default": 0.45, "description": "Dice coefficient threshold for cross-voter finding grouping" }
   }
 }

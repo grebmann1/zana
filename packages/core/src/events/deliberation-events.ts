@@ -7,7 +7,20 @@
 // prerequisite — T6 anti-dropout-bias logic consumes ProbeFailure.kind, and
 // keeping the audit substrate in one file keeps the contract surface small.
 
-export type ProbeFailureKind = "timeout" | "spawn" | "validation" | "misconfig";
+// FU-T3a-3 — split the legacy "spawn" bucket into typed retry-policy buckets.
+// T9 retry-policy will key off these to distinguish transient (timeout,
+// rate_limit, transport) from structural (auth, quota, misconfig, validation)
+// failures. Order is documentation-only — kept legacy buckets at the end so
+// audit consumers diffing the union see additions, not relocations.
+export type ProbeFailureKind =
+  | "timeout"
+  | "validation"
+  | "misconfig"
+  | "auth"           // 401/403, missing token, gateway-rejected credentials
+  | "rate_limit"     // 429, gateway-rejected too-many-requests
+  | "quota"          // 402/payment-required, quota exhausted
+  | "transport"      // network/DNS/TLS, child-process spawn errors that aren't auth/rate/quota
+  | "spawn";         // process-level failure that doesn't match the above (legacy/unknown)
 
 export interface ProbeFailure {
   // null indicates a whole-probe failure (e.g. profile has no declared model).
@@ -25,6 +38,10 @@ export interface AgentProbedPayload {
   failures: ProbeFailure[];
   latencyMs: number;
   ts: string;              // ISO
+  // T6-FU-2 — true when this event reports a cache lookup, false on a real
+  // probe. latencyMs reflects the original probe in either case (the cache
+  // never re-times the lookup itself).
+  cached: boolean;
 }
 
 export interface DeliberationProposedPayload {
@@ -76,6 +93,25 @@ export interface DeliberationEscalatedPayload {
     | "explicit";
   lastTally?: { approve: number; changes: number };
   ts: string;
+}
+
+// T6-FU-3 — degradation audit. Every (re)assembly that drops voters appends
+// an entry to Deliberation.degradation AND fires this event so audit consumers
+// can answer "why is voter X missing from round N?" from the event log alone.
+export interface DroppedVoterRecord {
+  profileId: string;
+  reason: ProbeFailureKind;
+  detail?: string;
+}
+
+export interface DeliberationDegradedPayload {
+  deliberationId: string;
+  // Round at the time of (re)assembly. For initial assembleCouncil this is the
+  // currentRound at PROPOSED (typically 0). For reassembleCouncil this is the
+  // post-increment round (the round about to begin).
+  round: number;
+  dropped: DroppedVoterRecord[];
+  ts: string;              // ISO
 }
 
 export interface DeliberationOverridePayload {

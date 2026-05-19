@@ -41,6 +41,7 @@ const EXPECTED_KEYS = [
   "occMaxRetries",
   "probeTimeoutMs",
   "probeRawMaxBytes",
+  "probeCacheTtlMs",
   "synthesisSimilarityThreshold",
 ];
 
@@ -52,6 +53,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   occMaxRetries: 3,
   probeTimeoutMs: 30000,
   probeRawMaxBytes: 1024,
+  probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
 };
 

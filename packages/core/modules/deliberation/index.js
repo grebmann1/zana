@@ -31,6 +31,7 @@ function _publish(cfg) {
       probeCfg.setProbeConfig({
         probeTimeoutMs: cfg.probeTimeoutMs,
         probeRawMaxBytes: cfg.probeRawMaxBytes,
+        probeCacheTtlMs: cfg.probeCacheTtlMs,
       });
     }
   } catch (err) {

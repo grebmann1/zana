@@ -6,11 +6,16 @@
 export interface ProbeRuntimeConfig {
   probeTimeoutMs: number;
   probeRawMaxBytes: number;
+  // T6-FU-2 — TTL on the (profileId+modelId) probe-result cache. 0 disables.
+  // Default 5 min: probe outcomes (auth, model availability, instruction-
+  // following capability) change slowly compared to a deliberation's lifetime.
+  probeCacheTtlMs: number;
 }
 
 const DEFAULTS: ProbeRuntimeConfig = {
   probeTimeoutMs: 30000,
   probeRawMaxBytes: 1024,
+  probeCacheTtlMs: 300000,
 };
 
 let active: ProbeRuntimeConfig = { ...DEFAULTS };

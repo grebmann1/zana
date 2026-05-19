@@ -352,6 +352,56 @@ describe("reassembleCouncil (T6-FU-1)", () => {
   // OCC retry: state advances during re-probe → reload, recompute, clean throw
   // ──────────────────────────────────────────────────────────────────────────
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // T6-FU-3 — degradation entry on reassemble carries post-increment round
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it("reassembleCouncil with 1 dropped voter → degradation entry round = currentRound+1, event emitted", async () => {
+    const captured: any[] = [];
+    const listener = (p: any) => captured.push(p);
+    (core as any).events.bus.on(
+      (core as any).events.EVENTS.DELIBERATION_DEGRADED,
+      listener,
+    );
+
+    try {
+      const id = await setupConvergingDeliberation(["a", "b", "c"]);
+      const before = run.loadDeliberation(id)!;
+      const roundBefore = before.currentRound;
+
+      const outcome = await quorum.reassembleCouncil({
+        deliberationId: id,
+        candidates: [
+          { profileId: "a", profile: profileFor("a") },
+          { profileId: "b", profile: profileFor("b") },
+          { profileId: "c", profile: profileFor("c") },
+        ],
+        previousDissenterProfileIds: [],
+        expectedSourceState: "CONVERGING",
+        deps: { probeAgent: fakeProbe({ a: "ok", b: "ok", c: "timeout" }) },
+      });
+      expect(outcome.kind).toBe("READY");
+
+      const after = run.loadDeliberation(id)!;
+      // Reassemble bumps round; degradation entry records the post-increment
+      // round (the round that's about to begin).
+      expect(after.degradation).toHaveLength(1);
+      expect(after.degradation![0].round).toBe(roundBefore + 1);
+      expect(after.degradation![0].dropped).toEqual([
+        expect.objectContaining({ profileId: "c", reason: "timeout" }),
+      ]);
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].round).toBe(roundBefore + 1);
+      expect(captured[0].dropped[0].profileId).toBe("c");
+    } finally {
+      (core as any).events.bus.off(
+        (core as any).events.EVENTS.DELIBERATION_DEGRADED,
+        listener,
+      );
+    }
+  });
+
   it("OCC retry: state advances mid-reprobe → reload sees moved-past-source state, throws cleanly", async () => {
     const id = await setupConvergingDeliberation(["a", "b"]);
 

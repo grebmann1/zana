@@ -526,4 +526,149 @@ describe("deliberation quorum + graceful degradation (T6)", () => {
       expect(outcome.kind).toBe("READY");
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // T6-FU-3 — degradation persistence + deliberation:degraded event.
+  //
+  // Without this, audit consumers can't answer "why is voter X missing from
+  // round N?" by reading the deliberation alone — DroppedVoter[] only lived
+  // in-memory in assembleCouncil's return value.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe("T6-FU-3 — degradation audit persistence + event", () => {
+    it("assembleCouncil with 1 dropped (timeout) and quorum holds → READY, degradation entry persisted, event emitted", async () => {
+      const captured: any[] = [];
+      const listener = (p: any) => captured.push(p);
+      (core as any).events.bus.on(
+        (core as any).events.EVENTS.DELIBERATION_DEGRADED,
+        listener,
+      );
+
+      try {
+        const d = run.propose({
+          question: "q",
+          voters: [{ profileId: "a" }, { profileId: "b" }, { profileId: "c" }],
+          promptSnapshot: "p",
+        });
+        const outcome = await quorum.assembleCouncil({
+          deliberationId: d.id,
+          candidates: [
+            { profileId: "a", profile: profileFor("a") },
+            { profileId: "b", profile: profileFor("b") },
+            { profileId: "c", profile: profileFor("c") },
+          ],
+          deps: { probeAgent: fakeProbe({ a: "ok", b: "ok", c: "timeout" }) },
+        });
+        expect(outcome.kind).toBe("READY");
+
+        const reloaded = run.loadDeliberation(d.id)!;
+        expect(reloaded.degradation).toBeDefined();
+        expect(reloaded.degradation!).toHaveLength(1);
+        expect(reloaded.degradation![0].dropped).toHaveLength(1);
+        expect(reloaded.degradation![0].dropped[0]).toMatchObject({
+          profileId: "c",
+          reason: "timeout",
+        });
+        // Initial assemble does not bump round.
+        expect(reloaded.degradation![0].round).toBe(0);
+
+        // Event fired exactly once with matching payload.
+        expect(captured).toHaveLength(1);
+        expect(captured[0].deliberationId).toBe(d.id);
+        expect(captured[0].round).toBe(0);
+        expect(captured[0].dropped).toHaveLength(1);
+        expect(captured[0].dropped[0].reason).toBe("timeout");
+        expect(typeof captured[0].ts).toBe("string");
+      } finally {
+        (core as any).events.bus.off(
+          (core as any).events.EVENTS.DELIBERATION_DEGRADED,
+          listener,
+        );
+      }
+    });
+
+    it("assembleCouncil with 0 dropped → no degradation entry, no event", async () => {
+      const captured: any[] = [];
+      const listener = (p: any) => captured.push(p);
+      (core as any).events.bus.on(
+        (core as any).events.EVENTS.DELIBERATION_DEGRADED,
+        listener,
+      );
+
+      try {
+        const d = run.propose({
+          question: "q",
+          voters: [{ profileId: "a" }, { profileId: "b" }, { profileId: "c" }],
+          promptSnapshot: "p",
+        });
+        const outcome = await quorum.assembleCouncil({
+          deliberationId: d.id,
+          candidates: [
+            { profileId: "a", profile: profileFor("a") },
+            { profileId: "b", profile: profileFor("b") },
+            { profileId: "c", profile: profileFor("c") },
+          ],
+          deps: { probeAgent: fakeProbe({ a: "ok", b: "ok", c: "ok" }) },
+        });
+        expect(outcome.kind).toBe("READY");
+
+        const reloaded = run.loadDeliberation(d.id)!;
+        expect(reloaded.degradation).toBeUndefined();
+        expect(captured).toHaveLength(0);
+      } finally {
+        (core as any).events.bus.off(
+          (core as any).events.EVENTS.DELIBERATION_DEGRADED,
+          listener,
+        );
+      }
+    });
+
+    it("multiple successful assemblies with drops APPEND to degradation (don't replace)", async () => {
+      // First a clean initial assemble that drops one voter.
+      const d = run.propose({
+        question: "q",
+        voters: [{ profileId: "a" }, { profileId: "b" }, { profileId: "c" }],
+        promptSnapshot: "p",
+      });
+      await quorum.assembleCouncil({
+        deliberationId: d.id,
+        candidates: [
+          { profileId: "a", profile: profileFor("a") },
+          { profileId: "b", profile: profileFor("b") },
+          { profileId: "c", profile: profileFor("c") },
+        ],
+        deps: { probeAgent: fakeProbe({ a: "ok", b: "ok", c: "timeout" }) },
+      });
+
+      // Drive REVIEWING → SYNTHESIZING → CONVERGING so we can reassemble.
+      run.transition(d.id, "SYNTHESIZING");
+      run.transition(d.id, "CONVERGING");
+
+      // Reassemble with another drop. Existing entry must remain.
+      await quorum.reassembleCouncil({
+        deliberationId: d.id,
+        candidates: [
+          { profileId: "a", profile: profileFor("a") },
+          { profileId: "b", profile: profileFor("b") },
+          { profileId: "c", profile: profileFor("c") },
+        ],
+        previousDissenterProfileIds: [],
+        expectedSourceState: "CONVERGING",
+        deps: { probeAgent: fakeProbe({ a: "ok", b: "spawn", c: "ok" }) },
+      });
+
+      const reloaded = run.loadDeliberation(d.id)!;
+      expect(reloaded.degradation).toHaveLength(2);
+      expect(reloaded.degradation![0].dropped[0].profileId).toBe("c");
+      expect(reloaded.degradation![0].dropped[0].reason).toBe("timeout");
+      expect(reloaded.degradation![1].dropped[0].profileId).toBe("b");
+      expect(reloaded.degradation![1].dropped[0].reason).toBe("spawn");
+    });
+
+    it("DELIBERATION_DEGRADED is registered as a known EVENTS constant", () => {
+      // Sanity: contract surface — the constant must exist on EVENTS so
+      // listeners can subscribe by name without string-typing.
+      const E = (core as any).events.EVENTS;
+      expect(E.DELIBERATION_DEGRADED).toBe("deliberation:degraded");
+    });
+  });
 });

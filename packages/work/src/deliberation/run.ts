@@ -6,6 +6,19 @@
 // Persistence: each deliberation is one checkpoint record (kind="deliberation")
 // keyed by its uuid. Lifetime is 7 days.
 //
+// Concurrency model (T5a + T5x-cross-proc):
+//   - StaleDeliberationError below catches the IN-PROCESS race: two callers
+//     in the same Node process that each load v=N. The OCC version check on
+//     persist() forces the loser to retry.
+//   - Cross-PROCESS safety (two daemons / a CLI alongside an MCP server hitting
+//     the same workspace) is provided by checkpoint/store.ts, which does
+//     atomic write-tmp + rename plus a per-checkpoint advisory lockfile around
+//     read-modify-write. The lockfile is best-effort; it is NOT a kernel-grade
+//     fcntl lock and does not protect multi-machine NFS scenarios.
+//   - Net: in-process collisions surface as StaleDeliberationError; cross-
+//     process collisions either serialize cleanly via the lockfile or surface
+//     as a contention error within a bounded budget (~500ms).
+//
 // Event semantics — what `transition()` emits, by destination state:
 //   REVIEWING     → (no event; PROPOSED already fired the proposed event)
 //   SYNTHESIZING  → deliberation:synthesis  (only if synthesisHash is now set)
@@ -98,6 +111,9 @@ const PATCHABLE_FIELDS = new Set<keyof Deliberation>([
   "quorum",
   "rounds",
   "mode",
+  // T6-FU-3 — degradation is append-only; quorum.ts builds the new array
+  // (existing entries + new entry) and passes it through here.
+  "degradation",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,6 +330,8 @@ export function transition(
     if (patch.rounds !== undefined) d.rounds = patch.rounds;
     if (patch.mode !== undefined) d.mode = patch.mode;
     if (patch.settledAt !== undefined) d.settledAt = patch.settledAt;
+    // T6-FU-3 — caller passes the *new* full array (existing + new entry).
+    if (patch.degradation !== undefined) d.degradation = patch.degradation;
   }
 
   const fromState = d.state;

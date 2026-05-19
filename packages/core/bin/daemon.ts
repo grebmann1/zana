@@ -427,11 +427,23 @@ async function main() {
 
   // One-shot TTL sweep for expired checkpoints (e.g. deliberation records).
   // Safe to call repeatedly; idempotent on already-clean state.
+  // Also sweeps stale `.tmp.*` and `.lock` orphans left behind by a previous
+  // daemon crash mid-write (T5x-cross-proc). Best-effort — failure is logged
+  // but does not block daemon startup.
   try {
     const checkpointStore = require("@zana/work").runs.checkpoint.store;
     const { removed } = checkpointStore.sweepExpired();
     if (removed.length > 0) {
       console.log(`\x1b[36m[zana-daemon]\x1b[0m swept ${removed.length} expired checkpoint(s)`);
+    }
+    if (typeof checkpointStore.sweepStale === "function") {
+      const { removedTmp, removedLocks } = checkpointStore.sweepStale();
+      const total = (removedTmp?.length || 0) + (removedLocks?.length || 0);
+      if (total > 0) {
+        console.log(
+          `\x1b[36m[zana-daemon]\x1b[0m swept ${removedTmp.length} stale tmp + ${removedLocks.length} stale lock orphan(s)`,
+        );
+      }
     }
   } catch (err: any) {
     if (err?.code === "MODULE_NOT_FOUND") {

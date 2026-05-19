@@ -35,7 +35,17 @@ function _probeAgent(): any { return _core().agents.manager.probeAgent; }
 // Mirror the probe-failure shape from packages/core/src/events/deliberation-events.ts.
 // Re-declared here as a type alias to avoid a hard import edge that would force
 // the work package to compile against core's types eagerly.
-export type ProbeFailureKind = "timeout" | "spawn" | "validation" | "misconfig";
+// FU-T3a-3 — keep this in lockstep with the core union (split spawn into typed
+// retry-policy buckets).
+export type ProbeFailureKind =
+  | "timeout"
+  | "validation"
+  | "misconfig"
+  | "auth"
+  | "rate_limit"
+  | "quota"
+  | "transport"
+  | "spawn";
 export interface ProbeFailure {
   leg: "factual" | "instructionFollowing" | "toolUse" | null;
   kind: ProbeFailureKind;
@@ -461,12 +471,50 @@ async function assembleCore(
         if (ctx.incrementRound) {
           patch.currentRound = d.currentRound + 1;
         }
+        // T6-FU-3 — when ANY voter dropped, append a degradation entry to
+        // the persisted audit trail. The round we record is the round that
+        // is about to begin: post-increment for reassemble (CONVERGING →
+        // CONVERGING bumps round), and the existing currentRound for the
+        // initial assemble (PROPOSED → REVIEWING does not bump round; T5
+        // bumps to 1 at SYNTHESIZING → CONVERGING).
+        const degradationEntry = dropped.length > 0
+          ? {
+              round: ctx.incrementRound ? d.currentRound + 1 : d.currentRound,
+              dropped: dropped.map((dv) => ({
+                profileId: dv.profileId,
+                reason: dv.reason,
+                detail: dv.detail,
+              })),
+              ts: new Date().toISOString(),
+            }
+          : null;
+        if (degradationEntry) {
+          patch.degradation = [
+            ...(Array.isArray(d.degradation) ? d.degradation : []),
+            degradationEntry,
+          ];
+        }
         transition(
           deliberationId,
           ctx.targetState,
           patch,
           { expectedVersion },
         );
+        // Emit deliberation:degraded *after* the transition lands, mirroring
+        // the pattern used by other deliberation events (post-persist).
+        if (degradationEntry) {
+          try {
+            const core = require("@zana/core");
+            const bus = core.events.bus;
+            const EVENTS = core.events.EVENTS;
+            bus.emit(EVENTS.DELIBERATION_DEGRADED, {
+              deliberationId,
+              round: degradationEntry.round,
+              dropped: degradationEntry.dropped,
+              ts: degradationEntry.ts,
+            });
+          } catch {}
+        }
         return {
           kind: "READY",
           voters,

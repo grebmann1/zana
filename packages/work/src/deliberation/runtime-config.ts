@@ -11,6 +11,11 @@ export interface DeliberationRuntimeConfig {
   occMaxRetries: number;
   probeTimeoutMs: number;
   probeRawMaxBytes: number;
+  // T6-FU-2 — TTL on the (profileId+modelId) probe-result cache. The cache
+  // itself lives in @zana/core/probe-cache.ts; this field is mirrored here
+  // because the deliberation module publishes one config snapshot to BOTH
+  // bridges. 0 disables caching; default 5 min.
+  probeCacheTtlMs: number;
   synthesisSimilarityThreshold: number;
 }
 
@@ -22,6 +27,7 @@ const DEFAULTS: DeliberationRuntimeConfig = {
   occMaxRetries: 3,
   probeTimeoutMs: 30000,
   probeRawMaxBytes: 1024,
+  probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
 };
 
