@@ -115,6 +115,17 @@ export function uninstallHooks() {
   return { ok: true };
 }
 
+/**
+ * "Installed" means BOTH:
+ *   1. settings.json has at least one of our hook entries
+ *   2. the on-disk wrapper at wrapperPath() matches the bundled wrapper byte-for-byte
+ *
+ * #2 catches the stale-wrapper drift that bit users on upgrades — the hook
+ * entry stuck around but the deployed shim was the old pre-hardening one
+ * with sed-based injection and the legacy ~/.zana/hives path. core.ts gates
+ * re-install on this return value, so we MUST fail it when the wrapper is
+ * out of date.
+ */
 export function isHooksInstalled() {
   const p = settingsPath();
   if (!fs.existsSync(p)) return false;
@@ -125,13 +136,30 @@ export function isHooksInstalled() {
     return false;
   }
   if (!settings.hooks || typeof settings.hooks !== "object") return false;
+  let hasOurEntry = false;
   for (const arr of Object.values(settings.hooks)) {
     if (!Array.isArray(arr)) continue;
     for (const entry of arr) {
-      if (isOurEntry(entry)) return true;
+      if (isOurEntry(entry)) { hasOurEntry = true; break; }
     }
+    if (hasOurEntry) break;
   }
-  return false;
+  if (!hasOurEntry) return false;
+  // Wrapper drift check — if the on-disk wrapper differs from the bundled
+  // one, treat as not-installed so installHooks() runs and re-deploys it.
+  return wrapperIsCurrent();
+}
+
+function wrapperIsCurrent() {
+  const installed = wrapperPath();
+  if (!fs.existsSync(installed)) return false;
+  try {
+    const onDisk = fs.readFileSync(installed, "utf8");
+    const bundled = fs.readFileSync(path.join(__dirname, "wrapper.sh"), "utf8");
+    return onDisk === bundled;
+  } catch {
+    return false;
+  }
 }
 
 function isOurEntry(entry) {
