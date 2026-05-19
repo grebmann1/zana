@@ -83,4 +83,7 @@ module.exports = {
   },
   persistence: require("./persistence"),
   guardrails: require("./guardrails/index"),
+  util: {
+    logger: require("./util/logger"),
+  },
 };

@@ -99,7 +99,7 @@ export async function executeWorkflow(skill, triggerContext = {}) {
 
   activeRuns.set(run.id, run);
   persistRun(run);
-  bus.emit("workflow:started", { runId: run.id, skillId: skill.id, skillName: skill.name });
+  _bus().emit("workflow:started", { runId: run.id, skillId: skill.id, skillName: skill.name });
 
   try {
     for (let i = 0; i < run.steps.length; i++) {
@@ -107,7 +107,7 @@ export async function executeWorkflow(skill, triggerContext = {}) {
       const step = run.steps[i];
       step.status = "running";
       persistRun(run);
-      bus.emit("workflow:step", { runId: run.id, step: i, action: step.action });
+      _bus().emit("workflow:step", { runId: run.id, step: i, action: step.action });
 
       const context = { ...triggerContext, run: { id: run.id, step: i } };
       const result = await executeStep(step, context);
@@ -118,7 +118,7 @@ export async function executeWorkflow(skill, triggerContext = {}) {
         run.status = "halted";
         run.completedAt = new Date().toISOString();
         persistRun(run);
-        bus.emit("workflow:halted", { runId: run.id, step: i, reason: result.reason });
+        _bus().emit("workflow:halted", { runId: run.id, step: i, reason: result.reason });
         return run;
       }
 
@@ -130,14 +130,14 @@ export async function executeWorkflow(skill, triggerContext = {}) {
     run.status = "completed";
     run.completedAt = new Date().toISOString();
     persistRun(run);
-    bus.emit("workflow:completed", { runId: run.id, skillId: skill.id });
+    _bus().emit("workflow:completed", { runId: run.id, skillId: skill.id });
     return run;
   } catch (err) {
     run.status = "failed";
     run.error = err.message;
     run.completedAt = new Date().toISOString();
     persistRun(run);
-    bus.emit("workflow:failed", { runId: run.id, error: err.message });
+    _bus().emit("workflow:failed", { runId: run.id, error: err.message });
     return run;
   } finally {
     activeRuns.delete(run.id);

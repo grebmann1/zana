@@ -14,7 +14,9 @@ export function start(scheduleId: string, intervalMs: number, fireFn: () => void
       fireFn();
     } catch (err: any) {
       // swallow — caller's fireFn should handle its own errors
-      console.error(`[scheduler] interval fire failed for ${scheduleId}:`, err?.message || err);
+      require("@zana/core").util.logger
+        .getLogger("scheduler")
+        .error(`interval fire failed for ${scheduleId}`, err);
     }
   }, intervalMs);
   // Don't keep the event loop alive just for this timer.

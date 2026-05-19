@@ -5,10 +5,12 @@ import { pickBackend, computeNextRunAt } from "./triggers";
 import { everShorthandToMs } from "./yaml-format";
 import { validateSchedule, ValidationIssue } from "./schema";
 
+function _log() { return require("@zana/core").util.logger.getLogger("scheduler"); }
+
 function logWarnings(scheduleId: string, issues: ValidationIssue[]) {
   for (const w of issues) {
     if (w.level === "warning") {
-      console.warn(`[scheduler] ${scheduleId}: ${w.field}: ${w.message}`);
+      _log().warn(`${scheduleId}: ${w.field}: ${w.message}`);
     }
   }
 }
@@ -105,8 +107,9 @@ function attachTerminationListener(bus: any, eventName: string) {
         finalStatus,
       });
     } catch (err: any) {
-      console.warn(
-        `[scheduler] failed to inline agent result for schedule ${tracked.scheduleId} agent ${evt.agentId}: ${err?.message || err}`
+      _log().warn(
+        `failed to inline agent result for schedule ${tracked.scheduleId} agent ${evt.agentId}`,
+        err
       );
     }
   });
@@ -277,7 +280,28 @@ async function executeAction(action) {
   }
 
   if (type === "workflow") {
-    return { status: "skipped", error: "workflow action type not yet wired" };
+    if (!action.skillId || typeof action.skillId !== "string") {
+      return { status: "error", error: "workflow action requires skillId (string)" };
+    }
+    const skillStore = require("@zana/extras").settings.skillStore;
+    const skill = skillStore.getSkill(action.skillId);
+    if (!skill) return { status: "error", error: `workflow skill not found: ${action.skillId}` };
+    if (skill.type !== "workflow") {
+      return { status: "error", error: `skill is not a workflow (type=${skill.type}): ${action.skillId}` };
+    }
+    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
+    const triggerContext = { trigger: "scheduler", ...(action.context || {}) };
+    const run = await workflowEngine.executeWorkflow(skill, triggerContext);
+    if (run?.error) {
+      return { status: "error", error: run.error, runId: run.id };
+    }
+    if (run?.status === "completed") {
+      return { status: "success", runId: run.id, steps: run.steps?.length };
+    }
+    if (run?.status === "halted") {
+      return { status: "halted", runId: run.id, currentStep: run.currentStep };
+    }
+    return { status: "error", error: `workflow ended with status: ${run?.status}`, runId: run?.id };
   }
 
   if (type === "command") {
@@ -316,7 +340,33 @@ async function executeAction(action) {
   }
 
   if (type === "mcp_tool") {
-    return { status: "skipped", error: "mcp_tool execution not implemented" };
+    // Most MCP tools (zana_X) map 1:1 to orchestrator actions (X).
+    // We strip the zana_ prefix and dispatch through the orchestrator —
+    // same path the stdio MCP server uses, but without the framing.
+    if (!action.toolName || typeof action.toolName !== "string") {
+      return { status: "error", error: "mcp_tool action requires toolName (string)" };
+    }
+    if (!action.toolName.startsWith("zana_")) {
+      return { status: "error", error: `mcp_tool toolName must start with "zana_": ${action.toolName}` };
+    }
+    const orchestratorAction = action.toolName.slice("zana_".length);
+    const args = action.toolArgs || {};
+    const agentManager = require("@zana/core").agents.manager;
+    let workspace = action.cwd || process.env.HOME;
+    try {
+      const wc = require("@zana/core").project.workspaceContext;
+      if (wc?.isInitialized?.()) workspace = wc.getWorkspaceRoot();
+    } catch {}
+    const result = await agentManager.handleOrchestratorCommand(
+      { action: orchestratorAction, ...args },
+      () => workspace
+    );
+    // Some orchestrator handlers return arrays (list_profiles, list_skills, etc.)
+    // instead of objects. Always nest the raw result under `data` and lift errors.
+    if (result && typeof result === "object" && !Array.isArray(result) && result.error) {
+      return { status: "error", error: result.error, data: result };
+    }
+    return { status: "success", data: result };
   }
 
   return { status: "error", error: `unknown action type: ${type}` };
@@ -391,7 +441,7 @@ function startTrigger(rawSchedule: any) {
 
   const picked = pickBackend(schedule);
   if (!picked) {
-    console.warn(`[scheduler] no backend matched for schedule ${schedule.id} — skipping start`);
+    _log().warn(`no backend matched for schedule ${schedule.id} — skipping start`);
     return;
   }
 
@@ -399,11 +449,11 @@ function startTrigger(rawSchedule: any) {
   try {
     handle = picked.start(schedule.id, picked.arg, () => {
       triggerSchedule(schedule.id).catch((err: any) => {
-        console.error(`[scheduler] trigger fire failed for ${schedule.id}:`, err?.message || err);
+        _log().error(`trigger fire failed for ${schedule.id}`, err);
       });
     });
   } catch (err: any) {
-    console.error(`[scheduler] failed to start trigger for ${schedule.id}:`, err?.message || err);
+    _log().error(`failed to start trigger for ${schedule.id}`, err);
     return;
   }
 
@@ -465,11 +515,11 @@ export function loadFromDisk() {
       startTrigger(s);
       started++;
     } catch (err: any) {
-      console.warn(`[scheduler] loadFromDisk: failed to start ${s.id}:`, err?.message || err);
+      _log().warn(`loadFromDisk: failed to start ${s.id}`, err);
       skipped++;
     }
   }
-  console.log(`[scheduler] loadFromDisk: started=${started} skipped=${skipped} total=${all.length}`);
+  _log().info(`loadFromDisk: started=${started} skipped=${skipped} total=${all.length}`);
   return { started, skipped, total: all.length };
 }
 
