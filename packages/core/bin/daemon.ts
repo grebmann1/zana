@@ -425,6 +425,22 @@ async function main() {
   const port = hive.hookServerHandle?.port || apiPort;
   console.log(`\x1b[32m[zana-daemon]\x1b[0m ready — id: ${hive.daemonId}  api: http://127.0.0.1:${port}`);
 
+  // One-shot TTL sweep for expired checkpoints (e.g. deliberation records).
+  // Safe to call repeatedly; idempotent on already-clean state.
+  try {
+    const checkpointStore = require("@zana/work").runs.checkpoint.store;
+    const { removed } = checkpointStore.sweepExpired();
+    if (removed.length > 0) {
+      console.log(`\x1b[36m[zana-daemon]\x1b[0m swept ${removed.length} expired checkpoint(s)`);
+    }
+  } catch (err: any) {
+    if (err?.code === "MODULE_NOT_FOUND") {
+      console.warn(`[zana-daemon] checkpoint sweep skipped: @zana/work not loaded`);
+    } else {
+      console.warn(`[zana-daemon] checkpoint sweep failed: ${err?.message || err}`);
+    }
+  }
+
   if (teamId) {
     console.log(`\x1b[36m[zana-daemon]\x1b[0m starting team: ${teamId}`);
     const teamPrompt = process.env.ZANA_TEAM_PROMPT || undefined;

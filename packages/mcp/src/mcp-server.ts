@@ -1204,9 +1204,12 @@ const AUTOPILOT_TOOLS = [
   },
 ];
 
+// T9 — Deliberation MCP tools (zana_deliberate + companions).
+const { DELIBERATION_TOOLS, deliberateHandler, deliberationStatusHandler, deliberationListHandler, deliberationOverrideHandler } = require("./tools/deliberate");
+
 const toolSkills = loadToolSkills();
 const DYNAMIC_TOOLS = toolSkills.map((t) => t.schema);
-const STATIC_TOOLS = [...TOOLS, ...TICKET_TOOLS, ...TEAM_TOOLS, ...INTELLIGENCE_TOOLS, ...CHECKPOINT_TOOLS, ...WORKFLOW_TOOLS, ...ARTIFACT_TOOLS, ...SCHEDULER_TOOLS, ...EVENT_BUS_TOOLS, ...P2P_TOOLS, ...MASTER_TOOLS, ...AUTOPILOT_TOOLS, ...DYNAMIC_TOOLS];
+const STATIC_TOOLS = [...TOOLS, ...TICKET_TOOLS, ...TEAM_TOOLS, ...INTELLIGENCE_TOOLS, ...CHECKPOINT_TOOLS, ...WORKFLOW_TOOLS, ...ARTIFACT_TOOLS, ...SCHEDULER_TOOLS, ...EVENT_BUS_TOOLS, ...P2P_TOOLS, ...MASTER_TOOLS, ...AUTOPILOT_TOOLS, ...DELIBERATION_TOOLS, ...DYNAMIC_TOOLS];
 
 // Module tool registry (tools contributed by modules via api.mcp in module.json)
 let moduleToolRegistry = null;
@@ -1537,6 +1540,16 @@ async function handleToolCall(name, args, callerAgentId) {
       if (!ap?.api) return { error: "autopilot module not available" };
       return ap.api.cancelGoal(args.goalId);
     }
+
+    // Deliberation tools (T9)
+    case "zana_deliberate":
+      return await deliberateHandler(args);
+    case "zana_deliberation_status":
+      return deliberationStatusHandler(args);
+    case "zana_deliberation_list":
+      return deliberationListHandler(args || {});
+    case "zana_deliberation_override":
+      return deliberationOverrideHandler(args);
 
     default: {
       // Check dynamic swarm tool skills

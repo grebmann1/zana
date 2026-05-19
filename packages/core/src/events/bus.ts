@@ -8,6 +8,7 @@ export const EVENTS = {
   AGENT_TERMINATED: "agent:terminated",
   AGENT_HOOK: "agent:hook",
   AGENT_STATUS_CHANGED: "agent:statusChanged",
+  AGENT_PROBED: "agent:probed",
   TEAM_STARTED: "team:started",
   TEAM_STOPPED: "team:stopped",
   TEAM_WORKER_SPAWNED: "team:workerSpawned",
@@ -20,5 +21,11 @@ export const EVENTS = {
   RUN_STARTED: "run:started",
   RUN_ENDED: "run:ended",
   FILE_PRODUCED: "file:produced",
+  DELIBERATION_PROPOSED: "deliberation:proposed",
+  DELIBERATION_VOTE: "deliberation:vote",
+  DELIBERATION_SYNTHESIS: "deliberation:synthesis",
+  DELIBERATION_CONVERGED: "deliberation:converged",
+  DELIBERATION_ESCALATED: "deliberation:escalated",
+  DELIBERATION_OVERRIDE: "deliberation:override",
 };
 

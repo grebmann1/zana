@@ -1,5 +1,6 @@
 import { buildInteractiveCommand, spawnHeadless } from "./spawner";
 import { selectModel } from "./model-router";
+import { getProbeConfig } from "./probe-config";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 
@@ -34,6 +35,7 @@ function _checkpointResume() { return require("@zana/work").runs.checkpoint.resu
 function _artifactStore() { return require("@zana/work").runs.artifacts; }
 import * as persistence from "../persistence";
 import { bus, EVENTS } from "../events/bus";
+import type { ProbeFailure, ProbeFailureKind, AgentProbedPayload } from "../events/deliberation-events";
 import { MAX_CONCURRENT_AGENTS } from "../config";
 import * as moduleConfig from "../modules/config";
 
@@ -282,10 +284,14 @@ export function spawnHeadlessAgent(profile, options = {}) {
   bus.emit(EVENTS.AGENT_SPAWNED, { agentId, profileId: profile.id, mode: "headless" });
 
   let outputBuffer = "";
+  // Expose raw stdout buffer on the agent record so probes (and other consumers)
+  // can fall back to it when stream-json parsing fails to populate `result`.
+  (agent as any).outputBuffer = "";
 
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString();
     outputBuffer += text;
+    (agent as any).outputBuffer = outputBuffer;
     agent.lastActivity = Date.now();
 
     // Parse stream-json lines for status
@@ -392,6 +398,299 @@ export function spawnHeadlessAgent(profile, options = {}) {
   });
 
   return { agentId, terminalId };
+}
+
+// ---------------------------------------------------------------------------
+// probeAgent — capability probe (T3, deliberation/quorum gate)
+//
+// Validates a profile is *functionally* ready before adding it to a council.
+// Deliberately NOT a shallow PONG ping: we exercise factual recall, real
+// instruction-following, and (when the profile permits) tool use. Each leg
+// spawns a short-lived headless agent in parallel; the probe passes only if
+// all applicable legs pass within the timeout.
+//
+// Probes always run on the profile's declared model; we bypass cost-routing
+// (selectModel) so audit attribution is correct. Profiles with no declared
+// model are a real misconfiguration and the probe reports `ok: false`.
+//
+// Tests inject fake deps via the `deps` parameter. The pattern matches
+// spawnValidatedAgent (manager.ts:611) and checkpointResume (:911).
+// ---------------------------------------------------------------------------
+
+export interface ProbeRequest {
+  factual?: string;
+  instructionFollowing?: string;
+  toolUse?: string;
+  timeoutMs?: number;
+}
+
+export interface ProbeLegResult {
+  leg: string;
+  ok: boolean;
+  // Typed failure per FU-T3a — top-level failures[] is just legs.flatMap(l => l.failure ? [l.failure] : []) plus any whole-probe entries.
+  failure?: ProbeFailure;
+  latencyMs: number;
+  modelId: string;
+}
+
+export interface ProbeResult {
+  ok: boolean;
+  latencyMs: number;
+  failures: ProbeFailure[];   // typed (FU-T3a)
+  modelId: string;
+  probeId: string;
+  legs: ProbeLegResult[];
+}
+
+// Re-export ProbeFailure types so consumers can import from agents/manager.
+export type { ProbeFailure, ProbeFailureKind } from "../events/deliberation-events";
+
+// Truncate raw output captured for debugging. Bound is config-driven via
+// probe-config (default 1024); tests can override with setProbeConfig().
+function _truncateRaw(s: string | null | undefined): string | undefined {
+  if (typeof s !== "string" || s.length === 0) return undefined;
+  const max = (() => {
+    const v = getProbeConfig().probeRawMaxBytes;
+    return typeof v === "number" && v > 0 ? Math.floor(v) : 1024;
+  })();
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+export interface ProbeDeps {
+  spawnHeadlessAgent?: typeof spawnHeadlessAgent;
+  getAgent?: typeof getAgent;
+  killAgent?: typeof killAgent;
+}
+
+const DEFAULT_PROBE_FACTUAL = "Reply with exactly the number 42.";
+// Real instruction-following check: requires emitting a specific token.
+// Empty / non-empty alone proves nothing — that's PONG theatre.
+const DEFAULT_PROBE_INSTRUCTION_FOLLOWING =
+  "Reply with exactly the token PROBE_REFUSAL_OK and nothing else.";
+const DEFAULT_PROBE_TOOL_USE = "Use Bash to run `echo PROBE_OK` and reply with the stdout literally.";
+// Fallback if probe-config is unreachable. probe-config.getProbeConfig() defaults
+// to this same value — keeping the const documents the wire-in target.
+const DEFAULT_PROBE_TIMEOUT_MS_FALLBACK = 30000;
+
+function _probePollResult(
+  agentId: string,
+  deadline: number,
+  get: typeof getAgent,
+): Promise<{ state: string; result: string | null; outputBuffer: string | null }> {
+  return new Promise((resolve) => {
+    const tick = () => {
+      const ag = get(agentId);
+      if (!ag) {
+        resolve({ state: "missing", result: null, outputBuffer: null });
+        return;
+      }
+      const terminal = ag.state === "terminated" || ag.state === "errored" || ag.state === "error";
+      const buf = typeof (ag as any).outputBuffer === "string" ? (ag as any).outputBuffer : null;
+      if (terminal) {
+        resolve({
+          state: ag.state,
+          result: typeof ag.result === "string" ? ag.result : null,
+          outputBuffer: buf,
+        });
+        return;
+      }
+      if (Date.now() >= deadline) {
+        resolve({
+          state: "timeout",
+          result: typeof ag.result === "string" ? ag.result : null,
+          outputBuffer: buf,
+        });
+        return;
+      }
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
+async function _runProbeLeg(
+  legName: "factual" | "instructionFollowing" | "toolUse",
+  profile: any,
+  prompt: string,
+  timeoutMs: number,
+  validate: (output: string | null) => string | null, // returns failure reason or null on success
+  deps: Required<ProbeDeps>,
+): Promise<ProbeLegResult> {
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+
+  let agentId: string | null = null;
+  let modelId = profile.model || "default";
+  try {
+    const { agentId: id } = deps.spawnHeadlessAgent(profile, { prompt });
+    agentId = id;
+  } catch (err: any) {
+    const failure: ProbeFailure = {
+      leg: legName,
+      kind: "spawn",
+      reason: `spawn error: ${err?.message || String(err)}`,
+    };
+    return { leg: legName, ok: false, failure, latencyMs: Date.now() - started, modelId };
+  }
+
+  const { state, result, outputBuffer } = await _probePollResult(agentId!, deadline, deps.getAgent);
+  const latencyMs = Date.now() - started;
+
+  const ag = deps.getAgent(agentId!);
+  if (ag?.model) modelId = ag.model;
+
+  if (state === "timeout") {
+    // Use killAgent to clean up the agents Map and clear the AGENT_TIMEOUT_MS
+    // setTimeout owned by spawnHeadlessAgent. A bare child.kill() leaks both.
+    try { deps.killAgent(agentId!); } catch {}
+    const failure: ProbeFailure = {
+      leg: legName,
+      kind: "timeout",
+      reason: `leg timed out after ${timeoutMs}ms`,
+    };
+    return { leg: legName, ok: false, failure, latencyMs, modelId };
+  }
+
+  if (state === "errored" || state === "error" || state === "missing") {
+    const failure: ProbeFailure = {
+      leg: legName,
+      kind: "spawn",
+      reason: `agent ${state}`,
+    };
+    return { leg: legName, ok: false, failure, latencyMs, modelId };
+  }
+
+  // Stream-json parsing can fail to populate `agent.result` when shape varies.
+  // Fall back to the raw stdout buffer before declaring failure — the spawner
+  // exposes it as `agent.outputBuffer`.
+  const candidate = result && result.length > 0 ? result : outputBuffer;
+  const validationReason = validate(candidate);
+  if (validationReason) {
+    const failure: ProbeFailure = {
+      leg: legName,
+      kind: "validation",
+      reason: validationReason,
+      raw: _truncateRaw(candidate),
+    };
+    return { leg: legName, ok: false, failure, latencyMs, modelId };
+  }
+  return { leg: legName, ok: true, latencyMs, modelId };
+}
+
+export async function probeAgent(
+  profile: any,
+  probe?: ProbeRequest,
+  deps?: ProbeDeps,
+): Promise<ProbeResult> {
+  const probeId = crypto.randomUUID();
+  const resolved: Required<ProbeDeps> = {
+    spawnHeadlessAgent: deps?.spawnHeadlessAgent ?? spawnHeadlessAgent,
+    getAgent: deps?.getAgent ?? getAgent,
+    killAgent: deps?.killAgent ?? killAgent,
+  };
+
+  // No declared model = real misconfiguration; bypass-routing means we have
+  // no fallback and audit attribution would be meaningless either way.
+  const declaredModel: string | null =
+    typeof profile?.model === "string" && profile.model.length > 0 ? profile.model : null;
+  if (!declaredModel) {
+    const misconfig: ProbeFailure = {
+      leg: null,
+      kind: "misconfig",
+      reason: "profile has no declared model",
+    };
+    const result: ProbeResult = {
+      ok: false,
+      latencyMs: 0,
+      failures: [misconfig],
+      modelId: "unknown",
+      probeId,
+      legs: [],
+    };
+    _emitAgentProbed(profile, result);
+    return result;
+  }
+
+  const configuredTimeoutMs = (() => {
+    const v = getProbeConfig().probeTimeoutMs;
+    return typeof v === "number" && v > 0 ? Math.floor(v) : DEFAULT_PROBE_TIMEOUT_MS_FALLBACK;
+  })();
+  const timeoutMs = probe?.timeoutMs ?? configuredTimeoutMs;
+  const factualPrompt = probe?.factual ?? DEFAULT_PROBE_FACTUAL;
+  const instructionPrompt = probe?.instructionFollowing ?? DEFAULT_PROBE_INSTRUCTION_FOLLOWING;
+  const toolUsePrompt = probe?.toolUse ?? DEFAULT_PROBE_TOOL_USE;
+
+  const allowedTools: string[] = Array.isArray(profile?.allowedTools) ? profile.allowedTools : [];
+  const canUseBash = allowedTools.includes("Bash");
+
+  // Bypass selectModel: pass a profile clone with `model` already set so the
+  // routing pass-through in spawnHeadlessAgent is a no-op.
+  const probeProfile = { ...profile, model: declaredModel };
+
+  const legs: Promise<ProbeLegResult>[] = [];
+
+  legs.push(
+    _runProbeLeg("factual", probeProfile, factualPrompt, timeoutMs, (out) => {
+      if (!out || !out.includes("42")) return "response missing '42'";
+      return null;
+    }, resolved)
+  );
+
+  legs.push(
+    _runProbeLeg("instructionFollowing", probeProfile, instructionPrompt, timeoutMs, (out) => {
+      if (!out || !out.includes("PROBE_REFUSAL_OK")) {
+        return "response missing required token 'PROBE_REFUSAL_OK' (instruction not followed)";
+      }
+      return null;
+    }, resolved)
+  );
+
+  if (canUseBash) {
+    legs.push(
+      _runProbeLeg("toolUse", probeProfile, toolUsePrompt, timeoutMs, (out) => {
+        if (!out || !out.includes("PROBE_OK")) return "response missing 'PROBE_OK' (tool likely not invoked)";
+        return null;
+      }, resolved)
+    );
+  }
+
+  const results = await Promise.all(legs);
+
+  const failures: ProbeFailure[] = [];
+  let maxLatency = 0;
+  for (const r of results) {
+    if (!r.ok && r.failure) failures.push(r.failure);
+    if (r.latencyMs > maxLatency) maxLatency = r.latencyMs;
+  }
+
+  // Aggregate modelId deterministically from the profile's declared model.
+  // Per-leg modelIds are surfaced in `legs[]` for the rare divergence case.
+  const result: ProbeResult = {
+    ok: failures.length === 0,
+    latencyMs: maxLatency,
+    failures,
+    modelId: declaredModel,
+    probeId,
+    legs: results,
+  };
+  _emitAgentProbed(profile, result);
+  return result;
+}
+
+// Emit agent:probed for audit attribution (FU-T3b). Fired exactly once per
+// probeAgent call — including the whole-probe misconfig short-circuit — so
+// the event stream is the source of truth for "which probes ran, when".
+function _emitAgentProbed(profile: any, result: ProbeResult): void {
+  const payload: AgentProbedPayload = {
+    probeId: result.probeId,
+    profileId: profile?.id ?? "unknown",
+    modelId: result.modelId,
+    ok: result.ok,
+    failures: result.failures,
+    latencyMs: result.latencyMs,
+    ts: new Date().toISOString(),
+  };
+  bus.emit(EVENTS.AGENT_PROBED, payload);
 }
 
 export async function handleOrchestratorCommand(payload, getWorkspaceFn) {

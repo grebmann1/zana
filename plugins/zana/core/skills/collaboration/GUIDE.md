@@ -70,6 +70,10 @@ Beyond directed messages, agents can emit and query a shared event log.
 
 Use events for telemetry-style coordination: "agent X finished," "build Y failed," "ticket Z claimed." Events are append-only and good for retrospective analysis or for a late-arriving agent catching up on what already happened.
 
+## See also
+
+For protocolized multi-voice consensus — bounded N voters, synthesis with verbatim dissent, content-addressed audit trail, and a typed verdict — see **Deliberation** in `plugins/zana/core/skills/orchestration/GUIDE.md`. Inboxes and channels are for ongoing chatter; deliberation is for one-shot governance.
+
 ## Best practices
 
 - **Prefer artifacts for large payloads.** Inboxes and channels are not blob storage. Anything over a few paragraphs belongs in an artifact; pass the ID instead.

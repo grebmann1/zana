@@ -44,6 +44,14 @@ module.exports = {
     watcher: require("./project/watcher"),
     workspaceContext: require("./project/workspace-context"),
   },
+  // Re-exported at top level so callers can do
+  //   const { WorkspaceNotInitializedError } = require("@zana/core");
+  // without reaching into project.* internals. Same class identity as
+  // require("@zana/core").project.workspaceContext.WorkspaceNotInitializedError
+  // — both resolve to the singleton module.
+  get WorkspaceNotInitializedError() {
+    return require("./project/workspace-context").WorkspaceNotInitializedError;
+  },
   daemon: {
     registry: require("./daemon/registry"),
     serviceManager: require("./daemon/service-manager"),
@@ -56,6 +64,7 @@ module.exports = {
     ptyHost: require("./agents/pty-host"),
     modelRouter: require("./agents/model-router"),
     terminalRelay: require("./agents/terminal-relay"),
+    probeConfig: require("./agents/probe-config"),
   },
   events: {
     // Flat shape on purpose: bus IS the EventEmitter, EVENTS IS the constants.
@@ -66,6 +75,10 @@ module.exports = {
     store: require("./events/store"),
     log: require("./events/log"),
     stats: require("./events/stats-engine"),
+    // Type-only module — required so the resolved path is part of the package
+    // surface; downstream TS consumers import payload types from
+    // "@zana/core/src/events/deliberation-events".
+    deliberationEvents: require("./events/deliberation-events"),
   },
   get hooks() {
     const h = require("@zana/server").hooks;

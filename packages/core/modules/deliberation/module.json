@@ -1,0 +1,28 @@
+{
+  "id": "deliberation",
+  "name": "Deliberation",
+  "version": "0.1.0",
+  "main": "index.js",
+  "description": "Multi-voice consensus protocol — phased lifecycle (PROPOSED→REVIEWING→SYNTHESIZING→CONVERGING→SETTLED|ESCALATED|EXHAUSTED) with quorum, anti-dropout-bias, argument-based synthesis, and bounded convergence rounds.",
+  "events": {
+    "emits": [
+      "deliberation:proposed",
+      "deliberation:vote",
+      "deliberation:synthesis",
+      "deliberation:converged",
+      "deliberation:escalated",
+      "deliberation:override"
+    ],
+    "subscribes": []
+  },
+  "configSchema": {
+    "defaultRounds": { "type": "number", "default": 2, "description": "Default convergence-round hard cap when propose() omits rounds" },
+    "defaultQuorum": { "type": "string", "default": "majority", "description": "Default quorum spec: 'majority' | 'all' | integer-as-string" },
+    "defaultMode": { "type": "string", "default": "synthesis", "description": "Default reduction mode: 'synthesis' | 'tally'" },
+    "checkpointTTLDays": { "type": "number", "default": 7, "description": "Days before a deliberation checkpoint is eligible for sweep" },
+    "occMaxRetries": { "type": "number", "default": 3, "description": "Max stale-retry attempts on StaleDeliberationError in assembleCouncil and applyDecision" },
+    "probeTimeoutMs": { "type": "number", "default": 30000, "description": "Default per-leg timeout for probeAgent" },
+    "probeRawMaxBytes": { "type": "number", "default": 1024, "description": "Max bytes of raw probe response captured in ProbeFailure.raw" },
+    "synthesisSimilarityThreshold": { "type": "number", "default": 0.45, "description": "Dice coefficient threshold for cross-voter finding grouping" }
+  }
+}

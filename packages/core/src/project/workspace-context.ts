@@ -12,6 +12,38 @@ let _workspaceRoot = null;
 let _projectDir = null;
 
 /**
+ * Thrown when a tenant-isolated operation is attempted against an
+ * uninitialized workspace context. Callers can `instanceof`-check or
+ * dispatch on `code === "WORKSPACE_NOT_INITIALIZED"`.
+ *
+ * Used by the deliberation runtime (CAS writes + checkpoint writes with
+ * kind="deliberation") to refuse silent fallback into the global
+ * `~/.zana/` namespace, which would let two workspaces share
+ * deliberations while running independent quorum/TTL settings.
+ */
+export class WorkspaceNotInitializedError extends Error {
+  code = "WORKSPACE_NOT_INITIALIZED";
+  operation;
+  path;
+  requestedKind;
+  constructor(opts) {
+    const op = opts && opts.operation ? opts.operation : "write";
+    const p = opts && typeof opts.path === "string" ? opts.path : "";
+    const kind = opts && typeof opts.requestedKind === "string" ? opts.requestedKind : undefined;
+    const detail = kind ? ` (kind=${kind})` : "";
+    super(
+      `workspace not initialized — refusing tenant-isolated ${op}${detail}` +
+        (p ? ` at ${p}` : "") +
+        ". Run `zana init` (or call workspaceContext.init) before deliberation operations.",
+    );
+    this.name = "WorkspaceNotInitializedError";
+    this.operation = op;
+    this.path = p;
+    if (kind !== undefined) this.requestedKind = kind;
+  }
+}
+
+/**
  * Walk up from startPath looking for an existing .zana/ directory.
  * Stops at filesystem root or when a .git directory is found (project boundary).
  * If not found, returns path.join(startPath, '.zana') as the expected location.
@@ -102,6 +134,17 @@ export function getProjectPaths() {
  */
 export function isInitialized() {
   return _workspaceRoot !== null;
+}
+
+/**
+ * Test-only — drops the singleton back to its pre-init state. Production
+ * code MUST NOT call this; the singleton is process-global by design and
+ * resetting it mid-flight would void tenant isolation. Exposed solely so
+ * tests can simulate "workspace not yet bootstrapped" between cases.
+ */
+export function _resetForTesting() {
+  _workspaceRoot = null;
+  _projectDir = null;
 }
 
 /**
