@@ -1,8 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { serializeYaml, parseYaml } from "./yaml-format";
-
-const MAX_HISTORY = 10;
+import { resolveHistoryConfig } from "./schema";
 
 function getSchedulerDir(): string {
   return require("@zana/core").config.SCHEDULER_DIR;
@@ -169,10 +168,17 @@ export function getRunHistory(id) {
 
 export function appendRunResult(id, result) {
   ensureDir();
+  const schedule = getSchedule(id);
+  const cfg = resolveHistoryConfig(schedule);
+  if (!cfg.enabled || cfg.retain === 0) {
+    // History disabled or zero-retention — make sure no stale file remains.
+    try { fs.unlinkSync(path.join(getSchedulerDir(), `${id}.history.json`)); } catch {}
+    return [];
+  }
   let history = getRunHistory(id);
   history.push(result);
-  if (history.length > MAX_HISTORY) {
-    history = history.slice(-MAX_HISTORY);
+  if (history.length > cfg.retain) {
+    history = history.slice(-cfg.retain);
   }
   fs.writeFileSync(
     path.join(getSchedulerDir(), `${id}.history.json`),
@@ -193,6 +199,10 @@ export function appendRunResult(id, result) {
  */
 export function updateRunResult(scheduleId, agentId, fields) {
   ensureDir();
+  // If history is disabled there's nothing to patch; appendRunResult would
+  // have skipped writing the entry in the first place.
+  const cfg = resolveHistoryConfig(getSchedule(scheduleId));
+  if (!cfg.enabled) return null;
   const history = getRunHistory(scheduleId);
   if (!Array.isArray(history) || history.length === 0) return null;
 

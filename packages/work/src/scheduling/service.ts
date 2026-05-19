@@ -3,6 +3,20 @@ import { execFile } from "node:child_process";
 import * as schedulerStore from "./store";
 import { pickBackend, computeNextRunAt } from "./triggers";
 import { everShorthandToMs } from "./yaml-format";
+import { validateSchedule, ValidationIssue } from "./schema";
+
+function logWarnings(scheduleId: string, issues: ValidationIssue[]) {
+  for (const w of issues) {
+    if (w.level === "warning") {
+      console.warn(`[scheduler] ${scheduleId}: ${w.field}: ${w.message}`);
+    }
+  }
+}
+
+function firstError(issues: ValidationIssue[]): string | null {
+  const e = issues.find((i) => i.level === "error");
+  return e ? `${e.field}: ${e.message}` : null;
+}
 
 interface ActiveTrigger {
   scheduleId: string;
@@ -155,6 +169,7 @@ export function createSchedule(params) {
       ...(intervalMs != null ? { intervalMs } : {}),
     },
     action: params.action,
+    ...(params.history ? { history: params.history } : {}),
     ownerId: params.ownerId || null,
     ownerName: params.ownerName || null,
     createdAt: new Date().toISOString(),
@@ -166,6 +181,11 @@ export function createSchedule(params) {
       runCount: 0,
     },
   };
+
+  const issues = validateSchedule(schedule);
+  const err = firstError(issues);
+  if (err) return { error: `invalid schedule: ${err}` };
+  logWarnings(schedule.id, issues);
 
   // Default new schedules to YAML.
   schedulerStore.saveScheduleYaml(schedule);
@@ -190,6 +210,12 @@ export function updateSchedule(id, fields) {
   if (!schedule) return { error: "schedule not found" };
 
   const updated = { ...schedule, ...fields, id, updatedAt: new Date().toISOString() };
+
+  const issues = validateSchedule(updated);
+  const err = firstError(issues);
+  if (err) return { error: `invalid schedule: ${err}` };
+  logWarnings(id, issues);
+
   // Preserve the original on-disk format.
   schedulerStore.saveScheduleSameFormat(updated);
 

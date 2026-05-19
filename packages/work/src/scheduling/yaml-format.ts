@@ -55,6 +55,11 @@ export function serializeYaml(schedule: any): string {
   // action — pass through
   if (schedule.action) ordered.action = schedule.action;
 
+  // history — pass through if user-configured
+  if (schedule.history && typeof schedule.history === "object") {
+    ordered.history = schedule.history;
+  }
+
   // owner / metadata fields
   if (schedule.ownerId != null) ordered.ownerId = schedule.ownerId;
   if (schedule.ownerName != null) ordered.ownerName = schedule.ownerName;
