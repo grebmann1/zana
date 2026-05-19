@@ -1,0 +1,38 @@
+---
+import MythicDivider from './MythicDivider.astro';
+const year = new Date().getFullYear();
+---
+
+<footer class="mt-24 border-t border-forest/10 bg-parchment/40">
+  <div class="container-zana py-14">
+    <MythicDivider />
+    <div class="mt-10 grid gap-10 md:grid-cols-4">
+      <div class="md:col-span-2">
+        <p class="font-display text-2xl text-forest">zana</p>
+        <p class="mt-3 max-w-md text-sm text-moss">
+          A multi-agent orchestrator for Claude Code. Named for the
+          <em>zana</em> &mdash; the fairy of Albanian mountain folklore who
+          guides heroes through impossible tasks.
+        </p>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-widest text-gold">Explore</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li><a class="text-forest hover:text-berry" href="/how-it-works">How it works</a></li>
+          <li><a class="text-forest hover:text-berry" href="/features">Features</a></li>
+          <li><a class="text-forest hover:text-berry" href="/docs">Get started</a></li>
+          <li><a class="text-forest hover:text-berry" href="/about">About</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-widest text-gold">Open source</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li><a class="text-forest hover:text-berry" href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a class="text-forest hover:text-berry" href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">MCP</a></li>
+          <li><a class="text-forest hover:text-berry" href="https://claude.com/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="mt-12 text-xs text-moss/80">© {year} Zana. Crafted with care for orchestrators everywhere.</p>
+  </div>
+</footer>

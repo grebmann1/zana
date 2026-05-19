@@ -1,0 +1,173 @@
+---
+// A subtle canvas particle layer — fireflies that drift, glow, and ease toward the cursor.
+// Decorative only; respects prefers-reduced-motion.
+interface Props { class?: string; }
+const { class: className } = Astro.props;
+---
+<canvas
+  class={`firefly-canvas pointer-events-none absolute inset-0 h-full w-full ${className ?? ''}`}
+  data-fireflies
+  aria-hidden="true"
+></canvas>
+
+<script>
+  type Firefly = {
+    x: number; y: number;
+    vx: number; vy: number;
+    r: number;
+    hue: number;
+    phase: number;
+    pulse: number;
+  };
+
+  const PALETTE = [
+    [255, 244, 209], // pale gold
+    [201, 169, 97],  // gold
+    [229, 212, 161], // soft gold
+    [200, 150, 70],  // amber
+  ];
+
+  function init(canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
+
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const cssDpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0, height = 0;
+    let raf = 0;
+    let mouseX = -9999, mouseY = -9999;
+    let last = performance.now();
+
+    const flies: Firefly[] = [];
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = Math.floor(width * cssDpr);
+      canvas.height = Math.floor(height * cssDpr);
+      ctx.setTransform(cssDpr, 0, 0, cssDpr, 0, 0);
+    };
+    resize();
+
+    const count = reduce ? 12 : Math.min(48, Math.floor((width * height) / 14000));
+    for (let i = 0; i < count; i++) {
+      flies.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.18,
+        vy: (Math.random() - 0.5) * 0.18,
+        r: 1.1 + Math.random() * 2.6,
+        hue: Math.floor(Math.random() * PALETTE.length),
+        phase: Math.random() * Math.PI * 2,
+        pulse: 0.8 + Math.random() * 1.6,
+      });
+    }
+
+    const onMove = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    };
+    const onLeave = () => {
+      mouseX = -9999; mouseY = -9999;
+    };
+
+    canvas.parentElement?.addEventListener('pointermove', onMove);
+    canvas.parentElement?.addEventListener('pointerleave', onLeave);
+    window.addEventListener('resize', resize);
+
+    const tick = (now: number) => {
+      const dt = Math.min(48, now - last);
+      last = now;
+      ctx.clearRect(0, 0, width, height);
+
+      for (const f of flies) {
+        // gentle wandering
+        f.vx += (Math.random() - 0.5) * 0.012;
+        f.vy += (Math.random() - 0.5) * 0.012;
+
+        // gravitate softly toward cursor
+        const dx = mouseX - f.x;
+        const dy = mouseY - f.y;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 < 240 * 240) {
+          const dist = Math.sqrt(dist2) || 1;
+          const pull = (240 - dist) / 240;
+          f.vx += (dx / dist) * pull * 0.04;
+          f.vy += (dy / dist) * pull * 0.04;
+        }
+
+        // damp
+        f.vx *= 0.985;
+        f.vy *= 0.985;
+
+        // clamp speed
+        const sp = Math.hypot(f.vx, f.vy);
+        const maxSp = reduce ? 0.4 : 0.9;
+        if (sp > maxSp) { f.vx = (f.vx / sp) * maxSp; f.vy = (f.vy / sp) * maxSp; }
+
+        f.x += f.vx * (dt / 16);
+        f.y += f.vy * (dt / 16);
+
+        // wrap
+        if (f.x < -10) f.x = width + 10;
+        if (f.x > width + 10) f.x = -10;
+        if (f.y < -10) f.y = height + 10;
+        if (f.y > height + 10) f.y = -10;
+
+        // pulse glow
+        f.phase += dt * 0.001 * f.pulse;
+        const glow = 0.55 + Math.sin(f.phase) * 0.45;
+
+        const [r, g, b] = PALETTE[f.hue];
+
+        // outer halo
+        const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 8);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${0.28 * glow})`);
+        grad.addColorStop(0.5, `rgba(${r},${g},${b},${0.08 * glow})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r * 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // core
+        ctx.fillStyle = `rgba(${r},${g},${b},${0.85 * glow + 0.15})`;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // bright highlight
+        ctx.fillStyle = `rgba(255,255,255,${0.6 * glow})`;
+        ctx.beginPath();
+        ctx.arc(f.x - f.r * 0.3, f.y - f.r * 0.3, f.r * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+
+    // cleanup on page hide
+    const cleanup = () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+      canvas.parentElement?.removeEventListener('pointermove', onMove);
+      canvas.parentElement?.removeEventListener('pointerleave', onLeave);
+    };
+    window.addEventListener('pagehide', cleanup, { once: true });
+  }
+
+  document.querySelectorAll<HTMLCanvasElement>('canvas[data-fireflies]').forEach(init);
+</script>
+
+<style>
+  .firefly-canvas {
+    mix-blend-mode: multiply;
+  }
+  @media (prefers-color-scheme: dark) {
+    .firefly-canvas { mix-blend-mode: screen; }
+  }
+</style>

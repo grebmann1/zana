@@ -1,0 +1,21 @@
+---
+interface Props {
+  caption?: string;
+  lang?: string;
+}
+const { caption, lang = 'bash' } = Astro.props;
+---
+<figure class="overflow-hidden rounded-xl border border-forest/15 bg-ink shadow-lg">
+  {caption && (
+    <figcaption class="flex items-center justify-between border-b border-white/5 bg-black/30 px-4 py-2 text-xs text-gold-soft">
+      <span class="flex items-center gap-2">
+        <span class="inline-block h-2 w-2 rounded-full bg-berry/80"></span>
+        <span class="inline-block h-2 w-2 rounded-full bg-gold/80"></span>
+        <span class="inline-block h-2 w-2 rounded-full bg-moss/80"></span>
+        <span class="ml-2">{caption}</span>
+      </span>
+      <span class="uppercase tracking-widest text-gold/70">{lang}</span>
+    </figcaption>
+  )}
+  <pre class="overflow-x-auto px-5 py-4 text-sm leading-relaxed text-cream font-mono"><code><slot /></code></pre>
+</figure>

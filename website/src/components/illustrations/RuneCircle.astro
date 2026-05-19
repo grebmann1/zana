@@ -1,0 +1,215 @@
+---
+// Orchestration rune circle — Art-Nouveau styling, animated message flow,
+// glyph per agent role, labels placed outside the ring.
+interface Props { class?: string; }
+const { class: className } = Astro.props;
+
+type Agent = {
+  label: string;
+  angle: number;          // degrees, 0 = top
+  glyph: 'compass' | 'code' | 'flask' | 'eye' | 'lens' | 'shield';
+};
+
+const agents: Agent[] = [
+  { label: 'architect',  angle: 0,   glyph: 'compass' },
+  { label: 'coder',      angle: 60,  glyph: 'code'    },
+  { label: 'tester',     angle: 120, glyph: 'flask'   },
+  { label: 'reviewer',   angle: 180, glyph: 'eye'     },
+  { label: 'researcher', angle: 240, glyph: 'lens'    },
+  { label: 'security',   angle: 300, glyph: 'shield'  },
+];
+
+const cx = 260;
+const cy = 260;
+const r = 175;          // spoke radius (where node centers sit)
+const labelR = r + 50;  // where text labels sit (outside ring)
+
+const polar = (angle: number, radius: number) => {
+  const rad = (angle - 90) * (Math.PI / 180);
+  return { x: cx + Math.cos(rad) * radius, y: cy + Math.sin(rad) * radius };
+};
+
+// label anchor based on angle position
+const labelAnchor = (angle: number) => {
+  const a = ((angle % 360) + 360) % 360;
+  if (a > 30 && a < 150) return 'start';
+  if (a > 210 && a < 330) return 'end';
+  return 'middle';
+};
+---
+<svg
+  viewBox="0 0 520 520"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="A rune circle diagram. The orchestrator sits at the center; six specialist agents — architect, coder, tester, reviewer, researcher, and security — orbit on the outer ring, connected by dashed paths along which messages flow."
+  class={className}
+>
+  <defs>
+    <radialGradient id="rcStage" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFF4D1" stop-opacity="0.55" />
+      <stop offset="55%" stop-color="#E5D4A1" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#C9A961" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="rcCenter" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#FFFBEC" />
+      <stop offset="60%" stop-color="#FAF0CD" />
+      <stop offset="100%" stop-color="#E8D6A1" />
+    </radialGradient>
+    <radialGradient id="rcCenterCore" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="35%" stop-color="#FFE9A1" />
+      <stop offset="100%" stop-color="#C9A961" />
+    </radialGradient>
+    <radialGradient id="rcNode" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#FFFBEC" />
+      <stop offset="100%" stop-color="#F1E2B5" />
+    </radialGradient>
+    <radialGradient id="rcPulse" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#C9A961" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#C9A961" stop-opacity="0" />
+    </radialGradient>
+    <filter id="rcSoft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.2" />
+    </filter>
+    <filter id="rcShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+      <feOffset dy="2" />
+      <feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Agent glyphs (defined once, referenced via <use>) -->
+    <g id="g-compass">
+      <circle r="9" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M 0 -9 L 0 9 M -9 0 L 9 0" stroke="currentColor" stroke-width="0.7" opacity="0.7"/>
+      <circle r="1.6" fill="currentColor"/>
+      <path d="M 0 -7 L 1.5 0 L 0 1.5 L -1.5 0 Z" fill="currentColor" opacity="0.85"/>
+    </g>
+    <g id="g-code">
+      <path d="M -8 -5 L -3 0 L -8 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 8 -5 L 3 0 L 8 5"   fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 1 -8 L -1 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g id="g-flask">
+      <path d="M -3 -7 L -3 -2 L -7 6 Q -7 9 -3 9 L 3 9 Q 7 9 7 6 L 3 -2 L 3 -7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M -5 -7 L 5 -7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M -6 4 Q 0 1 6 4" stroke="currentColor" stroke-width="1" fill="none"/>
+      <circle cx="-2" cy="6" r="0.8" fill="currentColor"/>
+      <circle cx="2"  cy="3" r="0.6" fill="currentColor"/>
+    </g>
+    <g id="g-eye">
+      <path d="M -10 0 Q 0 -7 10 0 Q 0 7 -10 0 Z" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <circle r="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <circle r="1.2" fill="currentColor"/>
+    </g>
+    <g id="g-lens">
+      <circle cx="-2" cy="-2" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M 3 3 L 9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M -4 -4 Q -2 -6 0 -5" stroke="currentColor" stroke-width="0.7" fill="none" opacity="0.7"/>
+    </g>
+    <g id="g-shield">
+      <path d="M 0 -9 L 7 -6 L 7 1 Q 7 7 0 10 Q -7 7 -7 1 L -7 -6 Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M -3 -1 L -1 2 L 4 -3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </defs>
+
+  <!-- Stage glow -->
+  <circle cx={cx} cy={cy} r={r + 90} fill="url(#rcStage)" />
+
+  <!-- Outer rune ring (decorative dotted) -->
+  <circle cx={cx} cy={cy} r={r + 22} fill="none" stroke="#C9A961" stroke-width="0.6" stroke-dasharray="0.5 4" opacity="0.55"/>
+  <circle cx={cx} cy={cy} r={r + 12} fill="none" stroke="#C9A961" stroke-width="0.5" opacity="0.35"/>
+
+  <!-- Cardinal rune marks (replacing the previous fragmentary triangles) -->
+  <g fill="none" stroke="#C9A961" stroke-width="1" stroke-linecap="round">
+    <!-- top -->
+    <g transform={`translate(${cx} ${cy - r - 38})`}>
+      <path d="M -4 0 L 4 0 M 0 -4 L 0 4" />
+      <circle r="1.2" fill="#C9A961" stroke="none"/>
+    </g>
+    <!-- right -->
+    <g transform={`translate(${cx + r + 38} ${cy})`}>
+      <path d="M -3 -3 L 3 3 M -3 3 L 3 -3" />
+    </g>
+    <!-- bottom -->
+    <g transform={`translate(${cx} ${cy + r + 38})`}>
+      <path d="M -4 -2 L 4 -2 M -2 2 L 2 2 M 0 -4 L 0 4" />
+    </g>
+    <!-- left -->
+    <g transform={`translate(${cx - r - 38} ${cy})`}>
+      <path d="M 0 -4 L 4 0 L 0 4 Z" />
+    </g>
+  </g>
+
+  <!-- Spokes (animated dashed message flow toward center) -->
+  {agents.map((a, i) => {
+    const p = polar(a.angle, r);
+    return (
+      <g>
+        <line
+          x1={cx} y1={cy} x2={p.x} y2={p.y}
+          stroke="#4A7856" stroke-width="0.9" opacity="0.32"
+          stroke-dasharray="3 5"
+        >
+          <animate attributeName="stroke-dashoffset" from="0" to="-32" dur={`${6 + (i % 3)}s`} repeatCount="indefinite" />
+        </line>
+        <!-- traveling dot — a message in transit -->
+        <circle r="2.2" fill="#C9A961" opacity="0.85">
+          <animateMotion dur={`${5 + i}s`} repeatCount="indefinite" path={`M ${p.x} ${p.y} L ${cx} ${cy}`} />
+          <animate attributeName="opacity" values="0;0.9;0" keyTimes="0;0.5;1" dur={`${5 + i}s`} repeatCount="indefinite" />
+        </circle>
+      </g>
+    );
+  })}
+
+  <!-- Center: orchestrator (you) -->
+  <g filter="url(#rcShadow)">
+    <!-- pulsing aura -->
+    <circle cx={cx} cy={cy} r="68" fill="url(#rcPulse)">
+      <animate attributeName="r" values="58;72;58" dur="5s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.5;0.85;0.5" dur="5s" repeatCount="indefinite" />
+    </circle>
+    <circle cx={cx} cy={cy} r="46" fill="url(#rcCenter)" stroke="#2D5F3F" stroke-width="1.6"/>
+    <circle cx={cx} cy={cy} r="42" fill="none" stroke="#C9A961" stroke-width="0.6" stroke-dasharray="1 3" opacity="0.8"/>
+    <!-- gold core -->
+    <circle cx={cx} cy={cy} r="9" fill="url(#rcCenterCore)"/>
+    <circle cx={cx} cy={cy} r="3.2" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+  <!-- Labels above/below center -->
+  <text x={cx} y={cy - 60} text-anchor="middle" font-family="Inter, sans-serif" font-size="10" fill="#4A7856" letter-spacing="3" font-weight="600">YOU</text>
+  <text x={cx} y={cy + 70} text-anchor="middle" font-family="Fraunces, serif" font-size="14" font-style="italic" fill="#2D5F3F" font-weight="600">orchestrator</text>
+
+  <!-- Agent nodes -->
+  {agents.map((a, i) => {
+    const p = polar(a.angle, r);
+    const lp = polar(a.angle, labelR);
+    const anchor = labelAnchor(a.angle);
+    return (
+      <g>
+        <!-- soft halo -->
+        <circle cx={p.x} cy={p.y} r="32" fill="url(#rcPulse)" opacity="0.6">
+          <animate attributeName="r" values="24;34;24" dur={`${4 + (i * 0.4)}s`} begin={`${i * 0.5}s`} repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.3;0.7;0.3" dur={`${4 + (i * 0.4)}s`} begin={`${i * 0.5}s`} repeatCount="indefinite" />
+        </circle>
+        <!-- node body -->
+        <g filter="url(#rcShadow)">
+          <circle cx={p.x} cy={p.y} r="22" fill="url(#rcNode)" stroke="#2D5F3F" stroke-width="1.3"/>
+        </g>
+        <circle cx={p.x} cy={p.y} r="20" fill="none" stroke="#C9A961" stroke-width="0.5" stroke-dasharray="1 2" opacity="0.7"/>
+        <!-- glyph (forest color) -->
+        <g transform={`translate(${p.x} ${p.y})`} color="#2D5F3F">
+          <use href={`#g-${a.glyph}`} />
+        </g>
+        <!-- label -->
+        <text
+          x={lp.x} y={lp.y + 4}
+          text-anchor={anchor}
+          font-family="Inter, sans-serif"
+          font-size="13"
+          font-weight="600"
+          fill="#2D5F3F"
+        >{a.label}</text>
+      </g>
+    );
+  })}
+</svg>

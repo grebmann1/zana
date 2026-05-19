@@ -1,0 +1,23 @@
+---
+// Drifting seeds — used as decorative bg in sections.
+interface Props { class?: string; count?: number; }
+const { class: className, count = 8 } = Astro.props;
+const seeds = Array.from({ length: count }, (_, i) => ({
+  x: Math.round(((i * 137) % 100)),
+  y: Math.round(((i * 73) % 100)),
+  delay: (i * 1.2).toFixed(1),
+  size: 1 + ((i * 0.4) % 1.5),
+}));
+---
+<div class={`pointer-events-none absolute inset-0 overflow-hidden ${className ?? ''}`} aria-hidden="true">
+  {seeds.map((s) => (
+    <svg
+      class="absolute animate-drift"
+      style={`left:${s.x}%; top:${s.y}%; animation-delay:${s.delay}s; width:${10 + s.size * 4}px; height:${10 + s.size * 4}px;`}
+      viewBox="0 0 16 16" fill="none"
+    >
+      <circle cx="8" cy="8" r="1.4" fill="#C9A961" />
+      <path d="M8 6 L11 2 M8 6 L5 2 M8 6 L8 1" stroke="#C9A961" stroke-width="0.6" stroke-linecap="round" />
+    </svg>
+  ))}
+</div>

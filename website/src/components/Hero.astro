@@ -1,0 +1,111 @@
+---
+import Fairy from './illustrations/Fairy.astro';
+import FireflyCanvas from './illustrations/FireflyCanvas.astro';
+import DandelionSeeds from './illustrations/DandelionSeeds.astro';
+---
+
+<section class="relative overflow-hidden">
+  <DandelionSeeds count={5} class="opacity-50" />
+
+  <div class="container-zana relative grid items-center gap-12 py-20 md:grid-cols-[1.05fr_1fr] md:py-28">
+    <!-- Copy column -->
+    <div class="relative z-10">
+      <p class="ornament text-xs uppercase text-gold">— a fairy of the mountains —</p>
+      <h1 class="mt-4 font-display text-5xl leading-[1.05] text-forest sm:text-6xl md:text-7xl">
+        Make the wishes.<br />
+        <span class="italic text-berry">The work gets done.</span>
+      </h1>
+      <p class="mt-6 max-w-xl text-lg text-moss">
+        <strong class="text-forest">Zana</strong> is a multi-agent orchestrator
+        for Claude Code. Spawn a council of specialists, coordinate their work,
+        and ship — all from one conversation.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="/docs" class="btn-primary">
+          Get started
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <a href="/how-it-works" class="btn-ghost">See how it works</a>
+      </div>
+      <dl class="mt-12 grid grid-cols-3 gap-6 max-w-md">
+        <div>
+          <dt class="font-display text-3xl text-forest">86<span class="text-gold">+</span></dt>
+          <dd class="text-xs uppercase tracking-wider text-moss">MCP tools</dd>
+        </div>
+        <div>
+          <dt class="font-display text-3xl text-forest">11</dt>
+          <dd class="text-xs uppercase tracking-wider text-moss">agent profiles</dd>
+        </div>
+        <div>
+          <dt class="font-display text-3xl text-forest">∞</dt>
+          <dd class="text-xs uppercase tracking-wider text-moss">parallel work</dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Fairy stage column -->
+    <div class="fairy-stage relative">
+      <!-- ambient glow (CSS-only, ultra-soft) -->
+      <div class="fairy-glow" aria-hidden="true"></div>
+      <!-- fireflies layer behind the fairy -->
+      <FireflyCanvas />
+      <!-- runic ring behind the figure -->
+      <svg class="fairy-rune" viewBox="0 0 500 500" aria-hidden="true">
+        <defs>
+          <radialGradient id="ringGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="50%" stop-color="#C9A961" stop-opacity="0" />
+            <stop offset="100%" stop-color="#C9A961" stop-opacity="0.35" />
+          </radialGradient>
+        </defs>
+        <circle cx="250" cy="250" r="232" fill="none" stroke="url(#ringGrad)" stroke-width="0.6" />
+        <circle cx="250" cy="250" r="220" fill="none" stroke="#C9A961" stroke-width="0.5" stroke-dasharray="1 6" opacity="0.5" />
+        <circle cx="250" cy="250" r="200" fill="none" stroke="#C9A961" stroke-width="0.4" stroke-dasharray="2 10" opacity="0.35" />
+      </svg>
+      <!-- the fairy herself -->
+      <Fairy class="fairy-figure relative z-10 w-full max-w-[520px] mx-auto" />
+    </div>
+  </div>
+</section>
+
+<style>
+  .fairy-stage {
+    aspect-ratio: 1 / 1.05;
+    isolation: isolate;
+  }
+  .fairy-glow {
+    position: absolute;
+    inset: -10%;
+    background:
+      radial-gradient(closest-side, rgba(255, 244, 209, 0.55), rgba(229, 212, 161, 0.18) 45%, transparent 70%);
+    filter: blur(8px);
+    z-index: 0;
+    animation: fairyGlowPulse 7s ease-in-out infinite;
+  }
+  .fairy-rune {
+    position: absolute;
+    inset: 4%;
+    z-index: 1;
+    animation: runeSpin 90s linear infinite;
+    transform-origin: center;
+  }
+  .fairy-figure {
+    animation: fairyHover 8s ease-in-out infinite;
+    filter: drop-shadow(0 22px 40px rgba(45, 95, 63, 0.18));
+  }
+  @keyframes fairyHover {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes runeSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes fairyGlowPulse {
+    0%, 100% { opacity: 0.85; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.04); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fairy-figure, .fairy-rune, .fairy-glow { animation: none; }
+  }
+</style>

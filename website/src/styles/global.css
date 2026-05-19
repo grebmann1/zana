@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --cream: #FAF6E8;
+    --parchment: #F3EBD3;
+    --forest: #2D5F3F;
+    --moss: #4A7856;
+    --gold: #C9A961;
+    --gold-soft: #E5D4A1;
+    --berry: #8B3A4E;
+    --ink: #1F2A24;
+  }
+
+  html {
+    background-color: var(--cream);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(201, 169, 97, 0.15), transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, rgba(74, 120, 86, 0.10), transparent 65%),
+      var(--cream);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+    color: var(--forest);
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: var(--gold);
+    color: var(--ink);
+  }
+
+  /* Focus states — accessibility */
+  :focus-visible {
+    outline: 2px solid var(--berry);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  .container-zana {
+    @apply mx-auto max-w-6xl px-6 sm:px-8;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-full bg-forest px-6 py-3 font-medium text-cream transition hover:bg-ink hover:shadow-lg;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-full border border-forest/30 px-6 py-3 font-medium text-forest transition hover:border-forest hover:bg-forest/5;
+  }
+
+  .ornament {
+    color: var(--gold);
+    letter-spacing: 0.6em;
+    font-feature-settings: 'liga';
+  }
+
+  .grain::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.16 0 0 0 0 0.14 0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.05;
+    mix-blend-mode: multiply;
+  }
+}

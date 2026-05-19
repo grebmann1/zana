@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Hero from '../components/Hero.astro';
+import PillarCard from '../components/PillarCard.astro';
+import FeatureCard from '../components/FeatureCard.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import MythicDivider from '../components/MythicDivider.astro';
+
+const pillars = [
+  {
+    glyph: 'orchestrate' as const,
+    title: 'Orchestrate',
+    body: 'Spawn specialized agents — architect, coder, tester, reviewer — and coordinate them with named messaging. You plan; they implement.',
+  },
+  {
+    glyph: 'deliberate' as const,
+    title: 'Deliberate',
+    body: 'Bounded multi-perspective review with a verdict and an audit trail. Disagreement is preserved, not papered over.',
+  },
+  {
+    glyph: 'automate' as const,
+    title: 'Automate',
+    body: 'Goal-driven autopilot loops, YAML-scheduled work, and event-bus replay. Set the criteria; let the council pursue them.',
+  },
+];
+
+const features = [
+  { tag: 'Agents', title: '11 built-in profiles', body: 'Architect, backend-dev, frontend-dev, code-reviewer, debugger, doc-generator, researcher, security-reviewer, test-writer, ux-designer, api-designer.' },
+  { tag: 'Teams', title: 'Pipeline · fan-out · supervisor', body: 'Compose topologies for sequential dependencies, independent parallel work, or ongoing coordination.' },
+  { tag: 'Tickets', title: 'The unit of dispatch', body: 'Independent, small, verifiable work items — fits inside one agent\'s context, plus margin for tools and tests.' },
+  { tag: 'Deliberation', title: 'Multi-voter consensus', body: 'Run security-reviewer, performance-engineer, and architect on a decision. Get a synthesized verdict with dissent intact.' },
+  { tag: 'Schedules', title: 'YAML cron + interval', body: 'Persistent schedules that survive daemon restarts. Spawn agents, run commands, or trigger teams on a cadence.' },
+  { tag: 'MCP', title: '86+ tools, one server', body: 'Agent spawn, ticket management, profiles, skills, memory, event bus, scheduling — exposed to any MCP-aware tool.' },
+];
+---
+
+<BaseLayout
+  title="Zana"
+  description="Zana is a multi-agent orchestrator for Claude Code. Spawn a council of specialists, coordinate their work, and ship — all from one conversation."
+>
+  <Hero />
+
+  <!-- What is Zana -->
+  <section class="container-zana py-16">
+    <MythicDivider />
+    <div class="mt-10 grid gap-10 md:grid-cols-[1fr_2fr] md:gap-16">
+      <h2 class="font-display text-4xl text-forest">What is Zana?</h2>
+      <div class="text-lg leading-relaxed text-ink/85">
+        <p>
+          Zana is a long-lived daemon that exposes an
+          <abbr title="Model Context Protocol">MCP</abbr> server, letting a
+          single conversation in Claude Code spawn, supervise, and synthesize
+          the work of many specialized worker agents.
+        </p>
+        <p class="mt-4">
+          You become the executive coordinator. Workers implement. Zana keeps
+          the loop honest about progress.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Three Pillars -->
+  <section class="relative py-16 bg-parchment/40">
+    <div class="container-zana">
+      <p class="ornament text-xs text-gold">— three pillars —</p>
+      <h2 class="mt-3 font-display text-4xl text-forest">A different way to build with agents.</h2>
+      <div class="mt-12 grid gap-6 md:grid-cols-3">
+        {pillars.map((p) => (
+          <PillarCard glyph={p.glyph} title={p.title} body={p.body} />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Code preview -->
+  <section class="container-zana py-20">
+    <div class="grid gap-12 md:grid-cols-2 md:items-center">
+      <div>
+        <p class="ornament text-xs text-gold">— quickstart —</p>
+        <h2 class="mt-3 font-display text-4xl text-forest">One command to summon the council.</h2>
+        <p class="mt-4 text-moss leading-relaxed">
+          Zana ships as an MCP server you wire into Claude Code. From there,
+          the <code class="rounded bg-parchment px-1.5 py-0.5 text-sm text-ink">/zana</code>
+          slash command spawns agents, opens tickets, and runs deliberations on demand.
+        </p>
+        <a href="/docs" class="mt-6 inline-flex text-forest font-medium underline-offset-4 hover:underline">
+          Read the full quickstart →
+        </a>
+      </div>
+      <div class="space-y-4">
+        <CodeBlock caption="Install the daemon" lang="bash">{`# Install globally
+npm i -g @zana/cli
+
+# Start the daemon
+zana daemon start
+
+# Wire into Claude Code (MCP)
+claude mcp add zana -- zana mcp`}</CodeBlock>
+        <CodeBlock caption="Spawn a team" lang="text">{`/zana spawn team \\
+  --members architect,coder,tester,reviewer \\
+  --task "Add bearer-token auth to /api/v2"`}</CodeBlock>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature grid -->
+  <section class="relative py-20 bg-parchment/40">
+    <div class="container-zana">
+      <p class="ornament text-xs text-gold">— what's inside —</p>
+      <h2 class="mt-3 font-display text-4xl text-forest">Primitives, not just prompts.</h2>
+      <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        {features.map((f) => (
+          <FeatureCard tag={f.tag} title={f.title} body={f.body} />
+        ))}
+      </div>
+      <div class="mt-10">
+        <a href="/features" class="btn-ghost">Explore all features</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA band -->
+  <section class="container-zana py-24">
+    <div class="relative overflow-hidden rounded-3xl border border-gold/30 bg-gradient-to-br from-cream via-parchment to-gold-soft/40 p-10 md:p-16">
+      <div class="relative max-w-2xl">
+        <h2 class="font-display text-4xl text-forest md:text-5xl">Stop context-switching.</h2>
+        <p class="mt-4 text-lg text-ink/80">
+          Spawn a code-review team. Run a nightly test audit. Break a refactor
+          into parallel tickets. All from one place.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="/docs" class="btn-primary">Get started</a>
+          <a href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

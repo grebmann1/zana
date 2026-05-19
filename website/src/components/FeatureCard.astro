@@ -1,0 +1,20 @@
+---
+interface Props {
+  title: string;
+  body: string;
+  tag?: string;
+}
+const { title, body, tag } = Astro.props;
+---
+<article class="group relative h-full rounded-xl border border-forest/10 bg-cream p-6 transition hover:border-gold hover:shadow-md">
+  {tag && (
+    <span class="text-[10px] uppercase tracking-widest text-gold">{tag}</span>
+  )}
+  <h3 class="mt-2 font-display text-xl text-forest">{title}</h3>
+  <p class="mt-2 text-sm leading-relaxed text-moss">{body}</p>
+  <span class="absolute right-5 top-5 text-gold opacity-0 transition group-hover:opacity-100" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </span>
+</article>
