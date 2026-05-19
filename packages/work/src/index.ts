@@ -10,6 +10,7 @@ module.exports = {
     service: require("./scheduling/service"),
     store: require("./scheduling/store"),
     workflowEngine: require("./scheduling/workflow-engine"),
+    schema: require("./scheduling/schema"),
   },
   teams: {
     manager: require("./teams/manager"),

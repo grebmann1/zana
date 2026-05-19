@@ -73,10 +73,14 @@ schedule:
   # intervalMs: 300000
 
 action:
-  type: spawn-agent      # spawn-agent | team | command | workflow
+  type: spawn-agent      # spawn-agent | team | command | workflow | mcp_tool
   profileId: test-writer
   prompt: |
     Scan the project for files that lack tests. Top 5 gaps in priority order.
+
+history:                 # opt-in run-history retention (default: enabled, retain 10)
+  enabled: true
+  retain: 30
 
 status:                  # managed by daemon — do not hand-edit
   lastRunAt: 2026-05-18T02:00:00Z
@@ -86,6 +90,8 @@ status:                  # managed by daemon — do not hand-edit
 ```
 
 Paths in actions (`cwd`, `command`) are interpreted relative to the workspace when not absolute.
+
+**Schema contract** — full field reference (allowed/reserved/ignored fields, validation rules) lives in [`packages/work/README.md`](../../../packages/work/README.md#scheduler--yaml-schema-contract). Unknown fields are warned about at load time but otherwise ignored.
 
 Backwards compatible: existing `<id>.json` schedules continue to load and run; new schedules created via `zana_schedule_create` are written as YAML by default.
 
