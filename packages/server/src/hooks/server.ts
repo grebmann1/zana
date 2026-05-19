@@ -1,6 +1,14 @@
+// Hook-server: agent → daemon callbacks.
+//
+// **No auth by design** — see packages/server/README.md ("Explicitly
+// deferred") for the rationale before adding any. The trust boundary is
+// "same-user, same-host loopback". If you find yourself wanting to add a
+// token check here, talk to the threat model first.
+
 import * as http from "node:http";
 import * as url from "node:url";
 function _core() { return require("@zana/core"); }
+function _log() { return _core().util.logger.getLogger("hook-server"); }
 const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 function appendAudit(...args: any[]) { return _core().events.log.appendAudit(...args); }
 const ticketService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.service[p] });
@@ -31,7 +39,7 @@ async function dispatchWithTimeout(handler, req, res, ...args) {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ error: "handler error", message: err?.message || String(err) }));
     } else {
-      console.warn("[hook-server] handler threw after response:", err?.message || err);
+      _log().warn("handler threw after response", err);
     }
   } finally {
     clearTimeout(timer);
@@ -98,7 +106,7 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
             try {
               data = JSON.parse(body);
             } catch (parseErr: any) {
-              console.warn("[hook-server] JSON parse error:", parseErr.message || parseErr);
+              _log().warn("JSON parse error", parseErr);
               res.statusCode = 400;
               res.end();
               return;
@@ -127,20 +135,17 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
         try {
           server.listen(port, "127.0.0.1");
         } catch (listenErr) {
-          console.warn("[hook-server] listen retry failed:", listenErr.message || listenErr);
+          _log().warn("listen retry failed", listenErr);
           resolve(null);
         }
       } else {
-        console.warn(
-          `[hook-server] couldn't bind to ${port}:`,
-          err.message ?? err,
-        );
+        _log().warn(`couldn't bind to ${port}`, err);
         resolve(null);
       }
     });
 
     server.on("listening", () => {
-      process.stderr.write(`[hook-server] listening on 127.0.0.1:${port}\n`);
+      _log().info(`listening on 127.0.0.1:${port}`);
       resolve({
         port,
         stop() {
@@ -150,7 +155,7 @@ export function startHookServer(onHook, orchestratorHandler, preferredPort: any 
             try {
               server.close(() => finish());
             } catch (err: any) {
-              console.warn("[hook-server] error closing server:", err?.message || err);
+              _log().warn("error closing server", err);
               finish();
               return;
             }
@@ -378,7 +383,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
     try {
       await Promise.resolve(onHook(data));
     } catch (err: any) {
-      console.warn(`[hook-server] onHook threw: ${err?.message || err}`);
+      _log().warn("onHook threw", err);
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ error: "hook handler failed", message: err?.message || String(err) }));
@@ -395,7 +400,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
         }
       }
     } catch (auditErr: any) {
-      console.warn("[hook-server] audit write failed:", auditErr.message || auditErr);
+      _log().warn("audit write failed", auditErr);
     }
 
     res.statusCode = 204;
@@ -416,7 +421,7 @@ function registerBuiltInRoutes(onHook, orchestratorHandler, getMainWindow) {
           appendAudit({ action: "agent_killed", agentId: data.agentId, workspace });
         }
       } catch (auditErr) {
-        console.warn("[hook-server] audit write failed:", auditErr.message || auditErr);
+        _log().warn("audit write failed", auditErr);
       }
 
       res.statusCode = 200;

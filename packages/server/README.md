@@ -78,6 +78,46 @@ copies are frozen — do not extend them.
 
 Neither server should ever be reverse-proxied to the public internet.
 
+## Explicitly deferred (do not re-open without a design decision)
+
+The 3-architect review on 2026-05-19 identified these and **chose to
+defer**, not because we forgot. Don't waste a cycle re-discovering them.
+
+### Hook-server auth
+
+Adding bearer auth to the hook-server has known costs:
+
+- `wrapper.sh` would need to read `~/.zana/auth.json` and inject
+  `Authorization: Bearer <token>` on every curl. Today the wrapper is
+  intentionally credential-free.
+- Spawned agents would need either filesystem access to the token
+  (already true: same user), or an env var injected at spawn time
+  (`ZANA_HOOK_TOKEN`). The injection plumbing crosses
+  `agents/spawner.ts`, the agent process bootstrap, and any
+  subprocesses the agent itself spawns.
+- The token alone doesn't change the threat model — same-user processes
+  can still read the token from disk. The real protection is "we trust
+  same-user same-host processes". Adding auth without changing that
+  trust model is theatre.
+
+**Decision:** keep deferred until we have an explicit threat model
+that requires same-user mistrust (e.g. shared workstations, untrusted
+local browser extensions, etc.).
+
+### Endpoint deduplication
+
+The "Known overlap" routes above are duplicated across both servers
+for back-compat. Removing the hook-server copies would mean either:
+
+- Forcing hook callers (wrapper.sh, agents) to authenticate to the
+  api-server (see "Hook-server auth" above for why that's deferred), or
+- Adding a "loopback bypass" to the api-server's auth middleware,
+  which weakens the api-server contract.
+
+**Decision:** keep deferred. The duplicated routes are stable, tested,
+and not extended. Net cost of the duplication today is documentation
+overhead, not maintenance pain.
+
 ## Common patterns
 
 - Route definitions: `src/hooks/server.ts` (hook) and
