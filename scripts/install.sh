@@ -207,12 +207,12 @@ show_quickstart() {
   cat <<EOF
 
 [zana] Quick start:
-  1) Restart Claude Code
+  1) Restart Claude Code (the ⚡ zana footer should appear at the bottom)
   2) In your project, run: /zana <task>
   3) Verify CLI: zana status
 
 [zana] Optional:
-  zana init wizard "${TARGET_WORKSPACE}" --repair-mcp
+  zana init wizard "${TARGET_WORKSPACE}" --repair-mcp   # also repairs statusLine
 EOF
 }
 

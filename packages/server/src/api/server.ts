@@ -254,6 +254,14 @@ async function handleRequest(req, res) {
   }
 
   // --- Tickets ---
+  if (method === "GET" && pathname === "/tickets/rules") {
+    const watcher = require("@zana/work").tickets.watcher;
+    json(res, {
+      rules: watcher.getRules(),
+      warnings: watcher.getRuleWarnings ? watcher.getRuleWarnings() : [],
+    });
+    return;
+  }
   if (method === "GET" && pathname === "/tickets") {
     const ticketService = require("@zana/work").tickets.service;
     const status = url.searchParams.get("status");

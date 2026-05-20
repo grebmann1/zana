@@ -86,6 +86,7 @@ copyCoreAssets();
 [
   path.join(root, "dist", "bin", "zana.js"),
   path.join(root, "packages", "core", "dist", "bin", "daemon.js"),
+  path.join(root, "packages", "core", "dist", "bin", "statusline.js"),
   path.join(root, "packages", "mcp", "dist", "bin", "zana-mcp-server.js"),
   path.join(root, "packages", "mcp", "dist", "bin", "setup.js"),
 ].forEach(chmodExecutableIfExists);

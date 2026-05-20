@@ -310,3 +310,590 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
     expect(commentCall[4]).toContain("off-by-one");
   });
 });
+
+describe("ticket-watcher rule schema (event-aware triggers)", () => {
+  it("normalizeTrigger rewrites legacy { status, label, reviewPhase } to event shape", async () => {
+    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const out = watcher.normalizeTrigger({ status: "review", reviewPhase: "qa", label: "urgent" });
+    expect(out.event).toBe("ticket:statusChanged");
+    expect(out.to).toBe("review");
+    expect(out.reviewPhase).toBe("qa");
+    expect(out.labels).toEqual(["urgent"]);
+  });
+
+  it("normalizeTrigger preserves explicit event shape", async () => {
+    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const out = watcher.normalizeTrigger({ event: "ticket:created", to: "*", labels: ["a", "b"] });
+    expect(out.event).toBe("ticket:created");
+    expect(out.to).toBe("*");
+    expect(out.labels).toEqual(["a", "b"]);
+  });
+
+  it("matchesRule honors from/to wildcards, arrays, and labels", async () => {
+    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const ticket = { status: "done", reviewPhase: null, labels: ["customer-facing", "p1"] };
+    const payload = { ticketId: "t1", oldStatus: "in-progress", newStatus: "done", updatedBy: "u" };
+
+    // Exact to + array from
+    expect(watcher.matchesRule(
+      { trigger: { event: "ticket:statusChanged", to: "done", from: ["in-progress", "review"] } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(true);
+
+    // Wildcard to
+    expect(watcher.matchesRule(
+      { trigger: { event: "ticket:statusChanged", to: "*" } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(true);
+
+    // Mismatch from
+    expect(watcher.matchesRule(
+      { trigger: { event: "ticket:statusChanged", from: "backlog" } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(false);
+
+    // Event mismatch
+    expect(watcher.matchesRule(
+      { trigger: { event: "ticket:created" } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(false);
+
+    // Labels — all required, present
+    expect(watcher.matchesRule(
+      { trigger: { event: "ticket:statusChanged", labels: ["p1"] } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(true);
+
+    // Labels — missing
+    expect(watcher.matchesRule(
+      { trigger: { event: "ticket:statusChanged", labels: ["missing-label"] } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(false);
+  });
+
+  it("matchesRule treats legacy bare-status rules as ticket:statusChanged", async () => {
+    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const ticket = { status: "review", reviewPhase: "qa", labels: [] };
+    const payload = { ticketId: "t1", oldStatus: "in-progress", newStatus: "review", updatedBy: "u" };
+
+    expect(watcher.matchesRule(
+      { trigger: { status: "review", reviewPhase: "qa" } },
+      "ticket:statusChanged", payload, ticket,
+    )).toBe(true);
+
+    // Legacy rule should NOT fire on a non-statusChanged event.
+    expect(watcher.matchesRule(
+      { trigger: { status: "review", reviewPhase: "qa" } },
+      "ticket:created", payload, ticket,
+    )).toBe(false);
+  });
+});
+
+describe("ticket-watcher template-context helper", () => {
+  it("buildTemplateContext resolves updatedBy across event-specific keys", async () => {
+    const tc = await import("@zana/work/src/tickets/template-context.ts");
+    const ticket = { id: "t1", status: "review", title: "x" };
+
+    // statusChanged → updatedBy
+    expect(tc.buildTemplateContext("ticket:statusChanged",
+      { updatedBy: "alice" }, ticket).updatedBy).toBe("alice");
+
+    // commented → authorId
+    expect(tc.buildTemplateContext("ticket:commented",
+      { authorId: "bob" }, ticket).updatedBy).toBe("bob");
+
+    // completed → completedBy
+    expect(tc.buildTemplateContext("ticket:completed",
+      { completedBy: "carol" }, ticket).updatedBy).toBe("carol");
+
+    // empty payload → "system"
+    expect(tc.buildTemplateContext("ticket:updated", {}, ticket).updatedBy).toBe("system");
+  });
+
+  it("renderTemplate substitutes vars; missing keys render as empty string", async () => {
+    const tc = await import("@zana/work/src/tickets/template-context.ts");
+    const ctx = tc.buildTemplateContext("ticket:statusChanged",
+      { oldStatus: "in-progress", newStatus: "done", updatedBy: "alice" },
+      { id: "T-1", title: "Hello" },
+    );
+    expect(tc.renderTemplate("{{id}} {{title}}: {{oldStatus}}→{{newStatus}} by {{updatedBy}}", ctx))
+      .toBe("T-1 Hello: in-progress→done by alice");
+    expect(tc.renderTemplate("missing={{nope}}", ctx)).toBe("missing=");
+  });
+});
+
+describe("ticket-watcher non-status events fire rules", () => {
+  let tmpDir: string | null = null;
+  let watcher: any = null;
+
+  afterEach(() => {
+    if (watcher) {
+      try { watcher._setReadTicketOverride(null); } catch {}
+      try { watcher._resetDedup(); } catch {}
+      if (watcher.isRunning()) watcher.stop();
+    }
+    watcher = null;
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    }
+    tmpDir = null;
+  });
+
+  it("ticket:created spawns the configured profile with rendered prompt", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-watcher-created-"));
+    const ticketsDir = path.join(tmpDir, "tickets");
+    fs.mkdirSync(ticketsDir, { recursive: true });
+
+    // Write an automation.json with a created-event rule.
+    const automationPath = path.join(tmpDir, "automation.json");
+    fs.writeFileSync(automationPath, JSON.stringify({
+      automation: [{
+        name: "triage-on-create",
+        trigger: { event: "ticket:created" },
+        action: { spawnProfile: "triager" },
+        promptTemplate: "Triage {{id}} \"{{title}}\" — event={{event}} by {{updatedBy}}",
+      }],
+    }), "utf8");
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    const core: any = await import("@zana/core");
+    const bus = core.events.bus;
+
+    const fakeTicket = {
+      id: "T-create-" + Date.now(),
+      title: "Investigate latency",
+      description: "p99 jumped",
+      status: "backlog",
+      reviewPhase: null,
+      labels: [],
+      reworkCount: 0,
+    };
+    watcher._setReadTicketOverride((id: string) => (id === fakeTicket.id ? fakeTicket : null));
+
+    const captured: any[] = [];
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: (profileId: string, prompt: string, ticketId: string) => {
+        captured.push({ profileId, prompt, ticketId });
+        return Promise.resolve({ agentId: "fake-triager-1" });
+      },
+    });
+
+    bus.emit("ticket:created", { ticketId: fakeTicket.id, title: fakeTicket.title, priority: "p1" });
+
+    await new Promise((r) => setTimeout(r, 250));
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].profileId).toBe("triager");
+    expect(captured[0].ticketId).toBe(fakeTicket.id);
+    // Prompt must include event metadata fed from the bus.
+    expect(captured[0].prompt).toContain("event=ticket:created");
+    expect(captured[0].prompt).toContain(fakeTicket.id);
+    expect(captured[0].prompt).toContain("Investigate latency");
+
+    watcher._setReadTicketOverride(null);
+  });
+
+  it("statusChanged template renders {{oldStatus}} and {{newStatus}}", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-watcher-status-render-"));
+    const ticketsDir = path.join(tmpDir, "tickets");
+    fs.mkdirSync(ticketsDir, { recursive: true });
+
+    const automationPath = path.join(tmpDir, "automation.json");
+    fs.writeFileSync(automationPath, JSON.stringify({
+      automation: [{
+        name: "slack-on-done",
+        trigger: { event: "ticket:statusChanged", to: "done" },
+        action: { spawnProfile: "slack-notifier" },
+        promptTemplate: "{{id}} {{oldStatus}}->{{newStatus}} by {{updatedBy}}",
+      }],
+    }), "utf8");
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    const core: any = await import("@zana/core");
+    const bus = core.events.bus;
+
+    const fakeTicket = {
+      id: "T-render-" + Date.now(),
+      title: "Demo",
+      status: "done",
+      reviewPhase: null,
+      labels: [],
+      reworkCount: 0,
+    };
+    watcher._setReadTicketOverride((id: string) => (id === fakeTicket.id ? fakeTicket : null));
+
+    const captured: any[] = [];
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: (profileId: string, prompt: string, ticketId: string) => {
+        captured.push({ profileId, prompt, ticketId });
+        return Promise.resolve({ agentId: "fake-slack-1" });
+      },
+    });
+
+    bus.emit("ticket:statusChanged", {
+      ticketId: fakeTicket.id,
+      oldStatus: "review",
+      newStatus: "done",
+      updatedBy: "alice",
+    });
+
+    await new Promise((r) => setTimeout(r, 250));
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].prompt).toBe(`${fakeTicket.id} review->done by alice`);
+
+    watcher._setReadTicketOverride(null);
+  });
+
+  it("dedup LRU swallows duplicate emits within 2s", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-watcher-dedup-"));
+    const ticketsDir = path.join(tmpDir, "tickets");
+    fs.mkdirSync(ticketsDir, { recursive: true });
+
+    const automationPath = path.join(tmpDir, "automation.json");
+    fs.writeFileSync(automationPath, JSON.stringify({
+      automation: [{
+        name: "comment-counter",
+        trigger: { event: "ticket:commented" },
+        action: { spawnProfile: "noop" },
+        promptTemplate: "{{id}}",
+      }],
+    }), "utf8");
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    const core: any = await import("@zana/core");
+    const bus = core.events.bus;
+
+    const fakeTicket = {
+      id: "T-dedup-" + Date.now(),
+      title: "x",
+      status: "in-progress",
+      reviewPhase: null,
+      labels: [],
+      reworkCount: 0,
+    };
+    watcher._setReadTicketOverride((id: string) => (id === fakeTicket.id ? fakeTicket : null));
+
+    let calls = 0;
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => { calls++; return Promise.resolve({ agentId: "fake-noop-" + calls }); },
+    });
+
+    // First emit, let the debounce + dispatch run.
+    const payload = { ticketId: fakeTicket.id, commentId: "c1", authorId: "alice" };
+    bus.emit("ticket:commented", payload);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(calls).toBe(1);
+
+    // Second emit with the same dedup key, well past the 150ms debounce
+    // but inside the 2s LRU window — should be swallowed by recentlyFired.
+    bus.emit("ticket:commented", payload);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(calls).toBe(1);
+
+    watcher._setReadTicketOverride(null);
+  });
+});
+
+describe("ticket-watcher disabled flag", () => {
+  it("matchesRule returns false for disabled rules even when trigger matches", async () => {
+    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const ticket = { status: "review", reviewPhase: "qa", labels: [] };
+    const payload = { ticketId: "t1", oldStatus: "in-progress", newStatus: "review", updatedBy: "u" };
+    const rule = {
+      disabled: true,
+      trigger: { event: "ticket:statusChanged", to: "review" },
+      action: { spawnProfile: "x" },
+    };
+    expect(watcher.matchesRule(rule, "ticket:statusChanged", payload, ticket)).toBe(false);
+
+    // Same rule with disabled: false fires.
+    expect(watcher.matchesRule(
+      { ...rule, disabled: false },
+      "ticket:statusChanged",
+      payload,
+      ticket,
+    )).toBe(true);
+  });
+});
+
+describe("ticket-watcher rule validation", () => {
+  let tmpDir: string | null = null;
+  let watcher: any = null;
+
+  afterEach(() => {
+    if (watcher) {
+      try { watcher._setReadTicketOverride(null); } catch {}
+      try { watcher._resetDedup(); } catch {}
+      if (watcher.isRunning()) watcher.stop();
+    }
+    watcher = null;
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    }
+    tmpDir = null;
+  });
+
+  function setup(automation: any) {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-watcher-validate-"));
+    const ticketsDir = path.join(tmpDir, "tickets");
+    fs.mkdirSync(ticketsDir, { recursive: true });
+    const automationPath = path.join(tmpDir, "automation.json");
+    fs.writeFileSync(automationPath, JSON.stringify({ automation }), "utf8");
+    return { ticketsDir, automationPath };
+  }
+
+  it("flags unknown event names as errors but loads the rules anyway", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "typo", trigger: { event: "ticket:statusChange" }, action: { spawnProfile: "p" } },
+    ]);
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+
+    expect(watcher.getRules().length).toBe(1);
+    const warnings = watcher.getRuleWarnings();
+    const errors = warnings.filter((w: any) => w.level === "error");
+    expect(errors.some((e: any) => e.message.includes("unknown event"))).toBe(true);
+    expect(errors[0].ruleName).toBe("typo");
+  });
+
+  it("flags missing spawnProfile as an error", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "no-profile", trigger: { event: "ticket:created" }, action: {} },
+    ]);
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+    const warnings = watcher.getRuleWarnings();
+    expect(warnings.some((w: any) => w.message.includes("spawnProfile"))).toBe(true);
+  });
+
+  it("warns on unknown trigger fields without dropping the rule", async () => {
+    const { ticketsDir, automationPath } = setup([
+      {
+        name: "extra-field",
+        trigger: { event: "ticket:statusChanged", to: "done", priority: "high" },
+        action: { spawnProfile: "p" },
+      },
+    ]);
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+    expect(watcher.getRules().length).toBe(1);
+    const warnings = watcher.getRuleWarnings();
+    expect(warnings.some((w: any) => w.level === "warn" && w.message.includes("priority"))).toBe(true);
+  });
+
+  it("legacy { status, label } shape passes validation cleanly", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "legacy", trigger: { status: "review", label: "p1" }, action: { spawnProfile: "p" } },
+    ]);
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+    const warnings = watcher.getRuleWarnings();
+    const errors = warnings.filter((w: any) => w.level === "error");
+    expect(errors).toEqual([]);
+  });
+});
+
+describe("ticket-watcher hot-reload", () => {
+  let tmpDir: string | null = null;
+  let watcher: any = null;
+
+  afterEach(() => {
+    if (watcher) {
+      try { watcher._setReadTicketOverride(null); } catch {}
+      try { watcher._resetDedup(); } catch {}
+      if (watcher.isRunning()) watcher.stop();
+    }
+    watcher = null;
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    }
+    tmpDir = null;
+  });
+
+  function setup(automation: any) {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-watcher-reload-"));
+    const ticketsDir = path.join(tmpDir, "tickets");
+    fs.mkdirSync(ticketsDir, { recursive: true });
+    const automationPath = path.join(tmpDir, "automation.json");
+    fs.writeFileSync(automationPath, JSON.stringify({ automation }), "utf8");
+    return { ticketsDir, automationPath };
+  }
+
+  it("picks up rule changes when automation.json is overwritten", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
+    ]);
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+    expect(watcher.getRules().length).toBe(1);
+
+    // Wait one poll interval so fs.watchFile establishes a baseline stat.
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Overwrite with two rules — the watcher's fs.watchFile + 100ms debounce
+    // should reload them within ~400ms.
+    fs.writeFileSync(automationPath, JSON.stringify({
+      automation: [
+        { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
+        { name: "r2", trigger: { event: "ticket:commented" }, action: { spawnProfile: "p2" }, promptTemplate: "{{id}}" },
+      ],
+    }), "utf8");
+
+    await new Promise((r) => setTimeout(r, 600));
+    expect(watcher.getRules().length).toBe(2);
+  });
+
+  it("falls back to defaults if the reloaded file is malformed", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
+    ]);
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+    expect(watcher.getRules().length).toBe(1);
+
+    // Wait for baseline stat capture before mutating.
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Write garbage — loadRules's catch branch should restore defaults.
+    fs.writeFileSync(automationPath, "this is not json {", "utf8");
+    await new Promise((r) => setTimeout(r, 600));
+    expect(watcher.getRules().length).toBe(3); // DEFAULT_RULES
+  });
+
+  it("a rule added post-reload fires when its event is emitted", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "noop", trigger: { event: "ticket:created" }, action: { spawnProfile: "noop" }, promptTemplate: "{{id}}" },
+    ]);
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    const core: any = await import("@zana/core");
+    const bus = core.events.bus;
+
+    const fakeTicket = {
+      id: "T-reload-" + Date.now(),
+      title: "x",
+      status: "in-progress",
+      reviewPhase: null,
+      labels: [],
+      reworkCount: 0,
+    };
+    watcher._setReadTicketOverride((id: string) => (id === fakeTicket.id ? fakeTicket : null));
+
+    const captured: any[] = [];
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: (profileId: string, prompt: string, ticketId: string) => {
+        captured.push({ profileId, prompt, ticketId });
+        return Promise.resolve({ agentId: "fake-" + captured.length });
+      },
+    });
+
+    // Wait for baseline stat capture before mutating.
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Add a new rule that targets ticket:commented (not in the original config).
+    fs.writeFileSync(automationPath, JSON.stringify({
+      automation: [
+        { name: "noop", trigger: { event: "ticket:created" }, action: { spawnProfile: "noop" }, promptTemplate: "{{id}}" },
+        {
+          name: "post-reload",
+          trigger: { event: "ticket:commented" },
+          action: { spawnProfile: "post-reload-profile" },
+          promptTemplate: "AFTER RELOAD {{id}}",
+        },
+      ],
+    }), "utf8");
+
+    await new Promise((r) => setTimeout(r, 600)); // wait for reload
+    expect(watcher.getRules().length).toBe(2);
+
+    bus.emit("ticket:commented", {
+      ticketId: fakeTicket.id,
+      commentId: "c1",
+      authorId: "alice",
+    });
+    await new Promise((r) => setTimeout(r, 250));
+
+    expect(captured.some((c) => c.profileId === "post-reload-profile")).toBe(true);
+    expect(captured.find((c) => c.profileId === "post-reload-profile").prompt)
+      .toBe(`AFTER RELOAD ${fakeTicket.id}`);
+
+    watcher._setReadTicketOverride(null);
+  });
+
+  it("stop() releases the file watcher cleanly", async () => {
+    const { ticketsDir, automationPath } = setup([
+      { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
+    ]);
+
+    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher._resetDedup();
+    watcher.init({
+      ticketsDirectory: ticketsDir,
+      configPath: automationPath,
+      spawnAgent: () => Promise.resolve({ agentId: "x" }),
+    });
+    expect(watcher.isRunning()).toBe(true);
+
+    // Wait for baseline stat before stop, so we exercise unwatchFile cleanup.
+    await new Promise((r) => setTimeout(r, 250));
+    watcher.stop();
+
+    // After stop, edits to automation.json must NOT cause loadRules to fire.
+    // We can't observe "no log" directly, but we can confirm the rules array
+    // doesn't change when the file does, because the watcher is dead.
+    const before = watcher.getRules().length;
+    fs.writeFileSync(automationPath, JSON.stringify({
+      automation: [
+        { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
+        { name: "r2", trigger: { event: "ticket:commented" }, action: { spawnProfile: "p2" }, promptTemplate: "{{id}}" },
+      ],
+    }), "utf8");
+    await new Promise((r) => setTimeout(r, 600));
+    expect(watcher.getRules().length).toBe(before);
+  });
+});

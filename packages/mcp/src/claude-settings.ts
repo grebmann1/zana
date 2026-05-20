@@ -63,9 +63,48 @@ function ensureMcpServer({
   return { status: nextStatus, settingsPath, serverName, serverConfig };
 }
 
+function ensureStatusLine({
+  scriptPath,
+  settingsPath = getClaudeSettingsPath(),
+  repairIfDifferent = false,
+  legacyMarkers = ["statusline-zana.sh"],
+}) {
+  if (!scriptPath || typeof scriptPath !== "string") {
+    throw new Error("ensureStatusLine requires a scriptPath");
+  }
+
+  const settings = readClaudeSettings(settingsPath);
+  const escaped = scriptPath.replace(/"/g, '\\"');
+  const desired = {
+    type: "command",
+    command: `node "${escaped}"`,
+    padding: 1,
+    refreshInterval: 30,
+  };
+
+  const current = settings.statusLine;
+  if (current && typeof current === "object") {
+    if (JSON.stringify(current) === JSON.stringify(desired)) {
+      return { status: "unchanged", settingsPath };
+    }
+    const isLegacy =
+      typeof current.command === "string" &&
+      legacyMarkers.some((m) => current.command.includes(m));
+    if (!isLegacy && !repairIfDifferent) {
+      return { status: "different", settingsPath };
+    }
+  }
+
+  const nextStatus = current ? "updated" : "added";
+  settings.statusLine = desired;
+  writeClaudeSettings(settings, settingsPath);
+  return { status: nextStatus, settingsPath };
+}
+
 module.exports = {
   getClaudeSettingsPath,
   readClaudeSettings,
   writeClaudeSettings,
   ensureMcpServer,
+  ensureStatusLine,
 };
