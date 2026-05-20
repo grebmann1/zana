@@ -74,8 +74,18 @@ if (subcommand === "ticket") {
         process.exit(1);
       }
     );
+  } else if (sub === "rules" && args[2] === "list") {
+    listTicketRules(args.slice(3)).then(
+      () => process.exit(0),
+      (err) => {
+        console.error(`zana ticket rules list: ${err.message || err}`);
+        process.exit(1);
+      }
+    );
   } else {
-    console.error(`Usage: zana ticket list [--status <s>] [--workspace <path>]`);
+    console.error(`Usage:`);
+    console.error(`  zana ticket list [--status <s>] [--workspace <path>]`);
+    console.error(`  zana ticket rules list [--workspace <path>]`);
     process.exit(1);
   }
 }
@@ -149,6 +159,7 @@ Commands:
   stop --all                             Stop all running daemons and clean registry
   config [args...]                       Print or modify module configuration
   ticket list [--status s] [--workspace] List tickets in the active daemon's workspace
+  ticket rules list [--workspace <p>]    List loaded automation hook rules + validation warnings
   run list [--limit N]                   List recent agent runs from .zana/runs/
   schedule list                          List schedules in .zana/scheduler/
   headless [path]                        Run zana-daemon in foreground (default)
@@ -161,7 +172,7 @@ Options:
 
 function runInitWizard(initArgs) {
   const { initProjectDir, isProjectInitialized } = require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
-  const { ensureMcpServer } = require(path.join(appRoot, "packages", "mcp", "dist", "src", "claude-settings.js"));
+  const { ensureMcpServer, ensureStatusLine } = require(path.join(appRoot, "packages", "mcp", "dist", "src", "claude-settings.js"));
 
   const target = initArgs.find((arg) => !arg.startsWith("-")) || process.cwd();
   const workspace = path.resolve(target);
@@ -190,14 +201,24 @@ function runInitWizard(initArgs) {
     },
   });
 
+  const statuslineScript = path.join(appRoot, "packages", "core", "dist", "bin", "statusline.js");
+  const statusLineResult = ensureStatusLine({
+    scriptPath: statuslineScript,
+    repairIfDifferent: repairMcp,
+  });
+
   console.log("\x1b[36mzana init wizard\x1b[0m complete");
   console.log();
   console.log(`  Workspace:      ${workspace}`);
   console.log(`  .zana/:         ${wasInitialized && !force ? "already initialized" : "initialized"}`);
   console.log(`  MCP server:     ${mcpResult.status} (zana)`);
+  console.log(`  Status line:    ${statusLineResult.status} (zana)`);
   console.log(`  Claude settings: ${mcpResult.settingsPath}`);
   if (mcpResult.status === "different" && !repairMcp) {
     console.log("  MCP note:       existing zana config differs; rerun with --repair-mcp to overwrite");
+  }
+  if (statusLineResult.status === "different" && !repairMcp) {
+    console.log("  Status note:    existing statusLine differs; rerun with --repair-mcp to overwrite");
   }
   console.log();
   console.log("Next steps:");
@@ -465,6 +486,50 @@ async function listTickets(restArgs) {
     const priority = t.priority || "?";
     const title = t.title || "";
     console.log(`${id} | ${status} | ${priority} | ${title}`);
+  }
+}
+
+// --- ticket rules list command ---
+
+async function listTicketRules(restArgs) {
+  const { findRunningDaemon } = require(path.join(appRoot, "packages", "core", "dist", "src", "daemon", "registry.js"));
+  const workspaceArg = getFlagValue(restArgs, "--workspace");
+  const workspace = workspaceArg ? path.resolve(workspaceArg) : process.cwd();
+
+  const daemon = findRunningDaemon(workspace);
+  if (!daemon) {
+    console.error("no daemon running for this workspace");
+    process.exit(1);
+  }
+
+  const apiPort = daemon.port + 1;
+  const token = readAuthToken();
+
+  const data = await httpGetJson(apiPort, "/tickets/rules", token);
+  const rules = (data && data.rules) || [];
+  const warnings = (data && data.warnings) || [];
+
+  if (rules.length === 0) {
+    console.log("No automation rules loaded.");
+    return;
+  }
+
+  for (let i = 0; i < rules.length; i++) {
+    const r = rules[i];
+    const name = r.name || `idx-${i}`;
+    const trig = r.trigger || {};
+    const event = trig.event || (trig.status !== undefined ? "ticket:statusChanged (legacy)" : "?");
+    const action = r.action || {};
+    const profile = action.spawnProfile || (action.type === "workflow" ? `workflow:${action.skillId}` : "?");
+    const flags = [];
+    if (r.disabled) flags.push("disabled");
+    const ruleWarnings = warnings.filter((w) => w.ruleIndex === i);
+    if (ruleWarnings.length > 0) flags.push(`${ruleWarnings.length} warning(s)`);
+    const flagSuffix = flags.length > 0 ? `  [${flags.join(", ")}]` : "";
+    console.log(`${name}  on=${event}  profile=${profile}${flagSuffix}`);
+    for (const w of ruleWarnings) {
+      console.log(`    ${w.level}: ${w.message}`);
+    }
   }
 }
 

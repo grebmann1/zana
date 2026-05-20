@@ -1,11 +1,79 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { buildTemplateContext, renderTemplate } from "./template-context";
+
+// Ticket-watcher rule schema (config: <workspace>/.zana/automation.json).
+//
+// Each rule fires when a ticket-bus event matches its trigger and then
+// spawns a Claude agent. Side-effects (Slack post, Linear update, etc.)
+// happen inside the agent via its MCP tools.
+//
+// Trigger fields:
+//   event       string (default "ticket:statusChanged")
+//                 one of: "ticket:created" | "ticket:claimed" |
+//                 "ticket:statusChanged" | "ticket:reviewPhaseChanged" |
+//                 "ticket:commented" | "ticket:completed" | "ticket:updated"
+//   to          string | string[] | "*"  match newStatus / current status
+//   from        string | string[] | "*"  match oldStatus
+//   reviewPhase string | null            exact reviewPhase match
+//   labels      string[]                 ticket must include all these labels
+//
+//   Legacy shape `{ status, reviewPhase, label }` is auto-rewritten to
+//   `{ event: "ticket:statusChanged", to: status, reviewPhase, labels: [label] }`
+//   so existing automation.json files keep working.
+//
+// Action fields (existing schema, unchanged):
+//   spawnProfile    string with {{var}} interpolation
+//   promptTemplate  string with {{var}} interpolation
+//
+// Top-level rule fields:
+//   name      string (optional) — used as dedup key and in `zana ticket rules list`
+//   disabled  boolean — if true, the rule is loaded and visible but never fires.
+//                       Useful for staging or temporarily silencing a hook.
+//
+// Template context exposes ticket fields plus event metadata: `event`,
+// `oldStatus`, `newStatus`, `oldPhase`, `newPhase`, `updatedBy`, `timestamp`.
+//
+// Example: notify Slack on every status change.
+//   {
+//     "trigger": { "event": "ticket:statusChanged" },
+//     "action": {
+//       "spawnProfile": "slack-notifier",
+//       "promptTemplate": "Ticket {{id}} \"{{title}}\" moved {{oldStatus}} → {{newStatus}} by {{updatedBy}}. Post to #team-feed via Slack MCP."
+//     }
+//   }
+//
+// Hot-reload: automation.json is watched; saves apply to events emitted
+// after reload. In-flight spawns keep their original rule. Adding a brand
+// new automation.json to a workspace that didn't have one still requires a
+// daemon restart.
 
 function log(msg) { process.stderr.write(`[ticket-watcher] ${msg}\n`); }
 
 const DEBOUNCE_MS = 150;
 const MAX_CONCURRENT = 3;
 const MAX_REWORK_CYCLES = 3;
+const DEDUP_TTL_MS = 2000;
+
+const TICKET_EVENTS = [
+  "ticket:created",
+  "ticket:claimed",
+  "ticket:statusChanged",
+  "ticket:reviewPhaseChanged",
+  "ticket:commented",
+  "ticket:completed",
+  "ticket:updated",
+] as const;
+
+// Events that drive the legacy status/phase dedup map. Other event types
+// (commented, claimed, updated, …) skip processedStates because they don't
+// represent state transitions.
+const LEGACY_DEDUP_EVENTS = new Set([
+  "ticket:created",
+  "ticket:statusChanged",
+  "ticket:reviewPhaseChanged",
+  "ticket:completed",
+]);
 
 let ticketsDir = null;
 let spawnFn = null;
@@ -20,6 +88,27 @@ let busSubscriptions = [];
 // agent:terminated event fires for one of these, we parse its output for a
 // VERDICT line and apply the corresponding ticket state transition.
 let inFlightSpawns = new Map();
+// Short-lived dedup keyed by `(ruleKey, eventType, ticketId, oldStatus, newStatus)`
+// to swallow duplicate emits within DEDUP_TTL_MS.
+let recentlyFired = new Map<string, number>();
+
+// Hot-reload: watch automation.json so rule edits take effect without a
+// daemon restart. Edits apply to events emitted after reload; in-flight
+// spawns keep their original rule (each queued item already captured `rule`
+// by closure).
+let configPathTracked: string | null = null;
+let configWatcher: any = null;
+let configReloadTimer: ReturnType<typeof setTimeout> | null = null;
+const CONFIG_RELOAD_DEBOUNCE_MS = 100;
+
+// Validation findings produced by validateRules(). Exposed via getRuleWarnings()
+// so the CLI / HTTP API can surface schema mistakes (typos in event names,
+// missing spawnProfile, etc.) without making the daemon refuse to start.
+type RuleWarning = { ruleIndex: number; ruleName: string; level: "warn" | "error"; message: string };
+let ruleWarnings: RuleWarning[] = [];
+
+const KNOWN_TRIGGER_FIELDS = new Set(["event", "to", "from", "reviewPhase", "labels", "status", "label"]);
+const KNOWN_ACTION_TYPES = new Set(["spawnAgent", "workflow"]); // spawnAgent is implicit when only spawnProfile is set
 
 export function init({ ticketsDirectory, spawnAgent, configPath }) {
   ticketsDir = ticketsDirectory;
@@ -28,28 +117,25 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
 
   loadRules(configPath);
   loadProcessedStates();
+  watchConfigFile();
 
   // Keep mkdir for compatibility — JSON-fallback ticket store still writes here.
   if (!fs.existsSync(ticketsDir)) {
     fs.mkdirSync(ticketsDir, { recursive: true });
   }
 
-  // Subscribe to ticket lifecycle events on the in-process bus.
+  // Subscribe to every ticket lifecycle event on the in-process bus.
   // This replaces the old fs.watch approach: the SQLite-backed ticket store
   // doesn't write JSON files, so fs.watch never fired. Bus events fire on
   // every state change regardless of the underlying store.
   const { bus } = require("@zana/core").events;
-  const listener = (msg) => {
-    if (msg && msg.ticketId) scheduleCheck(msg.ticketId);
-  };
-  bus.on("ticket:statusChanged", listener);
-  bus.on("ticket:reviewPhaseChanged", listener);
-  bus.on("ticket:created", listener);
-  busSubscriptions.push(
-    () => bus.off("ticket:statusChanged", listener),
-    () => bus.off("ticket:reviewPhaseChanged", listener),
-    () => bus.off("ticket:created", listener),
-  );
+  for (const eventType of TICKET_EVENTS) {
+    const listener = (msg) => {
+      if (msg && msg.ticketId) scheduleCheck(eventType, msg);
+    };
+    bus.on(eventType, listener);
+    busSubscriptions.push(() => bus.off(eventType, listener));
+  }
 
   // Listen for agent termination so we can parse VERDICT lines from review
   // agents we spawned and apply the resulting ticket state transitions.
@@ -99,8 +185,11 @@ const DEFAULT_RULES = [
 ];
 
 export function loadRules(configPath) {
+  if (configPath) configPathTracked = configPath;
+  const resolved = configPathTracked
+    || (ticketsDir ? path.join(path.dirname(ticketsDir), "config.json") : null);
   try {
-    const config = JSON.parse(fs.readFileSync(configPath || path.join(path.dirname(ticketsDir), "config.json"), "utf8"));
+    const config = JSON.parse(fs.readFileSync(resolved!, "utf8"));
     // Use user-provided rules only if they're a non-empty array. Otherwise fall back to defaults.
     if (Array.isArray(config.automation) && config.automation.length > 0) {
       rules = config.automation;
@@ -110,6 +199,89 @@ export function loadRules(configPath) {
   } catch {
     rules = DEFAULT_RULES;
   }
+  validateRules();
+}
+
+export function validateRules(): RuleWarning[] {
+  ruleWarnings = [];
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    const name = rule?.name || `idx-${i}`;
+    const push = (level: "warn" | "error", message: string) =>
+      ruleWarnings.push({ ruleIndex: i, ruleName: name, level, message });
+
+    if (!rule || typeof rule !== "object") {
+      push("error", "rule is not an object");
+      continue;
+    }
+
+    // Trigger validation
+    const trig = rule.trigger;
+    if (!trig || typeof trig !== "object") {
+      push("error", "missing or invalid `trigger`");
+    } else {
+      // Legacy shape (`status` without `event`) is allowed; only flag
+      // unknown keys that match neither legacy nor new schema.
+      for (const key of Object.keys(trig)) {
+        if (!KNOWN_TRIGGER_FIELDS.has(key)) {
+          push("warn", `unknown trigger field "${key}" (allowed: ${[...KNOWN_TRIGGER_FIELDS].join(", ")})`);
+        }
+      }
+      const normalized = normalizeTrigger(trig);
+      if (!TICKET_EVENTS.includes(normalized.event as any)) {
+        push("error", `unknown event "${normalized.event}" (allowed: ${TICKET_EVENTS.join(", ")})`);
+      }
+    }
+
+    // Action validation
+    const action = rule.action;
+    if (!action || typeof action !== "object") {
+      push("error", "missing or invalid `action`");
+    } else if (action.type === "workflow") {
+      if (!action.skillId) push("error", "action.type=workflow requires `skillId`");
+    } else if (action.type && !KNOWN_ACTION_TYPES.has(action.type)) {
+      push("warn", `unknown action.type "${action.type}" (allowed: spawnAgent, workflow, or omit type)`);
+    } else if (!action.spawnProfile) {
+      push("error", "missing `action.spawnProfile`");
+    }
+  }
+
+  for (const w of ruleWarnings) {
+    log(`${w.level.toUpperCase()}: rule "${w.ruleName}": ${w.message}`);
+  }
+  return ruleWarnings;
+}
+
+export function getRuleWarnings(): RuleWarning[] {
+  return ruleWarnings.slice();
+}
+
+function watchConfigFile() {
+  if (!configPathTracked) return;
+  if (configWatcher) {
+    try { fs.unwatchFile(configWatcher); } catch {}
+    configWatcher = null;
+  }
+  if (!fs.existsSync(configPathTracked)) {
+    // No file yet — daemon must restart to pick up a brand-new config.
+    return;
+  }
+  // Use fs.watchFile (poll-based) rather than fs.watch (inotify/kqueue):
+  // fs.watch is unreliable on individual files across macOS/Linux,
+  // especially when editors rename-on-save. Polling at 200ms is slower
+  // but rock solid and survives inode swaps without re-registration.
+  const tracked = configPathTracked;
+  configWatcher = tracked;
+  fs.watchFile(tracked, { interval: 200, persistent: false }, (curr, prev) => {
+    if (curr.mtimeMs === prev.mtimeMs && curr.size === prev.size) return;
+    if (configReloadTimer) clearTimeout(configReloadTimer);
+    configReloadTimer = setTimeout(() => {
+      configReloadTimer = null;
+      const before = rules.length;
+      loadRules(tracked);
+      log(`Reloaded automation rules (${before} → ${rules.length})`);
+    }, CONFIG_RELOAD_DEBOUNCE_MS);
+  });
 }
 
 function loadProcessedStates() {
@@ -142,11 +314,15 @@ function saveProcessedStates() {
   } catch {}
 }
 
-function scheduleCheck(ticketId) {
-  if (debounceTimers.has(ticketId)) clearTimeout(debounceTimers.get(ticketId));
-  debounceTimers.set(ticketId, setTimeout(() => {
-    debounceTimers.delete(ticketId);
-    checkTicket(ticketId);
+function scheduleCheck(eventType, payload) {
+  // Debounce by (eventType, ticketId) so two distinct events on the same
+  // ticket don't collapse into one.
+  const ticketId = payload.ticketId;
+  const key = `${eventType}:${ticketId}`;
+  if (debounceTimers.has(key)) clearTimeout(debounceTimers.get(key));
+  debounceTimers.set(key, setTimeout(() => {
+    debounceTimers.delete(key);
+    checkTicket(eventType, payload);
   }, DEBOUNCE_MS));
 }
 
@@ -169,50 +345,111 @@ export function _setReadTicketOverride(fn: ((id: string) => any) | null) {
   readTicketOverride = fn;
 }
 
-function checkTicket(ticketId) {
+function checkTicket(eventType, payload) {
+  const ticketId = payload.ticketId;
   const ticket = readTicket(ticketId);
   if (!ticket) return;
 
-  const currentKey = JSON.stringify({ status: ticket.status, reviewPhase: ticket.reviewPhase || null });
-  const previousKey = processedStates.get(ticket.id);
+  // Legacy state-based dedup: only applies to events that represent a state
+  // transition. Same `(status, reviewPhase)` as last time → skip. This
+  // preserves existing watcher behavior for the review pipeline.
+  if (LEGACY_DEDUP_EVENTS.has(eventType)) {
+    const currentKey = JSON.stringify({ status: ticket.status, reviewPhase: ticket.reviewPhase || null });
+    const previousKey = processedStates.get(ticket.id);
+    if (previousKey === currentKey) return;
+    processedStates.set(ticket.id, currentKey);
+    saveProcessedStates();
+  }
 
-  if (previousKey === currentKey) return;
-
-  processedStates.set(ticket.id, currentKey);
-  saveProcessedStates();
-
-  for (const rule of rules) {
-    if (matchesRule(rule, ticket)) {
-      enqueueAutomation(rule, ticket);
-    }
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    if (!matchesRule(rule, eventType, payload, ticket)) continue;
+    if (isDuplicateFire(rule, i, eventType, payload)) continue;
+    enqueueAutomation(rule, eventType, payload, ticket);
   }
 }
 
-function matchesRule(rule, ticket) {
-  if (rule.trigger.status !== ticket.status) return false;
-  if (rule.trigger.label && (!ticket.labels || !ticket.labels.includes(rule.trigger.label))) return false;
-  if (rule.trigger.reviewPhase !== undefined && (ticket.reviewPhase || null) !== rule.trigger.reviewPhase) return false;
+export function normalizeTrigger(trigger: any): any {
+  const t = trigger && typeof trigger === "object" ? trigger : {};
+  // Legacy shape: bare `status` / `label` keys mean ticket:statusChanged.
+  if (!t.event && (t.status !== undefined || t.label !== undefined)) {
+    const labels: string[] = [];
+    if (typeof t.label === "string") labels.push(t.label);
+    if (Array.isArray(t.labels)) labels.push(...t.labels);
+    return {
+      event: "ticket:statusChanged",
+      to: t.status,
+      reviewPhase: t.reviewPhase,
+      labels: labels.length ? labels : undefined,
+    };
+  }
+  return {
+    event: t.event || "ticket:statusChanged",
+    to: t.to,
+    from: t.from,
+    reviewPhase: t.reviewPhase,
+    labels: Array.isArray(t.labels) ? t.labels : (typeof t.label === "string" ? [t.label] : undefined),
+  };
+}
+
+function matchValue(spec: any, actual: any): boolean {
+  if (spec === undefined || spec === null) return true;
+  if (spec === "*") return true;
+  if (Array.isArray(spec)) return spec.some((s) => s === "*" || s === actual);
+  return spec === actual;
+}
+
+export function matchesRule(rule, eventType, payload, ticket): boolean {
+  if (rule?.disabled === true) return false;
+  const t = normalizeTrigger(rule?.trigger);
+  if (t.event !== eventType) return false;
+  if (t.to !== undefined && !matchValue(t.to, payload?.newStatus ?? ticket?.status ?? null)) return false;
+  if (t.from !== undefined && !matchValue(t.from, payload?.oldStatus ?? null)) return false;
+  if (t.reviewPhase !== undefined && (ticket?.reviewPhase ?? null) !== t.reviewPhase) return false;
+  if (Array.isArray(t.labels) && t.labels.length > 0) {
+    const owned = Array.isArray(ticket?.labels) ? ticket.labels : [];
+    if (!t.labels.every((l) => owned.includes(l))) return false;
+  }
   return true;
 }
 
-function enqueueAutomation(rule, ticket) {
-  queue.push({ rule, ticket });
+function isDuplicateFire(rule, ruleIndex, eventType, payload): boolean {
+  const ruleKey = rule?.name || `idx-${ruleIndex}`;
+  const dedupKey = [
+    ruleKey,
+    eventType,
+    payload?.ticketId ?? "",
+    payload?.oldStatus ?? "",
+    payload?.newStatus ?? "",
+  ].join("|");
+  const now = Date.now();
+  // Sweep expired entries opportunistically (cheap; map stays small).
+  for (const [k, ts] of recentlyFired) {
+    if (now - ts > DEDUP_TTL_MS) recentlyFired.delete(k);
+  }
+  if (recentlyFired.has(dedupKey)) return true;
+  recentlyFired.set(dedupKey, now);
+  return false;
+}
+
+function enqueueAutomation(rule, eventType, payload, ticket) {
+  queue.push({ rule, eventType, payload, ticket });
   processQueue();
 }
 
 function processQueue() {
   while (queue.length > 0 && activeAutomations < MAX_CONCURRENT) {
-    const { rule, ticket } = queue.shift();
-    executeAutomation(rule, ticket);
+    const item = queue.shift();
+    executeAutomation(item.rule, item.eventType, item.payload, item.ticket);
   }
 }
 
-function executeAutomation(rule, ticket) {
-  if (rule.action.type === "workflow" && rule.action.skillId) {
+function executeAutomation(rule, eventType, payload, ticket) {
+  if (rule.action?.type === "workflow" && rule.action.skillId) {
     executeWorkflowAction(rule, ticket);
     return;
   }
-  if (!spawnFn || !rule.action.spawnProfile) return;
+  if (!spawnFn || !rule.action?.spawnProfile) return;
 
   // Block infinite rework loops
   if (ticket.status === "rework" && (ticket.reworkCount || 0) >= MAX_REWORK_CYCLES) {
@@ -221,8 +458,8 @@ function executeAutomation(rule, ticket) {
     return;
   }
 
-  let profileId = rule.action.spawnProfile;
-  profileId = profileId.replace(/\{\{(\w+)\}\}/g, (_, key) => ticket[key] || "");
+  const ctx = buildTemplateContext(eventType, payload, ticket);
+  const profileId = renderTemplate(rule.action.spawnProfile, ctx);
 
   if (!profileId || profileId.includes("{{")) {
     log(`Cannot resolve profile for ticket ${ticket.id}: ${rule.action.spawnProfile} (assigneeProfileId=${ticket.assigneeProfileId})`);
@@ -231,10 +468,12 @@ function executeAutomation(rule, ticket) {
 
   activeAutomations++;
 
-  let prompt = rule.promptTemplate || `Work on ticket "${ticket.title}"`;
-  prompt = prompt.replace(/\{\{(\w+)\}\}/g, (_, key) => ticket[key] || "");
+  const prompt = renderTemplate(
+    rule.promptTemplate || `Work on ticket "${ticket.title}"`,
+    ctx,
+  );
 
-  log(`Auto-spawning ${profileId} for ticket ${ticket.id} (status=${ticket.status}, phase=${ticket.reviewPhase})`);
+  log(`Auto-spawning ${profileId} for ticket ${ticket.id} on ${eventType} (status=${ticket.status}, phase=${ticket.reviewPhase})`);
 
   try {
     Promise.resolve(spawnFn(profileId, prompt, ticket.id))
@@ -397,7 +636,13 @@ export function stop() {
   busSubscriptions = [];
   for (const timer of debounceTimers.values()) clearTimeout(timer);
   debounceTimers.clear();
+  if (configReloadTimer) { clearTimeout(configReloadTimer); configReloadTimer = null; }
+  if (configWatcher) { try { fs.unwatchFile(configWatcher); } catch {} configWatcher = null; }
+  configPathTracked = null;
   inFlightSpawns.clear();
+  recentlyFired.clear();
+  queue = [];
+  activeAutomations = 0;
   saveProcessedStates();
   log("Stopped");
 }
@@ -409,3 +654,7 @@ export function getRules() { return rules; }
 // Test-only: expose the processedStates map so integration tests can verify
 // in-process bus delivery without coupling to internal implementation.
 export function _getProcessedStates() { return processedStates; }
+
+// Test-only: reset the dedup LRU between scenarios. Vitest module isolation
+// means tests share watcher state across `it` blocks within one file.
+export function _resetDedup() { recentlyFired.clear(); processedStates.clear(); }
