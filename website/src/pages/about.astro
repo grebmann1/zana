@@ -1,0 +1,88 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MythicDivider from '../components/MythicDivider.astro';
+import DandelionSeeds from '../components/illustrations/DandelionSeeds.astro';
+---
+
+<BaseLayout
+  title="About"
+  description="The story behind Zana — the Albanian fairy of the mountains, the metaphor for an agent orchestrator, and the values behind the project."
+>
+  <section class="relative overflow-hidden">
+    <DandelionSeeds count={5} class="opacity-50" />
+    <div class="container-zana relative py-24">
+      <p class="ornament text-xs text-gold">— folklore —</p>
+      <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">The name <span class="italic">Zana</span>.</h1>
+      <div class="mt-8 max-w-2xl space-y-6 text-lg leading-relaxed text-ink/85">
+        <p>
+          In Albanian highland mythology, a <em>Zana</em> is a fairy of the
+          mountains. She is fierce, beautiful, and a guardian of travelers.
+          Folklore tells of heroes who, faced with impossible tasks, were
+          aided by the Zanas — given strength, sight, or a path through.
+        </p>
+        <p>
+          We thought it fit. You face an impossible task: build, review, test,
+          ship, in less time than there ever is. Zana brings a council of
+          specialists to your side. You stay the hero. They do the work that
+          would have taken days.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-parchment/40 py-20">
+    <div class="container-zana grid gap-12 md:grid-cols-2">
+      <div>
+        <p class="ornament text-xs text-gold">— the metaphor —</p>
+        <h2 class="mt-3 font-display text-3xl text-forest">Agents as fairies.<br/>You as the hero.</h2>
+        <p class="mt-4 text-moss leading-relaxed">
+          Each agent has a profile — a lens, a personality, a tool surface. The
+          architect sees structure. The reviewer sees flaws. The tester sees
+          edges. They are not interchangeable. Like fairies in a folktale, each
+          carries something different.
+        </p>
+        <p class="mt-3 text-moss leading-relaxed">
+          You orchestrate them. You make the wishes. You decide which voice
+          carries the day. The story remains yours.
+        </p>
+      </div>
+      <div>
+        <p class="ornament text-xs text-gold">— values —</p>
+        <h2 class="mt-3 font-display text-3xl text-forest">What we believe.</h2>
+        <ul class="mt-4 space-y-3 text-moss leading-relaxed">
+          <li><strong class="text-forest">Thick prompts beat clever models.</strong> The single biggest cause of bad agent output is a thin prompt.</li>
+          <li><strong class="text-forest">Tickets are not bureaucracy.</strong> They are the unit of dispatch and the thing you mark complete.</li>
+          <li><strong class="text-forest">Disagreement is information.</strong> Deliberation preserves dissent rather than averaging it away.</li>
+          <li><strong class="text-forest">Headless first.</strong> Anything you can do in a UI you can do in a script, on a schedule, or in a hook.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="container-zana py-20">
+    <MythicDivider />
+    <div class="mt-10 grid gap-10 md:grid-cols-2">
+      <div>
+        <h2 class="font-display text-3xl text-forest">Open source.</h2>
+        <p class="mt-4 text-moss leading-relaxed">
+          Zana is built in the open. Issues, profiles, skills, and proposals
+          are welcome. The orchestration loop should belong to everyone who
+          ships software with agents.
+        </p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer" class="btn-primary">View on GitHub</a>
+          <a href="/docs" class="btn-ghost">Read the docs</a>
+        </div>
+      </div>
+      <div>
+        <h2 class="font-display text-3xl text-forest">Built on.</h2>
+        <ul class="mt-4 space-y-2 text-moss">
+          <li>· <a href="https://claude.com/claude-code" class="text-forest hover:text-berry" target="_blank" rel="noopener noreferrer">Claude Code</a> — the conversational shell</li>
+          <li>· <a href="https://modelcontextprotocol.io" class="text-forest hover:text-berry" target="_blank" rel="noopener noreferrer">Model Context Protocol</a> — the tool surface</li>
+          <li>· TypeScript &amp; Node 20+</li>
+          <li>· An obsession with concrete deliverables</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

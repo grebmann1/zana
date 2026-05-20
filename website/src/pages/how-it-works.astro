@@ -1,0 +1,140 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import RuneCircle from '../components/illustrations/RuneCircle.astro';
+import MythicDivider from '../components/MythicDivider.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+
+const primitives = [
+  {
+    name: 'Tickets',
+    tagline: 'The unit of dispatch.',
+    body: 'A useful ticket is independent, small, and verifiable — fits inside one agent\'s context plus a margin for tools and tests. Tickets are not bureaucracy. They are the thing you mark complete so the orchestration loop stays honest about progress.',
+  },
+  {
+    name: 'Teams',
+    tagline: 'Topology by intent.',
+    body: 'Pipeline (A → B → C) for sequential dependencies. Fan-out (Lead → A, B, C → Lead) for independent parallel work. Supervisor (Lead ↔ workers) for ongoing coordination. Workers communicate via SendMessage — never polling, never shared state.',
+  },
+  {
+    name: 'Deliberation',
+    tagline: 'Bounded multi-perspective review.',
+    body: 'Sibling to Team and Autopilot. Voters (security-reviewer, performance-engineer, architect) examine a decision; dissent is preserved; a verdict is synthesized with an audit trail and override path. Use it when the stakes warrant the friction.',
+  },
+  {
+    name: 'Autopilot',
+    tagline: 'Goal-driven loops.',
+    body: 'Define success criteria and an ordered sequence of agent steps. The autopilot loops, evaluates, and retries until the criteria are met or the retry budget is exhausted. Built-in evaluator; configurable max iterations.',
+  },
+];
+
+const lifecycle = [
+  { step: '01', title: 'You wish.', body: 'A request lands in Claude Code. You frame it: task in one sentence, acceptance criterion, scope, file paths.' },
+  { step: '02', title: 'Zana plans.', body: 'The orchestrator picks a topology — solo, team, or deliberation — and writes tickets sized for one agent\'s context.' },
+  { step: '03', title: 'Agents work.', body: 'Workers spawn in parallel where they can, sequence where they must. They message each other by name, never poll.' },
+  { step: '04', title: 'Results converge.', body: 'The orchestrator synthesizes outputs, marks tickets complete, runs deliberation if confidence is low.' },
+  { step: '05', title: 'You ship.', body: 'A coherent diff, a test run, and a summary land back in your conversation. Memory updates. Patterns learn.' },
+];
+---
+
+<BaseLayout
+  title="How it works"
+  description="Zana orchestrates specialized agents through tickets, teams, deliberation, and autopilot — primitives for shipping real work, not just prompts."
+>
+  <section class="container-zana py-20">
+    <p class="ornament text-xs text-gold">— the orchestrator's role —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">
+      You plan. You delegate. You monitor.<br/>
+      <span class="italic text-berry">You do not implement.</span>
+    </h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      The single biggest cause of bad agent output is a thin prompt. Zana's job
+      is to keep your prompts thick and your dispatch precise — and to let the
+      council of agents do what they do best.
+    </p>
+  </section>
+
+  <!-- Rune circle diagram -->
+  <section class="relative py-12 bg-parchment/40">
+    <div class="container-zana grid items-center gap-10 md:grid-cols-2">
+      <div>
+        <h2 class="font-display text-4xl text-forest">A council, not a chain.</h2>
+        <p class="mt-4 text-moss leading-relaxed">
+          You sit at the center. Specialist agents arrange around you on a
+          rune-ring. Each carries a profile — a lens, a skill set, a tool surface
+          — and a single ticket sized for their context.
+        </p>
+        <p class="mt-3 text-moss leading-relaxed">
+          The orchestrator dispatches in the topology that fits the work, watches
+          message traffic, and synthesizes outputs into a coherent result.
+        </p>
+      </div>
+      <RuneCircle class="w-full max-w-xl mx-auto" />
+    </div>
+  </section>
+
+  <!-- Primitives -->
+  <section class="container-zana py-20">
+    <MythicDivider />
+    <h2 class="mt-10 font-display text-4xl text-forest">Four primitives.</h2>
+    <p class="mt-3 max-w-2xl text-moss">Composable, named, observable. Each survives daemon restarts; each leaves an audit trail.</p>
+    <div class="mt-12 grid gap-8 md:grid-cols-2">
+      {primitives.map((p, i) => (
+        <article class="rounded-2xl border border-forest/10 bg-cream p-7">
+          <div class="flex items-baseline gap-3">
+            <span class="font-display text-3xl text-gold">{String(i + 1).padStart(2, '0')}</span>
+            <h3 class="font-display text-2xl text-forest">{p.name}</h3>
+          </div>
+          <p class="mt-2 text-sm uppercase tracking-widest text-berry">{p.tagline}</p>
+          <p class="mt-4 text-moss leading-relaxed">{p.body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <!-- Lifecycle -->
+  <section class="relative py-20 bg-parchment/40">
+    <div class="container-zana">
+      <h2 class="font-display text-4xl text-forest">Lifecycle of a wish.</h2>
+      <ol class="mt-12 space-y-6">
+        {lifecycle.map((l) => (
+          <li class="grid gap-4 md:grid-cols-[100px_1fr] items-baseline border-l-2 border-gold/40 pl-6 md:pl-0 md:border-none">
+            <span class="font-display text-3xl text-gold">{l.step}</span>
+            <div>
+              <h3 class="font-display text-xl text-forest">{l.title}</h3>
+              <p class="mt-1 text-moss leading-relaxed">{l.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <!-- Code: how a team is spawned -->
+  <section class="container-zana py-20">
+    <div class="grid gap-10 md:grid-cols-2 md:items-center">
+      <div>
+        <p class="ornament text-xs text-gold">— in practice —</p>
+        <h2 class="mt-3 font-display text-4xl text-forest">SendMessage-first coordination.</h2>
+        <p class="mt-4 text-moss leading-relaxed">
+          Named agents message each other directly. No polling. No shared mutable
+          state. Each agent's prompt declares who they wait for and who they
+          report to next.
+        </p>
+      </div>
+      <CodeBlock caption="agent-team.ts" lang="ts">{`Agent({ name: "researcher",
+  prompt: "Survey codebase. SendMessage findings to 'architect'." })
+
+Agent({ name: "architect",
+  prompt: "Wait for 'researcher'. Design solution. SendMessage to 'coder'." })
+
+Agent({ name: "coder",
+  prompt: "Wait for 'architect'. Implement. SendMessage results to 'tester'." })
+
+Agent({ name: "tester",
+  prompt: "Wait for 'coder'. Verify. SendMessage to 'reviewer'." })
+
+// kick off the pipeline
+SendMessage({ to: "researcher", message: "[task context]" })`}</CodeBlock>
+    </div>
+  </section>
+</BaseLayout>

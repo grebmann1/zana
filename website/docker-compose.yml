@@ -1,0 +1,9 @@
+services:
+  web:
+    build: .
+    image: zana-website:local
+    ports:
+      - "8080:80"
+    environment:
+      - PORT=80
+    restart: unless-stopped

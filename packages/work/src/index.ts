@@ -26,4 +26,11 @@ module.exports = {
       resume: require("./runs/checkpoint/resume"),
     },
   },
+  deliberation: require("./deliberation"),
+  // Re-exported from @zana/core so callers downstream of @zana/work can
+  // `instanceof`-check the tenant-isolation gate without taking a direct
+  // dependency on @zana/core.
+  get WorkspaceNotInitializedError() {
+    return require("@zana/core").project.workspaceContext.WorkspaceNotInitializedError;
+  },
 };

@@ -1,0 +1,118 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import MythicDivider from '../../components/MythicDivider.astro';
+
+const toc = [
+  { id: 'install', label: '1. Install' },
+  { id: 'wire', label: '2. Wire into Claude Code' },
+  { id: 'first-team', label: '3. Spawn your first team' },
+  { id: 'deliberation', label: '4. Run a deliberation' },
+  { id: 'schedules', label: '5. Schedule recurring work' },
+  { id: 'next', label: '6. Where to next' },
+];
+---
+
+<BaseLayout
+  title="Docs · Get started"
+  description="Install Zana, wire it into Claude Code, spawn your first team of agents, and run a deliberation — in under five minutes."
+>
+  <section class="container-zana py-16">
+    <p class="ornament text-xs text-gold">— get started —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">First five minutes with Zana.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      Install the daemon, expose the MCP server, and you're ready. The
+      following walks through a real first session — install, wire, spawn,
+      deliberate, schedule.
+    </p>
+
+    <div class="mt-12 grid gap-12 md:grid-cols-[220px_1fr]">
+      <aside class="md:sticky md:top-24 md:self-start">
+        <p class="text-xs uppercase tracking-widest text-gold">On this page</p>
+        <ul class="mt-3 space-y-1.5 text-sm">
+          {toc.map((t) => (
+            <li><a href={`#${t.id}`} class="text-moss hover:text-forest">{t.label}</a></li>
+          ))}
+        </ul>
+      </aside>
+
+      <article class="prose-zana max-w-prose space-y-12">
+        <section id="install">
+          <h2 class="font-display text-3xl text-forest">1. Install</h2>
+          <p class="mt-2 text-moss">Node 20+ required.</p>
+          <div class="mt-4">
+            <CodeBlock caption="terminal" lang="bash">{`npm i -g @zana/cli
+zana doctor --fix    # checks deps, paths, permissions
+zana daemon start    # starts the long-lived orchestrator`}</CodeBlock>
+          </div>
+        </section>
+
+        <section id="wire">
+          <h2 class="font-display text-3xl text-forest">2. Wire into Claude Code</h2>
+          <p class="mt-2 text-moss">Register Zana as an MCP server. Claude Code will pick up the 86+ tools automatically.</p>
+          <div class="mt-4">
+            <CodeBlock caption="terminal" lang="bash">{`claude mcp add zana -- zana mcp
+
+# verify
+claude mcp list`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Open a Claude Code session and type <code class="rounded bg-parchment px-1.5 py-0.5">/zana ping</code>. You should see a heartbeat and the active profile list.</p>
+        </section>
+
+        <section id="first-team">
+          <h2 class="font-display text-3xl text-forest">3. Spawn your first team</h2>
+          <p class="mt-2 text-moss">Pick a topology that matches the work. For a feature: pipeline.</p>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · /zana command" lang="text">{`/zana spawn team \\
+  --members researcher,architect,coder,tester \\
+  --topology pipeline \\
+  --task "Add bearer-token auth to /api/v2"`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Each agent receives a sized ticket and a target ("SendMessage to <em>coder</em> when done"). You watch — you don't implement.</p>
+        </section>
+
+        <section id="deliberation">
+          <h2 class="font-display text-3xl text-forest">4. Run a deliberation</h2>
+          <p class="mt-2 text-moss">For high-stakes decisions: run multiple voters, preserve dissent, get a verdict with an audit trail.</p>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · /zana command" lang="text">{`/zana deliberate \\
+  --voters security-reviewer,architect,performance-engineer \\
+  --question "Should we drop Node 18 support in v2.0?"`}</CodeBlock>
+          </div>
+        </section>
+
+        <section id="schedules">
+          <h2 class="font-display text-3xl text-forest">5. Schedule recurring work</h2>
+          <p class="mt-2 text-moss">YAML schedules survive daemon restarts. Cron or interval. Spawn agents, run commands, or fire teams.</p>
+          <div class="mt-4">
+            <CodeBlock caption=".zana/schedules.yaml" lang="yaml">{`schedules:
+  - id: nightly-test-audit
+    cron: "0 2 * * *"
+    action:
+      type: spawn
+      profile: test-writer
+      task: "Audit coverage gaps in packages/work; write a TODO list"
+
+  - id: weekly-deps-review
+    interval: 7d
+    action:
+      type: team
+      members: [security-reviewer, researcher]
+      task: "Audit dependency CVEs and produce a triage list"`}</CodeBlock>
+          </div>
+        </section>
+
+        <section id="next">
+          <h2 class="font-display text-3xl text-forest">6. Where to next</h2>
+          <ul class="mt-3 space-y-2 text-moss">
+            <li>· <a href="/how-it-works" class="text-forest hover:text-berry">How it works</a> — primitives in depth.</li>
+            <li>· <a href="/features" class="text-forest hover:text-berry">All features</a> — the full surface area.</li>
+            <li>· <a href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">GitHub repository</a> — issues, profiles, contributions.</li>
+          </ul>
+        </section>
+
+        <MythicDivider />
+      </article>
+    </div>
+  </section>
+</BaseLayout>

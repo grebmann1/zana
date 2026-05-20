@@ -280,6 +280,56 @@ export function getStats() {
   return { totalOutcomes: outcomes.length, profileStats };
 }
 
+/**
+ * Resolve a voter spec into concrete profileIds.
+ *
+ * Voter spec shapes:
+ *   - "architect"                     → ["architect"] (literal profile id)
+ *   - { profileId: "architect" }      → ["architect"]
+ *   - { lens: "security" }            → all profile ids whose .lens === "security"
+ *
+ * Returns an array of profileIds (deduped, original order preserved).
+ * Throws if a literal profileId doesn't resolve, but a lens with no matches returns [].
+ */
+export function resolveVoters(specs) {
+  const result = [];
+  const seen = new Set();
+
+  const push = (id) => {
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      result.push(id);
+    }
+  };
+
+  for (const spec of specs || []) {
+    if (typeof spec === "string") {
+      const profile = profileStore.getProfile(spec);
+      if (!profile) {
+        throw new Error(`resolveVoters: unknown profileId '${spec}'`);
+      }
+      push(profile.id);
+    } else if (spec && typeof spec === "object") {
+      if ("profileId" in spec && spec.profileId) {
+        const profile = profileStore.getProfile(spec.profileId);
+        if (!profile) {
+          throw new Error(`resolveVoters: unknown profileId '${spec.profileId}'`);
+        }
+        push(profile.id);
+      } else if ("lens" in spec && spec.lens) {
+        const profiles = profileStore.getProfilesByLens(spec.lens);
+        for (const p of profiles) push(p.id);
+      } else {
+        throw new Error(`resolveVoters: invalid voter spec ${JSON.stringify(spec)}`);
+      }
+    } else {
+      throw new Error(`resolveVoters: invalid voter spec ${JSON.stringify(spec)}`);
+    }
+  }
+
+  return result;
+}
+
 export function reset() {
   outcomes = [];
   if (db) {

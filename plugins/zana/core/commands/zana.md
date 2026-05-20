@@ -78,6 +78,15 @@ action:
   prompt: |
     Scan the project for files that lack tests. Top 5 gaps in priority order.
 
+# `workflow` action — invokes a saved workflow skill via the in-process
+# workflow engine. Skill must have type=workflow and a steps[] array
+# (actions: spawn / gate / notify / wait).
+# action: { type: workflow, skillId: "qa-pipeline", context: { ... } }
+#
+# `mcp_tool` action — invokes any zana_* MCP tool by name. Maps zana_X
+# to the orchestrator action X.
+# action: { type: mcp_tool, toolName: "zana_list_profiles", toolArgs: {} }
+
 history:                 # opt-in run-history retention (default: enabled, retain 10)
   enabled: true
   retain: 30
@@ -172,3 +181,37 @@ claude mcp add zana \
 Use this for advanced multi-daemon setups where a single Zana process should be able to spawn and coordinate child Zana processes (each with its own orchestrator and worker pool). For ordinary single-daemon orchestration, leave master mode off — the in-process agent tools are sufficient.
 
 After enabling, you can verify activation: the MCP tool list should grow from 69 to 75 tools, with the additional 6 named `zana_swarm_*`. List them via the MCP tools/list method or check by trying to call `zana_swarm_list` — it returns an empty array when active, an "unknown tool" error when master mode is off.
+
+## Diagnostics & Logging
+
+### Structured logger
+
+`packages/core/src/util/logger.ts` exposes `getLogger(module)` returning `{debug, info, warn, error}`. Format: `<ISO-ts> [<level>] [<module>] <message> [<meta-json>]`. Default sink is stderr.
+
+Env knobs:
+- `ZANA_LOG_LEVEL` — `debug|info|warn|error` (default `info`)
+- `ZANA_LOG_FILE` — when set, route output to that file instead of stderr
+
+### Event log rotation
+
+The hook event log rotates at 50 MB by default; the audit log at 250 MB. Both keep the last 5 rolled files. Tunable via:
+- `ZANA_EVENT_LOG_MAX_BYTES` (default `52428800`)
+- `ZANA_AUDIT_LOG_MAX_BYTES` (default `262144000`)
+- `ZANA_LOG_RETAIN_COUNT` (default `5`)
+
+Rotation is size-based and rolls files via rename: when an active file passes the cap, it's renamed to `<name>.<ts>.<ext>` and a fresh file starts. Older rolled files beyond `retain_count` are pruned.
+
+### Hooks installer drift
+
+`installer.isHooksInstalled()` returns `false` when the on-disk wrapper at `~/.zana/bin/post-hook.sh` differs from the bundled `wrapper.sh`. The daemon auto-reinstalls on the next boot when it detects drift — useful after upgrades. To force a manual restore:
+
+```bash
+node -e 'require("@zana/server").hooks.installer.installHooks(47400)'
+```
+
+Symptom of stale wrapper: hook events from real Claude Code sessions never land in `<workspace>/.zana/sessions/<sid>/events.ndjson` (the file stays 0 bytes). Compare hashes:
+
+```bash
+shasum -a 256 ~/.zana/bin/post-hook.sh \
+              <(cat $(npm root -g)/zana/packages/server/src/hooks/wrapper.sh)
+```

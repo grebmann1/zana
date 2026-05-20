@@ -21,7 +21,7 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 
 ## Built-ins
 
-- 11 agent profiles in `packages/core/profiles/`: architect, backend-dev, frontend-dev, test-writer, code-reviewer, full-auto-coder, doc-generator, ux-designer, orchestrator, swarm-master, swarm-orchestrator
+- 14 agent profiles in `packages/core/profiles/`: architect, backend-dev, frontend-dev, test-writer, code-reviewer, debugger, doc-generator, full-auto-coder, ux-designer, researcher, security-reviewer, orchestrator, swarm-master, swarm-orchestrator
 - 1 example module in `packages/core/modules/example/`
 
 ## Getting started
@@ -44,8 +44,16 @@ For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the 6 `zana_swarm
 
 ## Status
 
-- Tests: 140/141 (1 pre-existing migration test issue)
-- Recent refactors: dropped legacy "hive" naming, split monolith into 7 themed packages, full purge of vocabulary
+- Tests: 458/458 (45 test files)
+- Recent work:
+  - Hook-server hardening (Tier 1+2): error propagation, agentId regex, graceful drain, 30s handler timeout, fan-out cap, jq-safe terminal-id injection
+  - Scheduler `workflow` and `mcp_tool` actions wired
+  - Opt-in run-history with retain-N policy (`history: { enabled, retain }` in YAML)
+  - Event log + audit log size-based rotation (`ZANA_EVENT_LOG_MAX_BYTES`)
+  - Structured logger module (`packages/core/src/util/logger.ts`)
+  - Hook installer drift detection (re-deploys stale `~/.zana/bin/post-hook.sh` on upgrade)
+
+For deeper docs: `packages/server/README.md` (HTTP surfaces + hook flow), `packages/work/README.md` (scheduler schema), `plugins/zana/core/commands/zana.md` (orchestrator command + diagnostics).
 
 ## Contributing
 

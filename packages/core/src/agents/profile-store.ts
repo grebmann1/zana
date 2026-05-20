@@ -8,7 +8,13 @@ export function profilesDir() {
 }
 
 function builtInDir() {
-  return path.join(__dirname, "..", "profiles");
+  // In production builds, profiles live next to dist/src/agents (i.e. ../profiles).
+  // In source-mode tests, profile-store.ts is at packages/core/src/agents and the
+  // built-in profiles live at packages/core/profiles (i.e. ../../profiles).
+  const distLocal = path.join(__dirname, "..", "profiles");
+  if (fs.existsSync(distLocal)) return distLocal;
+  const srcFallback = path.join(__dirname, "..", "..", "profiles");
+  return srcFallback;
 }
 
 function ensureDir(dir) {
@@ -76,6 +82,12 @@ export function listProfiles() {
 export function getProfile(id) {
   const all = listProfiles();
   return all.find((p) => p.id === id) || null;
+}
+
+/** Find all profiles with a matching `lens` field. */
+export function getProfilesByLens(lens) {
+  if (!lens) return [];
+  return listProfiles().filter((p) => p && p.lens === lens);
 }
 
 export function saveProfile(profile) {
