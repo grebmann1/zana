@@ -1269,20 +1269,17 @@ function handleBroadcast(args) {
 
 function sendResponse(id, result) {
   const msg = { jsonrpc: "2.0", id, result };
-  const json = JSON.stringify(msg);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
 function sendError(id, code, message) {
   const msg = { jsonrpc: "2.0", id, error: { code, message } };
-  const json = JSON.stringify(msg);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
 function sendNotification(method, params) {
   const msg = { jsonrpc: "2.0", method, params };
-  const json = JSON.stringify(msg);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
 function drainLocalInbox() {
@@ -1633,46 +1630,27 @@ async function handleMessage(msg) {
   }
 }
 
-// Read LSP-style messages from stdin (Content-Length header framing, byte-accurate)
-let buffer = Buffer.alloc(0);
-const HEADER_DELIMITER = Buffer.from("\r\n\r\n");
-const MAX_CONTENT_LENGTH = MCP_MAX_BUFFER_BYTES;
+// Read newline-delimited JSON messages from stdin (MCP stdio transport).
+let stdinBuffer = "";
 
+process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
-  buffer = Buffer.concat([buffer, chunk]);
+  stdinBuffer += chunk;
 
-  if (buffer.length > MCP_MAX_BUFFER_BYTES) {
+  if (stdinBuffer.length > MCP_MAX_BUFFER_BYTES) {
     sendError(null, -32700, "Buffer overflow: stdin buffer exceeded 10 MB limit");
-    buffer = Buffer.alloc(0);
+    stdinBuffer = "";
     return;
   }
 
-  while (true) {
-    const headerEnd = buffer.indexOf(HEADER_DELIMITER);
-    if (headerEnd === -1) break;
-
-    const header = buffer.slice(0, headerEnd).toString("ascii");
-    const match = header.match(/Content-Length:\s*(\d+)/i);
-    if (!match) {
-      buffer = buffer.slice(headerEnd + 4);
-      continue;
-    }
-
-    const contentLength = parseInt(match[1], 10);
-    if (contentLength > MAX_CONTENT_LENGTH) {
-      sendError(null, -32700, `Content-Length ${contentLength} exceeds maximum ${MAX_CONTENT_LENGTH}`);
-      buffer = buffer.slice(headerEnd + 4);
-      continue;
-    }
-
-    const contentStart = headerEnd + 4;
-    if (buffer.length < contentStart + contentLength) break;
-
-    const content = buffer.slice(contentStart, contentStart + contentLength).toString("utf8");
-    buffer = buffer.slice(contentStart + contentLength);
+  let newlineIdx;
+  while ((newlineIdx = stdinBuffer.indexOf("\n")) !== -1) {
+    const line = stdinBuffer.slice(0, newlineIdx).trim();
+    stdinBuffer = stdinBuffer.slice(newlineIdx + 1);
+    if (!line) continue;
 
     try {
-      const msg = JSON.parse(content);
+      const msg = JSON.parse(line);
       handleMessage(msg).catch((err) => {
         process.stderr.write(`[zana-mcp] unhandled tool error: ${err.message}\n`);
       });

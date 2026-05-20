@@ -40,7 +40,8 @@
     "typecheck:runtime": "tsc -p tsconfig.runtime.json",
     "typecheck:runtime:strict": "tsc -p tsconfig.runtime.strict.json",
     "docs": "cd docs && npm start",
-    "docs:build": "cd docs && npm run build"
+    "docs:build": "cd docs && npm run build",
+    "docs:mcp-ref": "npm run build:runtime:scripts && node dist/scripts/generate-mcp-reference.js"
   },
   "devDependencies": {
     "@types/node": "^25.7.0",

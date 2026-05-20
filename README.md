@@ -55,6 +55,8 @@ For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the 6 `zana_swarm
 
 For deeper docs: `packages/server/README.md` (HTTP surfaces + hook flow), `packages/work/README.md` (scheduler schema), `plugins/zana/core/commands/zana.md` (orchestrator command + diagnostics).
 
+**Slash-command authors:** before writing a render block for any `zana_*` MCP tool, consult [`docs/MCP-TOOL-REFERENCE.md`](docs/MCP-TOOL-REFERENCE.md). It is the source of truth for input schemas, output shapes, enum values, and known field-name landmines (e.g. priority is `critical|high|medium|low`, not `P0|P1|P2|P3`; initial ticket status is `backlog`, not `open`; `zana_start_team` returns `{ ok, orchestratorAgentId, terminalId }` with no `runId`). Regenerate after MCP changes with `npm run docs:mcp-ref`.
+
 ## Contributing
 
 PRs welcome. Keep tests at baseline. Use the existing patterns (sed-able identifier renames, lazy require for cycle breaks).
