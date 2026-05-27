@@ -108,18 +108,34 @@ if (subcommand === "run") {
 
 if (subcommand === "schedule") {
   const sub = args[1];
-  if (sub === "list") {
-    try {
-      listSchedules(args.slice(2));
-      process.exit(0);
-    } catch (err) {
-      console.error(`zana schedule list: ${err.message || err}`);
-      process.exit(1);
+  const rest = args.slice(2);
+  const dispatch = async () => {
+    switch (sub) {
+      case "list":         return listSchedules(rest);
+      case "enable":       return scheduleAction("enable", rest);
+      case "disable":      return scheduleAction("disable", rest);
+      case "trigger":      return scheduleAction("trigger", rest);
+      case "enable-all":   return scheduleBulkAction("enable", rest);
+      case "disable-all":  return scheduleBulkAction("disable", rest);
+      case "reload":       return scheduleReload(rest);
+      case "history":      return scheduleHistory(rest);
+      default:
+        console.error(`Usage:
+  zana schedule list [--workspace <p>] [--json]
+  zana schedule enable <id> [--workspace <p>]
+  zana schedule disable <id> [--workspace <p>]
+  zana schedule trigger <id> [--workspace <p>]
+  zana schedule enable-all [--workspace <p>]
+  zana schedule disable-all [--workspace <p>]
+  zana schedule reload [--workspace <p>]
+  zana schedule history <id> [-n N] [--workspace <p>]`);
+        process.exit(1);
     }
-  } else {
-    console.error(`Usage: zana schedule list [--workspace <path>]`);
+  };
+  dispatch().then(() => process.exit(0)).catch((err) => {
+    console.error(`zana schedule ${sub}: ${err.message || err}`);
     process.exit(1);
-  }
+  });
 }
 
 if (subcommand === "config") {
@@ -161,7 +177,14 @@ Commands:
   ticket list [--status s] [--workspace] List tickets in the active daemon's workspace
   ticket rules list [--workspace <p>]    List loaded automation hook rules + validation warnings
   run list [--limit N]                   List recent agent runs from .zana/runs/
-  schedule list                          List schedules in .zana/scheduler/
+  schedule list [--json]                 List schedules in .zana/scheduler/
+  schedule enable <id>                   Enable a schedule (persists, starts trigger)
+  schedule disable <id>                  Disable a schedule (persists, stops trigger)
+  schedule trigger <id>                  Fire a schedule once now
+  schedule enable-all                    Enable every disabled schedule
+  schedule disable-all                   Disable every enabled schedule
+  schedule reload                        Re-read YAMLs from disk + re-arm triggers
+  schedule history <id> [-n N]           Show last N run history entries (default 10)
   headless [path]                        Run zana-daemon in foreground (default)
 
 Options:
@@ -428,28 +451,55 @@ function getFlagValue(restArgs, flag) {
 }
 
 function httpGetJson(port, pathname, token) {
+  return httpJson(port, pathname, "GET", null, token);
+}
+
+function httpPostJson(port, pathname, body, token) {
+  return httpJson(port, pathname, "POST", body, token);
+}
+
+function httpJson(port, pathname, method, body, token) {
   return new Promise((resolve, reject) => {
     const headers = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
+    let payload = null;
+    if (body != null) {
+      payload = typeof body === "string" ? body : JSON.stringify(body);
+      headers["Content-Type"] = "application/json";
+      headers["Content-Length"] = Buffer.byteLength(payload).toString();
+    }
     const req = http.request(
-      { host: "127.0.0.1", port, path: pathname, method: "GET", headers },
+      { host: "127.0.0.1", port, path: pathname, method, headers },
       (res) => {
         const chunks = [];
         res.on("data", (c) => chunks.push(c));
         res.on("end", () => {
-          const body = Buffer.concat(chunks).toString("utf8");
+          const respBody = Buffer.concat(chunks).toString("utf8");
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            try { resolve(JSON.parse(body)); }
+            try { resolve(respBody ? JSON.parse(respBody) : {}); }
             catch (err) { reject(new Error(`bad JSON from ${pathname}: ${err.message}`)); }
           } else {
-            reject(new Error(`HTTP ${res.statusCode} from ${pathname}: ${body.slice(0, 200)}`));
+            reject(new Error(`HTTP ${res.statusCode} from ${pathname}: ${respBody.slice(0, 200)}`));
           }
         });
       }
     );
     req.on("error", reject);
+    if (payload) req.write(payload);
     req.end();
   });
+}
+
+function resolveDaemon(workspaceArg) {
+  const { findRunningDaemon } = require(path.join(appRoot, "packages", "core", "dist", "src", "daemon", "registry.js"));
+  const workspace = workspaceArg ? path.resolve(workspaceArg) : process.cwd();
+  const daemon = findRunningDaemon(workspace);
+  if (!daemon) {
+    console.error("no daemon running for this workspace");
+    process.exit(1);
+  }
+  const apiPort = daemon.port + 1;
+  return { apiPort, token: readAuthToken(), workspace };
 }
 
 // --- ticket list command ---
@@ -672,13 +722,15 @@ function formatRelativeFuture(iso) {
 }
 
 function listSchedules(restArgs) {
+  const asJson = restArgs.includes("--json");
   const workspaceArg = getFlagValue(restArgs, "--workspace");
   const workspace = workspaceArg ? path.resolve(workspaceArg) : process.cwd();
   const projectDir = resolveProjectDir(workspace);
   const schedulerDir = path.join(projectDir, "scheduler");
 
   if (!fs.existsSync(schedulerDir)) {
-    console.log("(no scheduler directory)");
+    if (asJson) console.log("[]");
+    else console.log("(no scheduler directory)");
     return;
   }
 
@@ -709,6 +761,10 @@ function listSchedules(restArgs) {
   }
 
   const schedules = Array.from(byId.values());
+  if (asJson) {
+    console.log(JSON.stringify(schedules, null, 2));
+    return;
+  }
   if (schedules.length === 0) {
     console.log("(no schedules)");
     return;
@@ -730,6 +786,89 @@ function listSchedules(restArgs) {
     console.log(
       `${id} | ${enabled} | ${everyStr} | next ${next} | runCount ${runCount} | ${name}${lastResultStr}`
     );
+  }
+}
+
+// --- schedule enable / disable / trigger (single-id) ---
+
+async function scheduleAction(verb, restArgs) {
+  const id = restArgs.find((a) => !a.startsWith("--"));
+  if (!id) {
+    console.error(`zana schedule ${verb}: <id> is required`);
+    process.exit(1);
+  }
+  const { apiPort, token } = resolveDaemon(getFlagValue(restArgs, "--workspace"));
+  const result = await httpPostJson(apiPort, `/api/schedules/${encodeURIComponent(id)}/${verb}`, {}, token);
+  if (verb === "trigger") {
+    const status = result?.result?.status || "?";
+    console.log(`triggered ${id} → ${status}`);
+    if (result?.result?.error) console.error(`  error: ${result.result.error}`);
+  } else {
+    const enabled = result?.schedule?.enabled;
+    console.log(`${verb}d ${id}${typeof enabled === "boolean" ? ` (enabled=${enabled})` : ""}`);
+  }
+}
+
+// --- schedule enable-all / disable-all (bulk) ---
+
+async function scheduleBulkAction(verb, restArgs) {
+  const { apiPort, token } = resolveDaemon(getFlagValue(restArgs, "--workspace"));
+  const all = await httpGetJson(apiPort, "/api/schedules", token);
+  if (!Array.isArray(all)) {
+    console.error(`unexpected /api/schedules response`);
+    process.exit(1);
+  }
+  // Only act on schedules whose state would change.
+  const targets = all.filter((s) => verb === "enable" ? !s.enabled : s.enabled);
+  if (targets.length === 0) {
+    console.log(`(no schedules to ${verb})`);
+    return;
+  }
+  let ok = 0;
+  let fail = 0;
+  for (const s of targets) {
+    try {
+      await httpPostJson(apiPort, `/api/schedules/${encodeURIComponent(s.id)}/${verb}`, {}, token);
+      console.log(`  ${verb}d ${s.id} (${s.name || ""})`);
+      ok++;
+    } catch (err) {
+      console.error(`  failed ${s.id}: ${err.message || err}`);
+      fail++;
+    }
+  }
+  console.log(`done — ok=${ok} fail=${fail} total=${targets.length}`);
+}
+
+// --- schedule reload (re-read YAMLs from disk) ---
+
+async function scheduleReload(restArgs) {
+  const { apiPort, token } = resolveDaemon(getFlagValue(restArgs, "--workspace"));
+  const result = await httpPostJson(apiPort, "/api/schedules/reload", {}, token);
+  console.log(`reload — started=${result.started ?? "?"} skipped=${result.skipped ?? "?"} total=${result.total ?? "?"}`);
+}
+
+// --- schedule history <id> [-n N] ---
+
+async function scheduleHistory(restArgs) {
+  const id = restArgs.find((a) => !a.startsWith("-"));
+  if (!id) {
+    console.error("zana schedule history: <id> is required");
+    process.exit(1);
+  }
+  const nFlag = getFlagValue(restArgs, "-n") || getFlagValue(restArgs, "--limit");
+  const limit = nFlag ? Math.max(1, parseInt(nFlag, 10) || 10) : 10;
+  const { apiPort, token } = resolveDaemon(getFlagValue(restArgs, "--workspace"));
+  const history = await httpGetJson(apiPort, `/api/schedules/${encodeURIComponent(id)}/history`, token);
+  if (!Array.isArray(history) || history.length === 0) {
+    console.log("(no history)");
+    return;
+  }
+  const tail = history.slice(-limit);
+  for (const e of tail) {
+    const t = e.startedAt || e.finishedAt || "?";
+    const status = e.finalStatus || e.status || "?";
+    const summary = (e.summary || e.error || "").replace(/\s+/g, " ").slice(0, 80);
+    console.log(`${t} | ${status} | ${summary}`);
   }
 }
 

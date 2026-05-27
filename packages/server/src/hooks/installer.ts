@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isClaudeHost } from "@zana/core/src/host/detect.js";
+import { isClaudeHost } from "@zana/core/dist/src/host/detect.js";
 function _config() { return require("@zana/core").config; }
 
 export const HOOK_EVENTS = [

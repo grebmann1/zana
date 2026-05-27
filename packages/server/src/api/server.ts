@@ -744,6 +744,17 @@ async function handleRequest(req, res) {
     json(res, result);
     return;
   }
+  const scheduleHistoryMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/history$/);
+  if (method === "GET" && scheduleHistoryMatch) {
+    const schedulerStore = require("@zana/work").scheduling.store;
+    json(res, schedulerStore.getRunHistory(scheduleHistoryMatch[1]));
+    return;
+  }
+  if (method === "POST" && pathname === "/api/schedules/reload") {
+    const schedulerService = require("@zana/work").scheduling.service;
+    json(res, schedulerService.loadFromDisk());
+    return;
+  }
 
   // --- Checkpoints ---
   if (method === "GET" && pathname === "/api/checkpoints") {
