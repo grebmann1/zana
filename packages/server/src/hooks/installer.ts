@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { isClaudeHost } from "@zana/core/src/host/detect.js";
 function _config() { return require("@zana/core").config; }
 
 export const HOOK_EVENTS = [
@@ -60,6 +61,9 @@ function backupIfNeeded() {
 }
 
 export function installHooks(port) {
+  if (!isClaudeHost()) {
+    return { ok: true, skipped: "not a Claude Code host (~/.claude/ not found)" };
+  }
   if (!Number.isFinite(port)) {
     throw new Error("installHooks: invalid port");
   }
@@ -92,6 +96,9 @@ export function installHooks(port) {
 }
 
 export function uninstallHooks() {
+  if (!isClaudeHost()) {
+    return { ok: true, skipped: "not a Claude Code host (~/.claude/ not found)" };
+  }
   const p = settingsPath();
   if (fs.existsSync(p)) {
     const settings = readSettings();

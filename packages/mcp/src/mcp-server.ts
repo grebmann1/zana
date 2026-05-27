@@ -34,6 +34,14 @@ const ZANA_MASTER_MODE = process.env.ZANA_MASTER_MODE === "true";
 const ZANA_ID = process.env.ZANA_ID || "mcp";
 const SCRATCHPAD_PATH = path.join(SCRATCHPAD_DIR, `${ZANA_ID}.md`);
 
+if (!process.env.ZANA_TERMINAL_ID) {
+  process.stderr.write(
+    "[zana-mcp] WARNING: ZANA_TERMINAL_ID is not set. Ticket and agent attribution will fall back to \"agent\". " +
+    "Set ZANA_TERMINAL_ID=<unique-session-id> in your MCP server env config (Cursor, Continue, Codex, etc.) " +
+    "to get correct per-session tracking.\n",
+  );
+}
+
 // --- In-process core (always boots — no daemon needed) ---
 let localDaemon = null;
 let bootstrapPromise = null;

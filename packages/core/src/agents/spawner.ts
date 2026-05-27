@@ -8,6 +8,8 @@ const skillStore: any = new Proxy({}, { get: (_t, p) => require("@zana/extras").
 const settingsStore: any = new Proxy({}, { get: (_t, p) => require("@zana/extras").settings.store[p] });
 
 export function findClaude() {
+  if (process.env.ZANA_WORKER_BIN) return process.env.ZANA_WORKER_BIN;
+
   const localBin = path.join(os.homedir(), ".local", "bin", "claude");
   if (fs.existsSync(localBin)) return localBin;
 

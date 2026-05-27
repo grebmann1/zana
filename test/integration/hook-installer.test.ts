@@ -10,11 +10,16 @@ import { tmpdir } from "node:os";
 let installer: any;
 let tmpHome: string;
 let originalHome: string | undefined;
+let originalHostOverride: string | undefined;
 
 beforeEach(async () => {
   tmpHome = mkdtempSync(path.join(tmpdir(), "zana-installer-"));
   originalHome = process.env.HOME;
+  originalHostOverride = process.env.ZANA_HOST_OVERRIDE;
   process.env.HOME = tmpHome;
+  // The installer's Phase 1 host guard short-circuits on non-Claude hosts.
+  // These tests exercise the Claude path; force-on for that branch.
+  process.env.ZANA_HOST_OVERRIDE = "claude";
   // Re-import so the installer's homeDir() picks up the new HOME.
   delete require.cache[require.resolve("@zana/server/src/hooks/installer.ts")];
   installer = await import("@zana/server/src/hooks/installer.ts");
@@ -36,6 +41,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   if (originalHome !== undefined) process.env.HOME = originalHome;
+  if (originalHostOverride === undefined) delete process.env.ZANA_HOST_OVERRIDE;
+  else process.env.ZANA_HOST_OVERRIDE = originalHostOverride;
   rmSync(tmpHome, { recursive: true, force: true });
 });
 
@@ -124,6 +131,21 @@ describe("hook installer", () => {
     const settings = JSON.parse(fs.readFileSync(installer.settingsPath(), "utf8"));
     expect(settings.hooks.PostToolUse).toHaveLength(1);
     expect(settings.hooks.PostToolUse[0].hooks[0].command).toBe("echo user-hook");
+  });
+
+  it("installHooks skips silently on a non-Claude host", () => {
+    process.env.ZANA_HOST_OVERRIDE = "generic";
+    const result = installer.installHooks(47402);
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toMatch(/not a Claude Code host/);
+    expect(fs.existsSync(installer.settingsPath())).toBe(false);
+  });
+
+  it("uninstallHooks skips silently on a non-Claude host", () => {
+    process.env.ZANA_HOST_OVERRIDE = "generic";
+    const result = installer.uninstallHooks();
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toMatch(/not a Claude Code host/);
   });
 
   it("isMcpInstalled and installMcpServer round-trip", () => {
