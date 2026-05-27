@@ -212,7 +212,7 @@ export function spawnHeadless(profile, options = {}) {
       args.unshift("-p");
     }
   } else {
-    args.splice(1, 0, "--input-format", "stream-json");
+    args.splice(2, 0, "--input-format", "stream-json");
     if (options.prompt) {
       args.push(options.prompt);
     }
