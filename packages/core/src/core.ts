@@ -203,6 +203,15 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     const apiServer = serverPkg.api.server;
     const apiPort = (hookServerHandle?.port || preferredPort || 47400) + 1;
     apiServerHandle = apiServer.start(zanaModules, apiPort);
+    if (daemonId && hookServerHandle?.port) {
+      daemonRegistry.register({
+        id: daemonId,
+        port: hookServerHandle.port,
+        apiPort,
+        workspace: resolvedWorkspace,
+        headless,
+      });
+    }
   }
 
   bus.emit(EVENTS.ZANA_READY, { daemonId, workspace: resolvedWorkspace, port: hookServerHandle?.port });

@@ -31,10 +31,10 @@ export function generateDaemonId() {
   return crypto.randomUUID().slice(0, 8);
 }
 
-export function register({ id, port, workspace, headless = false }) {
+export function register({ id, port, apiPort, workspace, headless = false }) {
   ensureDir();
   const now = new Date().toISOString();
-  const entry = {
+  const entry: any = {
     id,
     port,
     pid: process.pid,
@@ -43,6 +43,7 @@ export function register({ id, port, workspace, headless = false }) {
     startedAt: now,
     lastHeartbeat: now,
   };
+  if (apiPort != null) entry.apiPort = apiPort;
   const filePath = path.join(DAEMONS_DIR, `${id}.json`);
   fs.writeFileSync(filePath, JSON.stringify(entry, null, 2) + "\n", "utf8");
   return entry;

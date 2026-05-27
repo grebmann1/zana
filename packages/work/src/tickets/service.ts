@@ -57,6 +57,18 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
   addAuditEntry(ticket, "created", createdBy, { title, priority: ticket.priority });
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:created", { ticketId: ticket.id, title: ticket.title, priority: ticket.priority });
+
+  if (sprintId) {
+    const sprint = ticketStore.getSprint(sprintId);
+    if (sprint) {
+      if (!sprint.ticketIds) sprint.ticketIds = [];
+      if (!sprint.ticketIds.includes(ticket.id)) {
+        sprint.ticketIds.push(ticket.id);
+        sprint.updatedAt = new Date().toISOString();
+        ticketStore.saveSprint(sprint);
+      }
+    }
+  }
   return ticket;
 }
 

@@ -26,11 +26,18 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 
 ## Getting started
 
+Quick path: `bash scripts/install.sh` from the repo root. Full step-by-step
+(humans + agents): see [INSTALL.md](./INSTALL.md), which covers prerequisites,
+manual install, marketplace + MCP registration, daemon boot, verification, and
+common failure modes.
+
+Bare-minimum cheat sheet:
+
 - Install: `npm install`
 - Build: `npm run build:runtime`
 - Test: `npm test`
 - CLI: `node dist/bin/zana.js init` then `node dist/bin/zana.js status`
-- MCP: register the built server with Claude Code — `claude mcp add zana node packages/mcp/dist/src/mcp-server.js`
+- MCP: `claude mcp add -s local zana node packages/mcp/dist/src/mcp-server.js`
 
 ## Master mode
 
