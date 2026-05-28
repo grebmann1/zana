@@ -17,6 +17,10 @@ export interface DeliberationRuntimeConfig {
   // bridges. 0 disables caching; default 5 min.
   probeCacheTtlMs: number;
   synthesisSimilarityThreshold: number;
+  // Per-voter timeout for collectReviews. Real-Claude voters reading actual
+  // codebases need more than the original 10-min default; bumped to 20 min
+  // after the May 2026 real-Claude smoke test caught all 3 voters timing out.
+  voterTimeoutMs: number;
 }
 
 const DEFAULTS: DeliberationRuntimeConfig = {
@@ -29,6 +33,7 @@ const DEFAULTS: DeliberationRuntimeConfig = {
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
+  voterTimeoutMs: 20 * 60 * 1000,
 };
 
 let active: DeliberationRuntimeConfig = { ...DEFAULTS };

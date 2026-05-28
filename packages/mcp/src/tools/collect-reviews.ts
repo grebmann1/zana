@@ -65,8 +65,16 @@ const DEFAULT_POLL_MS = 50;
 
 /**
  * Build the per-voter prompt: shared snapshot + role + explicit JSON contract.
+ *
  * The output contract is enforced at the parsing layer (parseVoterOutput) — we
- * tolerate prose around the JSON object so loosely-formatted models still vote.
+ * tolerate prose around the JSON object so loosely-formatted models still
+ * cast a vote. But real-Claude voters reading codebases consistently went
+ * past the contract without producing JSON, so this prompt now:
+ *   - Explicitly permits internal reasoning ("Think through it as needed")
+ *   - Requires the JSON block as the LAST thing in the message
+ *   - Caps rationale length to keep parse cost predictable + ensure voters
+ *     converge on a vote rather than rambling indefinitely
+ *   - Includes a worked APPROVE + CHANGES example so the format is unambiguous
  */
 export function buildVoterPrompt(promptSnapshot: string, voter: VoterSpec): string {
   const lens = voter.profile?.displayName || voter.profileId;
@@ -78,13 +86,31 @@ export function buildVoterPrompt(promptSnapshot: string, voter: VoterSpec): stri
     `You are reviewing as the ${lens} (profileId=${voter.profileId}).${lensDescription}`,
     "Cast your vote independently — the council preserves dissent verbatim.",
     "",
-    "## Output contract",
-    "Reply with EXACTLY one JSON object as your final message, no prose around it:",
+    "## Output contract — REQUIRED",
+    "Think through the question as needed (read code, weigh tradeoffs, etc.),",
+    "but your message MUST end with EXACTLY one fenced JSON block. Nothing",
+    "after the closing ``` fence. The orchestrator will refuse votes that",
+    "don't match this shape and record them as a CHANGES timeout-fallback.",
+    "",
+    "Required shape:",
     "```json",
-    `{"bit": "APPROVE" | "CHANGES", "rationale": "<your reasoning>"}`,
+    `{"bit": "APPROVE" | "CHANGES", "rationale": "<= 1000 chars, single string"}`,
     "```",
-    "Use APPROVE only if the proposal is correct and complete as written.",
-    "Use CHANGES if anything needs revision; put the requested changes in `rationale`.",
+    "",
+    "- `bit: \"APPROVE\"` — the proposal is correct and complete as written.",
+    "- `bit: \"CHANGES\"` — anything needs revision; put requested changes in `rationale`.",
+    "",
+    "Example APPROVE vote:",
+    "```json",
+    `{"bit": "APPROVE", "rationale": "Schema is internally consistent. Anti-dropout-bias guard already covers the failure mode I was worried about (see quorum.ts:applyDegradation)."}`,
+    "```",
+    "",
+    "Example CHANGES vote:",
+    "```json",
+    `{"bit": "CHANGES", "rationale": "Migration loses data: the new NOT NULL column has no default and the backfill runs after the constraint is added. Reorder: backfill, then ALTER. Also missing rollback path."}`,
+    "```",
+    "",
+    "End your message with the JSON block. No further prose.",
   ].join("\n");
 }
 

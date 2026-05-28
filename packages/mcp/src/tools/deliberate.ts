@@ -34,6 +34,20 @@ function _delib(): any { return _work().deliberation; }
 // profile id may be passed through the args.voters array.
 const DEFAULT_VOTER_PROFILE_IDS = ["architect", "security-reviewer", "researcher"];
 
+// Sentinel thrown by checkCancelled() inside runDeliberationUnsafe — caught
+// by runDeliberation, drives the deliberation to EXHAUSTED instead of
+// ESCALATED. Distinct from a real crash so audit consumers can tell the
+// difference between "operator cancelled" and "the orchestrator blew up".
+class DeliberationCancelledError extends Error {
+  code = "DELIBERATION_CANCELLED" as const;
+  deliberationId: string;
+  constructor(deliberationId: string) {
+    super(`deliberation ${deliberationId} cancelled`);
+    this.name = "DeliberationCancelledError";
+    this.deliberationId = deliberationId;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Common types — exported so handlers in deliberate.test.ts can construct deps.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,16 +84,26 @@ export interface DeliberateArgs {
 }
 
 // In-memory tracking of running orchestration loops, keyed by deliberationId.
-// Used to (a) prevent double-launching the same deliberation and (b) allow
-// future cancellation. Persistence of state already lives in the checkpoint
-// store; this map is purely for live-process coordination.
-const activeRuns = new Map<string, { startedAt: number }>();
+// Used to (a) prevent double-launching the same deliberation, (b) coordinate
+// cancellation, and (c) hold the per-run kill switch + active voter agent IDs
+// so zana_deliberate_cancel can terminate spawned voters.
+//
+// Persistence of state already lives in the checkpoint store; this map is
+// purely for live-process coordination.
+interface ActiveRun {
+  startedAt: number;
+  cancelled: boolean;
+  killAgent: (agentId: string) => boolean;
+  liveAgentIds: Set<string>;
+}
+const activeRuns = new Map<string, ActiveRun>();
 
 /** Test-only: snapshot active runs (used by deliberate-async.test.ts). */
-export function _getActiveRunsForTest(): { deliberationId: string; startedAt: number }[] {
+export function _getActiveRunsForTest(): { deliberationId: string; startedAt: number; cancelled: boolean }[] {
   return Array.from(activeRuns.entries()).map(([deliberationId, info]) => ({
     deliberationId,
     startedAt: info.startedAt,
+    cancelled: info.cancelled,
   }));
 }
 
@@ -165,6 +189,19 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
       : undefined,
   });
 
+  // Register active run record up front so cancel can find it even if the
+  // background runner hasn't yet entered its first await.
+  const killAgent = deps.killAgent ?? ((id: string) => {
+    try { return core.agents.manager.killAgent(id); } catch { return false; }
+  });
+  const activeRun: ActiveRun = {
+    startedAt: Date.now(),
+    cancelled: false,
+    killAgent,
+    liveAgentIds: new Set<string>(),
+  };
+  activeRuns.set(proposed.id, activeRun);
+
   const ctx: RunDeliberationContext = {
     deliberationId: proposed.id,
     candidates,
@@ -172,12 +209,12 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
     deps,
     rounds,
     getProfile,
+    activeRun,
   };
 
   // 2. Default: detach the orchestration loop and return the proposed record.
   //    Caller polls zana_deliberation_status for progress / final outcome.
   if (args.wait !== true) {
-    activeRuns.set(proposed.id, { startedAt: Date.now() });
     runDeliberation(ctx).catch(() => {
       // runDeliberation already records ESCALATED on crash; just clear tracker.
     }).finally(() => {
@@ -213,30 +250,52 @@ interface RunDeliberationContext {
   deps: DeliberateDeps;
   rounds: number;
   getProfile: (id: string) => any;
+  // Live coordination handle — runner checks `cancelled` between rounds and
+  // registers spawned voter agents so zana_deliberate_cancel can kill them.
+  activeRun: ActiveRun;
 }
 
 async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
-  const work = _work();
   const delib = _delib();
-  const core = _core();
-  const { deliberationId, candidates, promptSnapshot, deps, rounds, getProfile } = ctx;
+  const { deliberationId } = ctx;
 
   try {
     return await runDeliberationUnsafe(ctx);
   } catch (err: any) {
     // Background-runner crash protocol: drive the deliberation to a terminal
     // state so polling callers don't get stuck on REVIEWING/CONVERGING forever.
+    //
+    // Cancellation is a distinct path — drive to EXHAUSTED (PROPOSED/CONVERGING
+    // permit it directly; REVIEWING/SYNTHESIZING must go via ESCALATED first).
+    const cancelled = err instanceof DeliberationCancelledError;
     try {
       const fresh = delib.loadDeliberation(deliberationId);
       if (fresh && fresh.state !== "SETTLED" && fresh.state !== "ESCALATED" && fresh.state !== "EXHAUSTED") {
-        // Attempt a clean transition to ESCALATED. If the legality table
-        // forbids it from the current state, swallow — the original error is
-        // what we want to surface anyway.
         try {
-          delib.transition(deliberationId, "ESCALATED", { escalationReason: "explicit" }, { expectedVersion: fresh.version });
+          if (cancelled) {
+            // Try EXHAUSTED first; if illegal from current state, escalate then exhaust.
+            try {
+              delib.transition(deliberationId, "EXHAUSTED", {}, { expectedVersion: fresh.version });
+            } catch {
+              const f2 = delib.loadDeliberation(deliberationId);
+              if (f2 && f2.state !== "ESCALATED" && f2.state !== "EXHAUSTED" && f2.state !== "SETTLED") {
+                try {
+                  delib.transition(deliberationId, "ESCALATED", { escalationReason: "explicit" }, { expectedVersion: f2.version });
+                } catch {}
+              }
+            }
+          } else {
+            delib.transition(deliberationId, "ESCALATED", { escalationReason: "explicit" }, { expectedVersion: fresh.version });
+          }
         } catch {}
       }
     } catch {}
+
+    // Cancellation is an authorized terminal — don't propagate as an error.
+    if (cancelled) {
+      const final = delib.loadDeliberation(deliberationId);
+      return { ...final, _outcome: "cancelled" };
+    }
     throw err;
   }
 }
@@ -245,17 +304,37 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
   const work = _work();
   const delib = _delib();
   const core = _core();
-  const { deliberationId, candidates, promptSnapshot, deps, rounds, getProfile } = ctx;
+  const { deliberationId, candidates, promptSnapshot, deps, rounds, getProfile, activeRun } = ctx;
+
+  // Cancellation observation point. Throws to abort the orchestration loop —
+  // the outer runDeliberation catch handles transition-to-terminal-state.
+  const checkCancelled = () => {
+    if (activeRun.cancelled) {
+      throw new DeliberationCancelledError(deliberationId);
+    }
+  };
+
+  // Wrap the caller's spawnHeadlessAgent so every voter we launch is registered
+  // for kill on cancellation.
+  const baseSpawn = deps.spawnHeadlessAgent ?? ((profile: any, options: any) =>
+    core.agents.manager.spawnHeadlessAgent(profile, options));
+  const trackedSpawn = (profile: any, options: any) => {
+    const result = baseSpawn(profile, options);
+    if (result?.agentId) activeRun.liveAgentIds.add(result.agentId);
+    return result;
+  };
 
   // 2. Assemble the initial council. assembleCouncil probes each candidate and
   //    transitions PROPOSED → REVIEWING (or PROPOSED → ESCALATED on quorum loss).
   const probeAgent = deps.probeAgent ?? core.agents.manager.probeAgent;
   const assembleDeps: any = {
     probeAgent,
+    spawnHeadlessAgent: trackedSpawn,
   };
-  if (deps.spawnHeadlessAgent) assembleDeps.spawnHeadlessAgent = deps.spawnHeadlessAgent;
   if (deps.getAgent) assembleDeps.getAgent = deps.getAgent;
   if (deps.killAgent) assembleDeps.killAgent = deps.killAgent;
+
+  checkCancelled();
 
   const assembleOutcome = await delib.assembleCouncil({
     deliberationId,
@@ -281,6 +360,7 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
 
   let d: any = delib.loadDeliberation(deliberationId);
   while (d.state === "REVIEWING" || d.state === "CONVERGING") {
+    checkCancelled();
     if (++iter > maxIterations) {
       throw new Error(
         `zana_deliberate: orchestration loop exceeded ${maxIterations} iterations on deliberation ${deliberationId} (state=${d.state})`,
@@ -299,10 +379,21 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
     // 1+ during CONVERGING. Map REVIEWING to round 1 explicitly.
     const round = d.state === "REVIEWING" ? 1 : d.currentRound;
 
+    // Resolve voter timeout from runtime config unless caller deps override.
+    // The runtime config knob (voterTimeoutMs) lets operators tune via the
+    // deliberation module config without a code change.
+    const reviewDeps: any = { ...deps, spawnHeadlessAgent: trackedSpawn };
+    if (typeof deps.timeoutMs !== "number") {
+      const cfgTimeout = delib.getRuntimeConfig?.()?.voterTimeoutMs;
+      if (typeof cfgTimeout === "number" && cfgTimeout > 0) {
+        reviewDeps.timeoutMs = cfgTimeout;
+      }
+    }
     const reviews = await collectReviews(
       { round, promptSnapshot: promptSnapshotForRound, voters: voterSpecs },
-      deps,
+      reviewDeps,
     );
+    checkCancelled();
 
     // OCC retry bound — sourced from runtime config so operators can tune it
     // without a code change. Falls back to 3 for safety if config is missing
@@ -520,6 +611,74 @@ export function deliberationOverrideHandler(args: OverrideArgs): any {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// zana_deliberate_cancel
+//
+// Cancel a running deliberation. Pairs with the async-by-default deliberate
+// tool — without it, a stuck or wrongly-scoped run would burn voter budget
+// until the per-voter timeout fires for every round.
+//
+// Behavior:
+//   1. Look up the activeRuns entry. If none, the run already completed
+//      (or never registered) — return the current persisted record.
+//   2. Set the cancelled flag so the next checkCancelled() in the loop
+//      throws DeliberationCancelledError.
+//   3. Kill any voter agents we registered via trackedSpawn — this unblocks
+//      collectReviews polling immediately.
+//   4. Return the current deliberation record. Final EXHAUSTED state lands
+//      shortly after via the runner's catch handler; callers polling
+//      zana_deliberation_status will see it.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface CancelArgs {
+  deliberationId: string;
+}
+
+export function deliberationCancelHandler(args: CancelArgs): any {
+  if (!args || typeof args.deliberationId !== "string" || args.deliberationId === "") {
+    throw new Error("zana_deliberate_cancel: deliberationId is required");
+  }
+  const delib = _delib();
+  const d = delib.loadDeliberation(args.deliberationId);
+  if (!d) throw new Error(`deliberation not found: ${args.deliberationId}`);
+
+  // Already terminal — no-op, return the record.
+  if (d.state === "SETTLED" || d.state === "ESCALATED" || d.state === "EXHAUSTED") {
+    return { ...d, _outcome: "already_terminal", _alreadyTerminal: true };
+  }
+
+  const active = activeRuns.get(args.deliberationId);
+  if (!active) {
+    // Not tracked in this process — best-effort: drive the deliberation to
+    // EXHAUSTED if state allows, otherwise ESCALATED via the override path.
+    // (Cross-process cancel is a future feature; for now warn via _orphan.)
+    try {
+      delib.transition(args.deliberationId, "EXHAUSTED", {}, { expectedVersion: d.version });
+    } catch {
+      try {
+        delib.transition(args.deliberationId, "ESCALATED", { escalationReason: "explicit" }, { expectedVersion: d.version });
+      } catch {}
+    }
+    const after = delib.loadDeliberation(args.deliberationId);
+    return { ...after, _outcome: "cancelled", _orphan: true };
+  }
+
+  // Tracked — flip the kill switch and terminate any spawned voters.
+  active.cancelled = true;
+  let killed = 0;
+  for (const agentId of active.liveAgentIds) {
+    try {
+      if (active.killAgent(agentId)) killed++;
+    } catch {}
+  }
+  active.liveAgentIds.clear();
+
+  return {
+    ...delib.loadDeliberation(args.deliberationId),
+    _outcome: "cancelling",
+    _killedAgents: killed,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MCP tool definitions — registered in mcp-server.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -618,12 +777,31 @@ export const deliberationOverrideTool = {
   },
 };
 
+export const deliberationCancelTool = {
+  name: "zana_deliberate_cancel",
+  description:
+    "Cancel a running deliberation. Flips the kill switch on the in-process orchestration loop, terminates any spawned voter agents, " +
+    "and drives the deliberation toward EXHAUSTED. Returns immediately; the EXHAUSTED transition lands shortly after via the runner's " +
+    "cancellation handler. " +
+    "If the deliberation is already terminal (SETTLED/ESCALATED/EXHAUSTED), returns _alreadyTerminal=true with no mutation. " +
+    "If the run isn't tracked in this process (e.g. daemon restarted), best-effort transitions to EXHAUSTED and returns _orphan=true. " +
+    "Result includes `_outcome` ('cancelling' | 'already_terminal' | 'cancelled') and, for live cancels, `_killedAgents` count.",
+  inputSchema: {
+    type: "object",
+    required: ["deliberationId"],
+    properties: {
+      deliberationId: { type: "string" },
+    },
+  },
+};
+
 // Used by mcp-server.ts to assemble the static TOOLS list.
 export const DELIBERATION_TOOLS = [
   deliberateTool,
   deliberationStatusTool,
   deliberationListTool,
   deliberationOverrideTool,
+  deliberationCancelTool,
 ];
 
 // Re-export the collected-review type for tests.
