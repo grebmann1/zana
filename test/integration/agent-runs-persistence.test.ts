@@ -79,32 +79,43 @@ describe("agent-runs-persistence", () => {
   it("manager.ts persists agent records on close and truncates oversize results", () => {
     const src = fs.readFileSync(MANAGER_SRC_PATH, "utf8");
 
-    // Run record write into runsDir
-    expect(src).toMatch(/runsDir\s*=\s*workspaceContext\.getProjectPaths\(\)\.runsDir/);
-    expect(src).toMatch(/\bpath(?:Mod)?\.join\(runsDir,\s*`\$\{agentId\}\.json`\)/);
+    // The write logic lives in the persistAgentRun helper so the spawn path
+    // and the vercel-ai dispatcher can share it. Verify the helper exists
+    // and contains the persistence wiring; the close handler just calls it.
+    const helperStart = src.indexOf("export function persistAgentRun");
+    expect(helperStart).toBeGreaterThan(-1);
+    const helperBlock = src.slice(helperStart, helperStart + 2000);
 
-    // The write happens inside child.on("close", ...).
+    // Run record write into runsDir
+    expect(helperBlock).toMatch(
+      /runsDir\s*=\s*workspaceContext\.getProjectPaths\(\)\.runsDir/
+    );
+    expect(helperBlock).toMatch(
+      /\bpath(?:Mod)?\.join\(runsDir,\s*`\$\{agent\.id\}\.json`\)/
+    );
+    expect(helperBlock).toContain("writeFileSync");
+
+    // The close handler must invoke the helper.
     const closeHandlerStart = src.indexOf('child.on("close"');
     expect(closeHandlerStart).toBeGreaterThan(-1);
     const closeBlock = src.slice(closeHandlerStart, closeHandlerStart + 2000);
-    expect(closeBlock).toContain("runsDir");
-    expect(closeBlock).toContain("writeFileSync");
+    expect(closeBlock).toMatch(/persistAgentRun\(agent,\s*code\)/);
 
     // Truncation guard so a runaway agent can't fill disk.
-    expect(src).toContain("MAX_RESULT_BYTES");
-    expect(src).toMatch(/100\s*\*\s*1024/);
-    expect(src).toContain("truncated");
+    expect(helperBlock).toContain("MAX_RESULT_BYTES");
+    expect(helperBlock).toMatch(/100\s*\*\s*1024/);
+    expect(helperBlock).toContain("truncated");
 
     // The serialized record must NOT include the live ChildProcess handle
     // (it isn't JSON-serializable and would leak fds).
-    expect(src).toMatch(/childProcess:\s*_omit/);
+    expect(helperBlock).toMatch(/childProcess:\s*_omit/);
 
     // terminatedAt + exitCode are part of the record shape.
-    expect(src).toContain("terminatedAt");
-    expect(src).toContain("exitCode: code");
+    expect(helperBlock).toContain("terminatedAt");
+    expect(helperBlock).toMatch(/exitCode\s*,/);
 
     // Failure path is non-fatal — write errors must be caught.
-    expect(closeBlock).toContain("try");
-    expect(closeBlock).toContain("catch");
+    expect(helperBlock).toContain("try");
+    expect(helperBlock).toContain("catch");
   });
 });

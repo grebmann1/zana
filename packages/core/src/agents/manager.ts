@@ -283,6 +283,57 @@ export function onAgentsChange(cb) {
   };
 }
 
+// emitTerminated — single source of truth for the AGENT_TERMINATED payload
+// shape. Multiple consumers depend on this exact shape (work/tickets/watcher,
+// scheduling/service, intelligence/goap-planner, background-workers,
+// server/api/sse-broadcaster, events/stats-engine). Centralized so the
+// vercel-ai dispatcher can emit identically without drift.
+export function emitTerminated(
+  agentId: string,
+  profileId: string,
+  reason: "completed" | "errored" | "spawn-error",
+  extra: { exitCode?: number | null; output?: string | null; error?: string } = {}
+) {
+  bus.emit(EVENTS.AGENT_TERMINATED, { agentId, profileId, reason, ...extra });
+}
+
+// persistAgentRun — writes the terminated agent's record to
+// <projectDir>/runs/<agentId>.json so it survives daemon restarts. Without
+// this the schedule history's agentId pointer dangles after a restart.
+// Errors are swallowed (warned) — persistence failure must never block
+// termination dispatch.
+export function persistAgentRun(agent: any, exitCode: number | null) {
+  try {
+    const fsMod = require("node:fs");
+    const pathMod = require("node:path");
+    const workspaceContext = require("../project/workspace-context");
+    const runsDir = workspaceContext.getProjectPaths().runsDir;
+    fsMod.mkdirSync(runsDir, { recursive: true });
+
+    // Truncate runaway result text (e.g. an agent stuck in a loop) before serializing.
+    const MAX_RESULT_BYTES = 100 * 1024;
+    const { childProcess: _omit, ...serializable } = agent;
+    const trimmedResult =
+      typeof serializable.result === "string" && serializable.result.length > MAX_RESULT_BYTES
+        ? serializable.result.slice(0, MAX_RESULT_BYTES) + `\n…[truncated ${serializable.result.length - MAX_RESULT_BYTES} chars]`
+        : serializable.result;
+
+    const record = {
+      ...serializable,
+      result: trimmedResult,
+      terminatedAt: new Date().toISOString(),
+      exitCode,
+    };
+    fsMod.writeFileSync(
+      pathMod.join(runsDir, `${agent.id}.json`),
+      JSON.stringify(record, null, 2),
+      "utf8"
+    );
+  } catch (err: any) {
+    console.warn(`[agent-manager] failed to persist run record for ${agent.id}: ${err?.message || err}`);
+  }
+}
+
 /**
  * Spawn an agent in headless mode (one-shot, no PTY).
  * The agent record is stored internally and accessible via getAgent(agentId).
@@ -306,6 +357,32 @@ export function spawnHeadlessAgent(profile, options = {}) {
     model: profile.model,
   });
   const routedProfile = profile.model ? profile : { ...profile, model: routedModel };
+
+  // ZANA_RUNTIME=vercel-ai fork. Spawn path below stays verbatim. See
+  // .zana/plans/phase-2-wiring.md (banner) for the architect/engineer
+  // decision rationale.
+  if ((process.env.ZANA_RUNTIME || "spawn") === "vercel-ai") {
+    const { spawnViaVercelAI } = require("./runtimes/vercel-ai-dispatch");
+    const agentTimeoutMs =
+      (moduleConfig.getModuleConfig("system")?.agentTimeoutMinutes || 10) * 60 * 1000;
+    return spawnViaVercelAI({
+      agentId,
+      terminalId,
+      cwd,
+      profile,
+      routedProfile,
+      options,
+      agents,
+      notifyChange,
+      getAgent,
+      emitSpawned: (id: string, pid: string) =>
+        bus.emit(EVENTS.AGENT_SPAWNED, { agentId: id, profileId: pid, mode: "headless" }),
+      emitTerminated,
+      persistAgentRun,
+      classifySpawnError,
+      agentTimeoutMs,
+    });
+  }
 
   const child = spawnHeadless(routedProfile, {
     name: `${profile.displayName} [${agentId.slice(0, 6)}]`,
@@ -407,7 +484,7 @@ export function spawnHeadlessAgent(profile, options = {}) {
     agent.state = "error";
     agent.lastAction = `Spawn error: ${err.message}`;
     notifyChange();
-    bus.emit(EVENTS.AGENT_TERMINATED, { agentId, profileId: profile.id, reason: "spawn-error", error: err.message });
+    emitTerminated(agentId, profile.id, "spawn-error", { error: err.message });
     const resilienceMod = require("../modules/loader").getModule?.("resilience");
     resilienceMod?.api?.recordFailure?.("agent-spawn");
   });
@@ -417,43 +494,15 @@ export function spawnHeadlessAgent(profile, options = {}) {
     agent.state = code === 0 ? "terminated" : "errored";
     agent.lastAction = code === 0 ? "Completed" : `Exited (code ${code})`;
     notifyChange();
-    bus.emit(EVENTS.AGENT_TERMINATED, { agentId, profileId: profile.id, reason: code === 0 ? "completed" : "errored", exitCode: code, output: agent.result || null });
+    emitTerminated(agentId, profile.id, code === 0 ? "completed" : "errored", {
+      exitCode: code,
+      output: agent.result || null,
+    });
     if (code === 0) {
       const resilienceMod = require("../modules/loader").getModule?.("resilience");
       resilienceMod?.api?.recordSuccess?.("agent-spawn");
     }
-    // Persist the terminated agent's record to <projectDir>/runs/<agentId>.json
-    // so it survives daemon restarts. Without this, the schedule history's
-    // agentId pointer dangles after a restart.
-    try {
-      const fsMod = require("node:fs");
-      const pathMod = require("node:path");
-      const workspaceContext = require("../project/workspace-context");
-      const runsDir = workspaceContext.getProjectPaths().runsDir;
-      fsMod.mkdirSync(runsDir, { recursive: true });
-
-      // Truncate runaway result text (e.g. an agent stuck in a loop) before serializing.
-      const MAX_RESULT_BYTES = 100 * 1024;
-      const { childProcess: _omit, ...serializable } = agent as any;
-      const trimmedResult =
-        typeof serializable.result === "string" && serializable.result.length > MAX_RESULT_BYTES
-          ? serializable.result.slice(0, MAX_RESULT_BYTES) + `\n…[truncated ${serializable.result.length - MAX_RESULT_BYTES} chars]`
-          : serializable.result;
-
-      const record = {
-        ...serializable,
-        result: trimmedResult,
-        terminatedAt: new Date().toISOString(),
-        exitCode: code,
-      };
-      fsMod.writeFileSync(
-        pathMod.join(runsDir, `${agentId}.json`),
-        JSON.stringify(record, null, 2),
-        "utf8"
-      );
-    } catch (err: any) {
-      console.warn(`[agent-manager] failed to persist run record for ${agentId}: ${err?.message || err}`);
-    }
+    persistAgentRun(agent, code);
   });
 
   return { agentId, terminalId };
