@@ -176,6 +176,11 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   vectorMemory.init();
   backgroundWorkers.init();
 
+  // Reap orphaned headless claude processes from earlier daemon runs.
+  // (See packages/core/src/agents/zombie-reaper.ts for the heuristic.)
+  const zombieReaper = require("./agents/zombie-reaper");
+  zombieReaper.start();
+
   // Start REST API server (headless/daemon mode)
   let apiServerHandle = null;
   const zanaModules = {
@@ -221,6 +226,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     if (shuttingDown) return;
     shuttingDown = true;
     await moduleLoader.shutdown();
+    try { require("./agents/zombie-reaper").stop(); } catch {}
     backgroundWorkers.shutdown();
     vectorMemory.shutdown();
     ticketWatcher.stop();
