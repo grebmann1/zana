@@ -240,6 +240,15 @@ async function handleRequest(req, res) {
   const teamStartMatch = pathname.match(/^\/teams\/([^/]+)\/start$/);
   if (method === "POST" && teamStartMatch) {
     const body = await readBody(req);
+    // Hard load gate — same one applied at the orchestrator-command boundary.
+    // We refuse a melted box outright rather than spawn an orchestrator that
+    // burns turns retrying spawn_agent forever (issue #a2a8f209).
+    const { checkSystemResources } = require("@zana/core").agents.manager;
+    const hardError = checkSystemResources?.("hard");
+    if (hardError) {
+      json(res, { ok: false, error: `cannot start team: ${hardError}` });
+      return;
+    }
     const result = await daemon.teamManager.startTeam(teamStartMatch[1], {
       prompt: body.prompt, cwd: body.cwd || daemon.workspace, headless: true,
     });

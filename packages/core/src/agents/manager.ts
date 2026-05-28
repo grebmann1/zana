@@ -45,16 +45,26 @@ function getMaxConcurrentAgents() {
   return Number(process.env.ZANA_MAX_WORKERS) || cfg?.system?.maxConcurrentAgents || MAX_CONCURRENT_AGENTS;
 }
 
-function checkSystemResources() {
+/**
+ * Resource gate. severity="soft" (default) blocks individual agent spawns
+ * when load exceeds cpuLoadThreshold * cores. severity="hard" only blocks
+ * when load exceeds cpuLoadHardCap * cores — used for whole-team starts,
+ * which represent multi-agent commitments and should refuse outright on
+ * a melted box rather than partially commit. Returns null when ok, or a
+ * human-readable reason string.
+ */
+export function checkSystemResources(severity: "soft" | "hard" = "soft") {
   const cfg = moduleConfig.get()?.system;
-  const cpuThreshold = cfg?.cpuLoadThreshold ?? 0.8;
+  const cpuSoft = cfg?.cpuLoadThreshold ?? 0.8;
+  const cpuHard = cfg?.cpuLoadHardCap ?? 2.0;
   const minFreePct = cfg?.minFreeMemoryPct ?? 10;
+  const factor = severity === "hard" ? cpuHard : cpuSoft;
 
   const load1m = os.loadavg()[0];
   const cpuCount = os.cpus().length;
-  const maxLoad = cpuCount * cpuThreshold;
+  const maxLoad = cpuCount * factor;
   if (load1m > maxLoad) {
-    return `CPU load too high: ${load1m.toFixed(2)} exceeds threshold ${maxLoad.toFixed(2)} (${cpuCount} cores x ${(cpuThreshold * 100).toFixed(0)}%)`;
+    return `CPU load too high: ${load1m.toFixed(2)} exceeds ${severity} threshold ${maxLoad.toFixed(2)} (${cpuCount} cores x ${(factor * 100).toFixed(0)}%)`;
   }
 
   const freePct = (os.freemem() / os.totalmem()) * 100;
@@ -63,6 +73,54 @@ function checkSystemResources() {
   }
 
   return null;
+}
+
+/**
+ * Per-parent overload streak counter. When the daemon repeatedly refuses
+ * a parent's spawns due to soft-load throttling, we eventually return a
+ * TERMINAL error (rather than the same retryable one) so the orchestrator
+ * knows to stop burning turns. Cleared on any successful spawn from that
+ * parent. Top-level (parentAgentId=null) requests share the "" key.
+ */
+const spawnOverloadStreaks = new Map<string, number>();
+
+function recordSpawnOverload(parentAgentId: string | null | undefined) {
+  const key = parentAgentId || "";
+  spawnOverloadStreaks.set(key, (spawnOverloadStreaks.get(key) || 0) + 1);
+  return spawnOverloadStreaks.get(key) || 0;
+}
+
+function clearSpawnOverloadStreak(parentAgentId: string | null | undefined) {
+  const key = parentAgentId || "";
+  spawnOverloadStreaks.delete(key);
+}
+
+function getSpawnThrottleStreakLimit() {
+  const cfg = moduleConfig.get()?.system;
+  return cfg?.spawnThrottleStreakLimit ?? 5;
+}
+
+// Test-only: reset all counters between tests.
+export function _resetSpawnOverloadState() {
+  spawnOverloadStreaks.clear();
+}
+
+/**
+ * Test-only probe for the streak counter. Lets unit tests exercise the
+ * record/clear/limit logic without going through handleOrchestratorCommand,
+ * which dynamically requires many modules unavailable in unit-test scope.
+ */
+export function _testSpawnOverloadProbe(
+  op: "record" | "clear" | "limit",
+  parentAgentId?: string | null,
+) {
+  if (op === "record") return recordSpawnOverload(parentAgentId);
+  if (op === "clear") {
+    clearSpawnOverloadStreak(parentAgentId);
+    return 0;
+  }
+  if (op === "limit") return getSpawnThrottleStreakLimit();
+  return 0;
 }
 
 const agents = new Map();
@@ -829,11 +887,23 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       if (resilienceMod?.api?.isOpen?.("agent-spawn")) {
         return { error: "Circuit breaker open: too many recent spawn failures. Try again later." };
       }
+      const { profileId, prompt, parentAgentId } = params;
       const resourceError = checkSystemResources();
       if (resourceError) {
+        const streak = recordSpawnOverload(parentAgentId);
+        const limit = getSpawnThrottleStreakLimit();
+        if (streak >= limit) {
+          // Stop telling the orchestrator to retry — return a terminal-shaped
+          // error and clear the streak so a future attempt can start fresh.
+          clearSpawnOverloadStreak(parentAgentId);
+          return {
+            error: `persistently overloaded: spawn refused ${streak} consecutive times (${resourceError}). Stop spawning new agents.`,
+            terminal: true,
+          };
+        }
         return { error: `system overloaded: ${resourceError}` };
       }
-      const { profileId, prompt, parentAgentId } = params;
+      clearSpawnOverloadStreak(parentAgentId);
       if (parentAgentId) {
         const allAgents = listAgents();
         const childCount = allAgents.filter(a => a.parentAgentId === parentAgentId && a.state !== "terminated").length;
@@ -1065,6 +1135,10 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
     case "start_team": {
       const teamMod = require("@zana/work").teams.manager;
       const cwd = params.cwd || (getWorkspaceFn ? getWorkspaceFn() : process.env.HOME);
+      const hardError = checkSystemResources("hard");
+      if (hardError) {
+        return { ok: false, error: `cannot start team: ${hardError}` };
+      }
       return teamMod.startTeam(params.teamId, { prompt: params.prompt, cwd, headless: true });
     }
     case "stop_team": {

@@ -4,7 +4,7 @@ import * as crypto from "node:crypto";
 
 const DEFAULTS = {
   modules: {},
-  system: { initTimeout: 10000, suspendTimeout: 5000, hotReload: false, maxConcurrentAgents: 10, cpuLoadThreshold: 0.8, minFreeMemoryPct: 10, agentTimeoutMinutes: 10 },
+  system: { initTimeout: 10000, suspendTimeout: 5000, hotReload: false, maxConcurrentAgents: 10, cpuLoadThreshold: 0.8, cpuLoadHardCap: 2.0, minFreeMemoryPct: 10, agentTimeoutMinutes: 10, spawnThrottleStreakLimit: 5 },
 };
 
 let configPath = null;
