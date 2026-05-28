@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "core",
+  "name": "zana-marketplace",
   "description": "Zana — multi-agent orchestrator for Claude Code",
   "owner": {
     "name": "Guillaume Rebmann"
@@ -10,6 +10,11 @@
       "name": "zana",
       "description": "Multi-agent orchestrator — spawn teams, manage sprints, run autopilot",
       "source": "./plugins/zana/core"
+    },
+    {
+      "name": "zana-loop",
+      "description": "Lightweight scheduler — drive .zana/scheduler/*.yml via /loop, no daemon",
+      "source": "./plugins/zana/loop"
     }
   ]
 }

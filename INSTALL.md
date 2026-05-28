@@ -105,17 +105,23 @@ slash-command picker.
 
 ```bash
 claude plugin marketplace add /absolute/path/to/zana
-claude plugin install zana@core
+claude plugin install zana@zana-marketplace
+claude plugin install zana-loop@zana-marketplace
 ```
 
-The marketplace name is `core` (declared in `.claude-plugin/marketplace.json`).
+The marketplace name is `zana-marketplace` (declared in `.claude-plugin/marketplace.json`).
+It exposes two plugins: `zana` (orchestrator + daemon-driven schedules) and
+`zana-loop` (lightweight `/loop`-driven schedules — no daemon required).
 After install, restart Claude Code so the new commands register.
 
 Verify:
 
 ```bash
-claude plugin details zana@core
+claude plugin details zana@zana-marketplace
 # Skills count should be 23 (council family + autopilot/team/ticket/schedule/memory/status + collaboration/orchestration/zana).
+
+claude plugin details zana-loop@zana-marketplace
+# Skills count should be 4 (loop-start + loop-stop + loop-define + zana-scheduler).
 ```
 
 ### 6. Register the Zana MCP server
@@ -200,7 +206,7 @@ claude mcp list | grep zana
 # expected: zana: ... ✓ Connected
 
 # 4. Plugin registered
-claude plugin details zana@core | head -5
+claude plugin details zana@zana-marketplace | head -5
 # expected: zana / Multi-agent orchestrator / Skills (23)
 
 # 5. Statusline emits new branding
@@ -238,8 +244,10 @@ claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/src/m
 The plugin cache is stale. Reinstall:
 
 ```bash
-claude plugin uninstall zana@core
-claude plugin install zana@core
+claude plugin uninstall zana@zana-marketplace
+claude plugin uninstall zana-loop@zana-marketplace
+claude plugin install zana@zana-marketplace
+claude plugin install zana-loop@zana-marketplace
 # then restart Claude Code
 ```
 
@@ -289,9 +297,10 @@ node -e 'require("@zana/server").hooks.installer.installHooks(47402)'
 # Stop running daemons
 node dist/bin/zana.js stop --all
 
-# Remove plugin
-claude plugin uninstall zana@core
-claude plugin marketplace remove core
+# Remove plugins
+claude plugin uninstall zana@zana-marketplace
+claude plugin uninstall zana-loop@zana-marketplace
+claude plugin marketplace remove zana-marketplace
 
 # Remove MCP registration
 claude mcp remove zana
@@ -324,8 +333,10 @@ npm run build:runtime
 claude mcp add -s local zana node "$(pwd)/packages/mcp/dist/src/mcp-server.js" 2>&1 | head -1
 claude mcp list 2>&1 | grep -q 'zana.* ✓ Connected'
 claude plugin marketplace add "$(pwd)" 2>&1 | tail -1
-claude plugin install zana@core
-claude plugin details zana@core | grep -q 'Skills (23)'
+claude plugin install zana@zana-marketplace
+claude plugin install zana-loop@zana-marketplace
+claude plugin details zana@zana-marketplace | grep -q 'Skills (23)'
+claude plugin details zana-loop@zana-marketplace | grep -q 'Skills (4)'
 node dist/bin/zana.js headless "$(pwd)" --background &
 sleep 4
 node dist/bin/zana.js status | grep -q '●'

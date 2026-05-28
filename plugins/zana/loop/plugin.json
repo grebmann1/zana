@@ -1,0 +1,21 @@
+{
+  "id": "zana-loop",
+  "name": "zana-loop",
+  "version": "0.1.0",
+  "description": "Lightweight scheduler for Zana — drive .zana/scheduler/*.yml files via Claude Code's /loop, no daemon required.",
+  "author": {
+    "name": "Guillaume Rebmann",
+    "url": "https://github.com/grebmann1"
+  },
+  "repository": "https://github.com/grebmann1/zana",
+  "license": "MIT",
+  "keywords": [
+    "scheduler",
+    "loop",
+    "claude-code",
+    "zana"
+  ],
+  "category": "development",
+  "skills": "./skills/",
+  "commands": "./commands/"
+}
