@@ -5,7 +5,8 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 ## What Zana is
 
 - Multi-agent orchestrator for Claude Code
-- MCP server exposing 69+ tools for spawning agents, managing tickets/sprints, and coordinating swarms
+- MCP server exposing 91 `zana_*` tools for spawning agents, managing tickets/sprints, scheduling, and deliberation
+- A standalone CLI (`zana …`) for use without Claude Code — same primitives, different surface
 - Pluggable module system for adding new capabilities without forking the core
 
 ## Repository layout (7 packages)
@@ -27,6 +28,49 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 - Two slash-command plugins in the `zana-marketplace` marketplace: `zana@zana-marketplace` (orchestration + daemon-driven schedules) and `zana-loop@zana-marketplace` (lightweight `/loop`-driven schedules — no daemon required)
 - Pluggable agent runtime via `ZANA_RUNTIME`: defaults to `claude-spawn`; experimental `vercel-ai` adapter available
 
+## Two ways to run Zana
+
+Zana is the same engine either way; the difference is who issues the commands.
+
+### A. From Claude Code (slash-command + MCP)
+
+The richer surface. After install, restart Claude Code, then in any
+workspace:
+
+```
+/zana spawn team --members researcher,architect,coder,tester --topology pipeline --task "…"
+/zana:council         # multi-voter deliberation
+/zana:autopilot       # goal-driven loop
+/zana:schedule:list   # daemon-driven schedules
+/zana:loop:start      # daemon-free /loop scheduling
+```
+
+24 slash commands + 91 MCP tools (`mcp__zana__zana_*`). See
+[plugins/zana/core/commands/](plugins/zana/core/commands/) and
+[plugins/zana/loop/commands/](plugins/zana/loop/commands/).
+
+### B. From the terminal (`zana <subcommand>`)
+
+After `bash scripts/install.sh` (which runs `npm install -g .`), the `zana`
+binary is on your PATH. Useful for scripting, CI, ops, and any context
+where Claude Code isn't running.
+
+```
+zana --help
+zana init wizard <path>            # bootstrap workspace + register MCP
+zana headless . --background       # start daemon (port 47402)
+zana status                        # list running daemons
+zana ticket list                   # query tickets
+zana run list --limit 10           # recent agent runs
+zana schedule list                 # YAML schedules in .zana/scheduler/
+zana schedule trigger <id>         # fire one schedule now
+zana stop --all                    # stop every daemon, clean registry
+```
+
+Full subcommand list: `zana --help`. Both binaries — `zana` (top-level
+dispatcher) and `zana-daemon` (the long-lived process) — are installed
+globally.
+
 ## Getting started
 
 Quick path: `bash scripts/install.sh` from the repo root. Full step-by-step
@@ -34,17 +78,17 @@ Quick path: `bash scripts/install.sh` from the repo root. Full step-by-step
 manual install, marketplace + MCP registration, daemon boot, verification, and
 common failure modes.
 
-Bare-minimum cheat sheet:
+Bare-minimum cheat sheet (development, from a clone):
 
 - Install: `npm install`
 - Build: `npm run build:runtime`
 - Test: `npm test`
-- CLI: `node dist/bin/zana.js init` then `node dist/bin/zana.js status`
-- MCP: `claude mcp add -s local zana node packages/mcp/dist/src/mcp-server.js`
+- CLI: `node dist/bin/zana.js --help` (or after `npm install -g .`: `zana --help`)
+- MCP server entry: `packages/mcp/dist/bin/zana-mcp-server.js`
 
 ## Master mode
 
-For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the 6 `zana_swarm_*` tools (75 total instead of 69). For ordinary single-daemon orchestration, leave it off — the in-process agent tools are sufficient.
+For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the additional `zana_swarm_*` coordination tools. For ordinary single-daemon orchestration, leave it off — the in-process agent tools are sufficient.
 
 ## Architecture notes
 

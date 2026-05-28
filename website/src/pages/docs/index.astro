@@ -11,7 +11,8 @@ const toc = [
   { id: 'schedules', label: '5. Schedule recurring work' },
   { id: 'loop', label: '6. Lightweight loops (no daemon)' },
   { id: 'runtime', label: '7. Pick a runtime' },
-  { id: 'next', label: '8. Where to next' },
+  { id: 'terminal', label: '8. Drive Zana from the terminal' },
+  { id: 'next', label: '9. Where to next' },
 ];
 ---
 
@@ -142,8 +143,42 @@ ZANA_RUNTIME=vercel-ai zana headless /path/to/workspace --background`}</CodeBloc
           <p class="mt-3 text-moss">The runtime is a clean seam: profiles, tickets, deliberation, and the MCP surface stay the same regardless of who's actually running the worker.</p>
         </section>
 
+        <section id="terminal">
+          <h2 class="font-display text-3xl text-forest">8. Drive Zana from the terminal</h2>
+          <p class="mt-2 text-moss">Everything you can do through Claude slash commands has a CLI mirror. Useful for scripting, CI, ops, or any context where Claude Code isn't running. After <code class="rounded bg-parchment px-1.5 py-0.5">scripts/install.sh</code>, the <code class="rounded bg-parchment px-1.5 py-0.5">zana</code> binary is on your <code class="rounded bg-parchment px-1.5 py-0.5">PATH</code>.</p>
+          <div class="mt-4">
+            <CodeBlock caption="terminal · zana CLI" lang="bash">{`zana --help                            # full subcommand list
+
+# bootstrap
+zana init wizard /path/to/workspace --repair-mcp
+
+# daemon control
+zana headless /path/to/workspace --background     # fork daemon (port 47402)
+zana status                                        # list running daemons
+zana stop --all                                    # stop every daemon
+
+# work-tracking (need a running daemon)
+zana ticket list --status backlog
+zana ticket rules list
+zana run list --limit 10
+
+# scheduling (live with a daemon, also reads disk)
+zana schedule list --json
+zana schedule trigger code-and-docs-audit
+zana schedule history code-and-docs-audit -n 5
+zana schedule disable-all && zana schedule reload
+
+# config + migrations
+zana config list
+zana config get system
+zana config set system maxConcurrentAgents 12
+zana migrate /path/to/workspace`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Two binaries are installed: <code class="rounded bg-parchment px-1.5 py-0.5">zana</code> (top-level dispatcher) and <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon</code> (the long-lived process). The daemon also exposes <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon service install</code> (launchd/systemd) and <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon plugin link &lt;path&gt;</code> for plugin development. Full reference: <a href="https://github.com/grebmann1/zana/blob/main/INSTALL.md#terminal-cli-reference" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">INSTALL.md</a>.</p>
+        </section>
+
         <section id="next">
-          <h2 class="font-display text-3xl text-forest">8. Where to next</h2>
+          <h2 class="font-display text-3xl text-forest">9. Where to next</h2>
           <ul class="mt-3 space-y-2 text-moss">
             <li>· <a href="/how-it-works/" class="text-forest hover:text-berry">How it works</a> — primitives in depth.</li>
             <li>· <a href="/features/" class="text-forest hover:text-berry">All features</a> — the full surface area.</li>

@@ -181,9 +181,69 @@ The auth token lives in `~/.zana/auth.json` and is used as `Authorization: Beare
 ### 9. Run diagnostics
 
 ```bash
-node dist/bin/zana.js doctor --fix    # if the doctor command exists
 node dist/bin/zana.js status          # show running daemons
+node dist/bin/zana.js schedule list   # confirm scheduler loaded
+node dist/bin/zana.js ticket list     # confirm tickets API responds
 ```
+
+---
+
+## Terminal CLI reference
+
+After install, `zana` is on your PATH. Two binaries are exposed: `zana` (the
+top-level dispatcher) and `zana-daemon` (the long-lived process).
+
+### `zana` — top-level dispatcher
+
+| Command | Effect | Needs daemon? |
+|---|---|---|
+| `zana --help` | Print help | no |
+| `zana init [path]` | Create `.zana/` in a workspace | no |
+| `zana init wizard [path] [--repair-mcp]` | Init + register MCP server | no |
+| `zana migrate [path]` | Run pending schema migrations | no |
+| `zana status` | List running daemons | no |
+| `zana stop <id\|port>` / `zana stop --all` | Stop one or all daemons | no |
+| `zana headless [path] [--background]` | Start daemon (foreground or fork) | no |
+| `zana config list` / `config get <module>` / `config set <module> <key> <value>` | Inspect/modify module config | no (reads disk) |
+| `zana ticket list [--status s] [--workspace p]` | List tickets | yes |
+| `zana ticket rules list [--workspace p]` | List automation hook rules | yes |
+| `zana run list [--limit N] [--workspace p]` | List recent agent runs | no (reads disk) |
+| `zana schedule list [--json]` | List schedules in `.zana/scheduler/` | yes for live status |
+| `zana schedule enable <id>` / `disable <id>` | Toggle one schedule | yes |
+| `zana schedule enable-all` / `disable-all` | Toggle all schedules | yes |
+| `zana schedule trigger <id>` | Fire a schedule once now | yes |
+| `zana schedule reload` | Re-read YAMLs + re-arm triggers | yes |
+| `zana schedule history <id> [-n N]` | Last N run entries (default 10) | yes |
+
+Most commands accept `--workspace <path>` to target a specific project.
+
+### `zana-daemon` — engine binary
+
+You usually drive the daemon through `zana headless`, not directly. But these
+subcommands are useful for ops:
+
+| Command | Effect |
+|---|---|
+| `zana-daemon --help` | Daemon flags |
+| `zana-daemon service install` / `uninstall` / `status` / `logs [n]` | Run/manage as a login service (launchd on macOS, systemd on Linux) |
+| `zana-daemon plugin list` | List installed plugins |
+| `zana-daemon plugin enable <id>` / `disable <id>` | Toggle a plugin |
+| `zana-daemon plugin link <path>` / `unlink <id>` | Symlink a local plugin for development |
+| `zana-daemon plugin init <name>` | Scaffold a new plugin |
+| `zana-daemon config list` / `get <module>` / `set <module> <key> <value>` / `reset <module>` | Module configuration |
+
+### `zana-mcp-server` — MCP transport
+
+`zana-mcp-server` is what Claude Code launches over stdio. You don't run it
+manually except for diagnostics:
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"diag","version":"0"}}}' \
+  | zana-mcp-server | head -1
+```
+
+A successful handshake returns a `result` payload. If you see no output, the
+build is stale — run `npm run build:runtime:mcp`.
 
 ---
 
