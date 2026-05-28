@@ -1,29 +1,84 @@
-# Ruflo — Claude Code Configuration
+# Zana — Claude Code Configuration
+
+Zana is a multi-agent orchestrator for Claude Code: a long-lived daemon exposing
+an MCP server so a single conversation can spawn, supervise, and synthesize the
+work of many specialized worker agents.
 
 ## Rules
 
 - Do what has been asked; nothing more, nothing less
 - NEVER create files unless absolutely necessary — prefer editing existing files
 - NEVER create documentation files unless explicitly requested
-- NEVER save working files or tests to root — use `/src`, `/tests`, `/docs`, `/config`, `/scripts`
 - ALWAYS read a file before editing it
-- NEVER commit secrets, credentials, or .env files
+- NEVER commit secrets, credentials, or `.env` files
 - Keep files under 500 lines
-- Validate input at system boundaries
+- Validate input at system boundaries — trust internal code
 
-## Agent Comms (SendMessage-First Coordination)
+## Repo layout
+
+TypeScript monorepo. All work happens under `packages/` and `plugins/`.
+
+| Path | What |
+|---|---|
+| `packages/core` | Engine: agents, profiles, scheduling, workspace context, daemon (`bin/daemon.ts`) |
+| `packages/work` | Tickets, teams, runs, deliberation, checkpoint store |
+| `packages/mcp` | MCP server — surfaces Zana primitives as `mcp__zana__*` tools |
+| `packages/server` | HTTP/IPC surface (hook server + REST) |
+| `packages/intelligence` | Task router, GOAP planner, vector memory, background workers |
+| `packages/extras` | Settings, skills, plugin loader |
+| `packages/swarm` | Multi-daemon coordination |
+| `plugins/zana/core` | Slash commands + skills shipped as `zana@zana-marketplace` |
+| `plugins/zana/loop` | Daemon-free `/loop`-driven scheduling, shipped as `zana-loop@zana-marketplace` |
+| `.zana/` | Workspace state (gitignored): `tickets/`, `runs/`, `checkpoints/`, `scheduler/`, `events/`, `artifacts/` |
+| `scripts/diagnostics/` | Real-Claude smoke tests (cost real money — run sparingly) |
+
+Tests live in `packages/<pkg>/test/`. Build artifacts in `packages/<pkg>/dist/`.
+
+## Build & test
+
+```bash
+npm run -w @zana/<pkg> build         # build one package
+cd packages/<pkg> && npx vitest run  # test one package
+npm run build && npm test             # full sweep before committing
+```
+
+After editing TS in `packages/<pkg>/src/`, rebuild that package — production
+code paths in other packages reach it via `require("@zana/<pkg>")` which
+resolves to `dist/`.
+
+## Workspace context — tenant isolation invariant
+
+Every project-local path resolves through `packages/core/src/project/workspace-context.ts`.
+The singleton must be initialized once on app/script start:
+
+```js
+core.project.workspaceContext.init(workspaceRoot);
+```
+
+Project-local stores (`tickets`, `runs`, `checkpoints`, `scheduler`, etc.)
+ALWAYS go through `getProjectPaths()`. Adding a new project-local dir means
+adding it to BOTH branches of `getProjectPaths()` (singleton + `createForWorkspace`
+factory) and consuming it via the workspace-context lookup, NOT by joining
+paths from the workspace root in the calling module.
+
+Tenant-isolated writes (CAS artifacts, `kind: "deliberation"` checkpoints) MUST
+refuse to fall back to `~/.zana/`. The fallback is shared across every
+workspace on the host — landing a deliberation record there silently mixes
+state across workspaces. Use `WorkspaceNotInitializedError` to refuse.
+
+## Agent comms — SendMessage-first
 
 Named agents coordinate via `SendMessage`, not polling or shared state.
 
 ```
-Lead (you) ←→ architect ←→ developer ←→ tester ←→ reviewer
+Lead (you) ←→ architect ←→ coder ←→ tester ←→ reviewer
               (named agents message each other directly)
 ```
 
-### Spawning a Coordinated Team
+Spawn the whole team in ONE message; each agent's prompt names who to message
+next.
 
 ```javascript
-// ALL agents in ONE message, each knows WHO to message next
 Agent({ prompt: "Research the codebase. SendMessage findings to 'architect'.",
   subagent_type: "researcher", name: "researcher", run_in_background: true })
 Agent({ prompt: "Wait for 'researcher'. Design solution. SendMessage to 'coder'.",
@@ -35,141 +90,75 @@ Agent({ prompt: "Wait for 'coder'. Write tests. SendMessage results to 'reviewer
 Agent({ prompt: "Wait for 'tester'. Review code quality and security.",
   subagent_type: "reviewer", name: "reviewer", run_in_background: true })
 
-// Kick off the pipeline
 SendMessage({ to: "researcher", summary: "Start", message: "[task context]" })
 ```
 
-### Patterns
-
-| Pattern | Flow | Use When |
-|---------|------|----------|
+| Pattern | Flow | When |
+|---|---|---|
 | **Pipeline** | A → B → C → D | Sequential dependencies (feature dev) |
 | **Fan-out** | Lead → A, B, C → Lead | Independent parallel work (research) |
 | **Supervisor** | Lead ↔ workers | Ongoing coordination (complex refactor) |
 
-### Rules
+Rules:
+- Always `name:` agents so they're addressable
+- Always include comms instructions in prompts
+- Spawn ALL agents in one message with `run_in_background: true`
+- After spawning: STOP, tell the user what's running, wait for results
+- NEVER poll status — agents message back when done
 
-- ALWAYS name agents — `name: "role"` makes them addressable
-- ALWAYS include comms instructions in prompts — who to message, what to send
-- Spawn ALL agents in ONE message with `run_in_background: true`
-- After spawning: STOP, tell user what's running, wait for results
-- NEVER poll status — agents message back or complete automatically
+## When to swarm
 
-## Swarm & Routing
+- **YES**: 3+ files, new features, cross-module refactors, API changes, security/perf reviews
+- **NO**: single file edits, 1-2 line fixes, doc tweaks, config changes, questions
 
-### Config
-- **Topology**: hierarchical-mesh (anti-drift)
-- **Max Agents**: 15
-- **Memory**: hybrid
-- **HNSW**: Enabled
-- **Neural**: Enabled
+## MCP tool surface (Zana)
 
-```bash
-npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized
-```
+Discover with `ToolSearch("zana <keyword>")`. All Zana tools are namespaced
+`mcp__zana__zana_*`.
 
-### Agent Routing
+| Domain | Representative tools |
+|---|---|
+| **Agents** | `zana_spawn_agent`, `zana_list_agents`, `zana_kill_agent`, `zana_agent_status` |
+| **Teams** | `zana_start_team`, `zana_get_team`, `zana_team_status`, `zana_stop_team` |
+| **Tickets** | `zana_ticket_create`, `zana_ticket_claim`, `zana_ticket_complete`, `zana_ticket_list` |
+| **Sprints** | `zana_sprint_create`, `zana_sprint_start`, `zana_sprint_board` |
+| **Deliberation** | `zana_deliberate`, `zana_deliberate_cancel`, `zana_deliberation_status` |
+| **Autopilot** | `zana_autopilot_goal_driven`, `zana_autopilot_goal_status`, `zana_autopilot_goal_cancel` |
+| **Schedules** | `zana_schedule_list`, `zana_schedule_trigger`, `zana_schedule_reload` |
+| **Memory** | `zana_memory_store`, `zana_memory_search` |
+| **Events** | `zana_event_emit`, `zana_event_query`, `zana_publish_channel`, `zana_subscribe_channel` |
+| **Artifacts** | `zana_artifact_create`, `zana_artifact_read`, `zana_artifact_list` |
 
-| Task | Agents | Topology |
-|------|--------|----------|
-| Bug Fix | researcher, coder, tester | hierarchical |
-| Feature | architect, coder, tester, reviewer | hierarchical |
-| Refactor | architect, coder, reviewer | hierarchical |
-| Performance | perf-engineer, coder | hierarchical |
-| Security | security-architect, auditor | hierarchical |
+Slash commands are shipped through two plugins under `plugins/zana/{core,loop}`
+and installed as `zana@zana-marketplace` and `zana-loop@zana-marketplace`.
 
-### When to Swarm
-- **YES**: 3+ files, new features, cross-module refactoring, API changes, security, performance
-- **NO**: single file edits, 1-2 line fixes, docs updates, config changes, questions
+## Runtime adapter
 
-### 3-Tier Model Routing
+`ZANA_RUNTIME` selects how worker agents are spawned:
 
-| Tier | Handler | Use Cases |
-|------|---------|-----------|
-| 1 | Agent Booster (WASM) | Simple transforms — skip LLM, use Edit directly |
-| 2 | Haiku | Simple tasks, low complexity |
-| 3 | Sonnet/Opus | Architecture, security, complex reasoning |
+- `claude-spawn` (default) — mirrors Claude Code's own `Task` spawn
+- `vercel-ai` (experimental, Phase 3) — Vercel AI SDK dispatcher
 
-## Memory & Learning
+Profiles, tickets, deliberation, and the MCP surface stay identical regardless
+of runtime — that's the seam.
 
-### Before Any Task
-```bash
-npx @claude-flow/cli@latest memory search --query "[task keywords]" --namespace patterns
-npx @claude-flow/cli@latest hooks route --task "[task description]"
-```
+## Scheduling
 
-### After Success
-```bash
-npx @claude-flow/cli@latest memory store --namespace patterns --key "[name]" --value "[what worked]"
-npx @claude-flow/cli@latest hooks post-task --task-id "[id]" --success true --store-results true
-```
+One YAML schema, two paths:
 
-### MCP Tools (use `ToolSearch("keyword")` to discover)
+- **Daemon path** (heavyweight): `cron` or `every`, daemon-driven, full history.
+  Drop `<id>.yml` in `.zana/scheduler/`, run `/zana:schedule:reload`.
+- **Loop path** (lightweight, daemon-free): same yml file, driven by Claude
+  Code's built-in `/loop` skill via `/zana:loop:start <id>`. `cron` is daemon-only.
 
-| Category | Key Tools |
-|----------|-----------|
-| **Memory** | `memory_store`, `memory_search`, `memory_search_unified` |
-| **Bridge** | `memory_import_claude`, `memory_bridge_status` |
-| **Swarm** | `swarm_init`, `swarm_status`, `swarm_health` |
-| **Agents** | `agent_spawn`, `agent_list`, `agent_status` |
-| **Hooks** | `hooks_route`, `hooks_post-task`, `hooks_worker-dispatch` |
-| **Security** | `aidefence_scan`, `aidefence_is_safe`, `aidefence_has_pii` |
-| **Hive-Mind** | `hive-mind_init`, `hive-mind_consensus`, `hive-mind_spawn` |
+Schema doc: `plugins/zana/loop/skills/scheduler/SKILL.md`.
 
-### Background Workers
+## Things to remember
 
-| Worker | When |
-|--------|------|
-| `audit` | After security changes |
-| `optimize` | After performance work |
-| `testgaps` | After adding features |
-| `map` | Every 5+ file changes |
-| `document` | After API changes |
-
-```bash
-npx @claude-flow/cli@latest hooks worker dispatch --trigger audit
-```
-
-## Agents
-
-**Core**: `coder`, `reviewer`, `tester`, `planner`, `researcher`
-**Architecture**: `system-architect`, `backend-dev`, `mobile-dev`
-**Security**: `security-architect`, `security-auditor`
-**Performance**: `performance-engineer`, `perf-analyzer`
-**Coordination**: `hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`
-**GitHub**: `pr-manager`, `code-review-swarm`, `issue-tracker`, `release-manager`
-
-Any string works as a custom agent type.
-
-## Build & Test
-
-- ALWAYS run tests after code changes
-- ALWAYS verify build succeeds before committing
-
-```bash
-npm run build && npm test
-```
-
-## CLI Quick Reference
-
-```bash
-npx @claude-flow/cli@latest init --wizard           # Setup
-npx @claude-flow/cli@latest swarm init --v3-mode     # Start swarm
-npx @claude-flow/cli@latest memory search --query "" # Vector search
-npx @claude-flow/cli@latest hooks route --task ""    # Route to agent
-npx @claude-flow/cli@latest doctor --fix             # Diagnostics
-npx @claude-flow/cli@latest security scan            # Security scan
-npx @claude-flow/cli@latest performance benchmark    # Benchmarks
-```
-
-26 commands, 140+ subcommands. Use `--help` on any command for details.
-
-## Setup
-
-```bash
-claude mcp add claude-flow -- npx -y @claude-flow/cli@latest
-npx @claude-flow/cli@latest daemon start
-npx @claude-flow/cli@latest doctor --fix
-```
-
-**Agent tool** handles execution (agents, files, code, git). **MCP tools** handle coordination (swarm, memory, hooks). **CLI** is the same via Bash.
+- Don't add features, fallbacks, or backwards-compat shims that aren't asked for
+- The `init()` function on `packages/work/src/runs/checkpoint/store.ts` is for
+  tests — production code should rely on workspace-context resolution
+- `~/.zana/` is the GLOBAL fallback for an uninitialized workspace; never use
+  it for tenant-isolated state
+- `scripts/diagnostics/run-real-deliberation*.js` calls real Claude and costs
+  real money — don't run unless explicitly asked
