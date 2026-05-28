@@ -166,6 +166,8 @@ export function buildVoterPrompt(promptSnapshot: string, voter: VoterSpec): stri
  *   - bare JSON (`{"bit":"APPROVE",...}`)
  *   - JSON in a fenced code block
  *   - JSON embedded in surrounding prose
+ *   - Multiple JSON-shaped blocks across multi-turn output (returns the LAST
+ *     valid {bit, rationale}, which represents the voter's final committed vote)
  * Falls back to {bit:"CHANGES", rationale: <raw output>} on any parse failure
  * — the safe default is "ask the human" rather than silently flipping APPROVE.
  */
@@ -175,9 +177,12 @@ export function parseVoterOutput(raw: string | null | undefined): { bit: VoteBit
   }
   const candidates: string[] = [];
 
-  // ```json ... ``` fenced block
-  const fenced = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
-  if (fenced) candidates.push(fenced[1].trim());
+  // All ```json ... ``` fenced blocks (multi-turn voters may emit several).
+  const fencedRe = /```(?:json)?\s*\n?([\s\S]*?)\n?```/gi;
+  let m: RegExpExecArray | null;
+  while ((m = fencedRe.exec(raw)) !== null) {
+    candidates.push(m[1].trim());
+  }
 
   // Bare brace-bounded JSON (greedy enough to capture nested rationales).
   const firstBrace = raw.indexOf("{");
@@ -189,6 +194,12 @@ export function parseVoterOutput(raw: string | null | undefined): { bit: VoteBit
   // Last resort: try the whole string.
   candidates.push(raw.trim());
 
+  // Walk all candidates and keep the LAST valid {bit, rationale}. Voters who
+  // narrate after their vote (background tool callbacks etc.) may emit the
+  // contract JSON in turn 1 and acknowledgment prose in turn N; if any
+  // narration accidentally restates the vote, the last valid one is the
+  // canonical decision.
+  let last: { bit: VoteBit; rationale: string } | null = null;
   for (const c of candidates) {
     try {
       const parsed = JSON.parse(c);
@@ -199,17 +210,60 @@ export function parseVoterOutput(raw: string | null | undefined): { bit: VoteBit
             typeof parsed.rationale === "string" && parsed.rationale.trim() !== ""
               ? parsed.rationale
               : "[no rationale provided]";
-          return { bit: bit as VoteBit, rationale };
+          last = { bit: bit as VoteBit, rationale };
         }
       }
     } catch {}
   }
+  if (last) return last;
 
   // Couldn't parse — preserve the raw output as rationale and CHANGES-vote.
   return {
     bit: "CHANGES",
     rationale: `[parse-fallback] voter output did not match {bit, rationale} contract:\n${raw.slice(0, 4000)}`,
   };
+}
+
+/**
+ * Extract every assistant text block from a stream-json transcript.
+ *
+ * The headless runner overwrites `agent.result` on each assistant turn
+ * (manager.ts handles only the latest message). When a voter writes the JSON
+ * vote in turn 1 and then continues speaking after a background tool call
+ * resolves, `agent.result` ends up holding the post-vote narration only — the
+ * vote JSON is gone. The raw stream-json transcript lives in `outputBuffer`,
+ * and this helper reconstructs the full assistant-side conversation so the
+ * parser can find the vote regardless of which turn carried it.
+ *
+ * Returns null when the buffer doesn't look like stream-json (so the caller
+ * can fall back to the raw buffer as plain prose).
+ */
+export function extractAssistantTextFromStreamJson(buffer: string | null | undefined): string | null {
+  if (typeof buffer !== "string" || buffer.trim() === "") return null;
+  const parts: string[] = [];
+  let sawAnyJsonLine = false;
+  for (const line of buffer.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed[0] !== "{") continue;
+    try {
+      const msg = JSON.parse(trimmed);
+      sawAnyJsonLine = true;
+      if (msg && msg.type === "assistant" && msg.message?.content) {
+        const content = Array.isArray(msg.message.content) ? msg.message.content : [];
+        for (const block of content) {
+          if (block && block.type === "text" && typeof block.text === "string") {
+            parts.push(block.text);
+          }
+        }
+      } else if (msg && msg.type === "result" && typeof msg.result === "string") {
+        parts.push(msg.result);
+      }
+    } catch {
+      // Non-JSON stdout line — skip.
+    }
+  }
+  if (!sawAnyJsonLine) return null;
+  return parts.length === 0 ? "" : parts.join("\n");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -324,10 +378,19 @@ export async function collectReviews(
       };
     }
 
-    // stream-json may not have populated `result`; fall back to outputBuffer.
-    const candidate = outcome.result && outcome.result.length > 0
-      ? outcome.result
-      : outcome.outputBuffer;
+    // Voters who narrate after their vote (e.g. acknowledging a background
+    // tool-call result) overwrite `agent.result` in manager.ts, clobbering the
+    // turn that carried the JSON contract. Reconstruct the full assistant-side
+    // transcript from the raw stream-json buffer first; that exposes every
+    // turn so parseVoterOutput can find the contract block regardless of when
+    // it was emitted. Fall back to `result`, then the raw buffer, when the
+    // buffer doesn't look like stream-json.
+    const transcript = extractAssistantTextFromStreamJson(outcome.outputBuffer);
+    const candidate = transcript && transcript.length > 0
+      ? transcript
+      : outcome.result && outcome.result.length > 0
+        ? outcome.result
+        : outcome.outputBuffer;
     const { bit, rationale } = parseVoterOutput(candidate);
     const stored = storeCAS(rationale);
 

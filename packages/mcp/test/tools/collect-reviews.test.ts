@@ -5,6 +5,7 @@ import {
   buildVoterPrompt,
   parseVoterOutput,
   collectReviews,
+  extractAssistantTextFromStreamJson,
   type VoterSpec,
   type CollectReviewsDeps,
 } from "../../src/tools/collect-reviews.ts";
@@ -124,6 +125,100 @@ describe("parseVoterOutput", () => {
     expect(parseVoterOutput(null).bit).toBe("CHANGES");
     expect(parseVoterOutput(undefined).bit).toBe("CHANGES");
   });
+
+  // Real-Claude regression — voters that emit the JSON vote then continue
+  // speaking after a background tool result lands. The first valid JSON in
+  // the transcript IS the canonical vote, but if any later acknowledgment
+  // restates {bit, rationale}, the LAST is the voter's final word.
+  it("returns the LAST valid {bit, rationale} when multiple appear (multi-turn)", () => {
+    const raw = [
+      "Initial vote:",
+      "```json",
+      '{"bit":"CHANGES","rationale":"need more context"}',
+      "```",
+      "After reviewing the file, my vote stands. Final answer:",
+      "```json",
+      '{"bit":"APPROVE","rationale":"context confirmed; concern resolved"}',
+      "```",
+    ].join("\n");
+    const r = parseVoterOutput(raw);
+    expect(r.bit).toBe("APPROVE");
+    expect(r.rationale).toMatch(/concern resolved/);
+  });
+
+  it("finds the vote when prose follows the JSON block", () => {
+    // The exact failure mode from the 3v2r real-Claude run: voter emits the
+    // JSON vote, then a background tool callback fires and the voter
+    // narrates the result. Both pieces of text get concatenated downstream.
+    const raw = [
+      "```json",
+      '{"bit":"APPROVE","rationale":"governance guarantee favors rule-based"}',
+      "```",
+      "",
+      "The background `find` completed with exit code 0 — no action needed.",
+    ].join("\n");
+    const r = parseVoterOutput(raw);
+    expect(r.bit).toBe("APPROVE");
+    expect(r.rationale).toMatch(/governance guarantee/);
+  });
+});
+
+describe("extractAssistantTextFromStreamJson", () => {
+  it("returns null for empty/non-stream-json buffers", () => {
+    expect(extractAssistantTextFromStreamJson("")).toBeNull();
+    expect(extractAssistantTextFromStreamJson(null)).toBeNull();
+    expect(extractAssistantTextFromStreamJson("just plain prose, no JSON")).toBeNull();
+  });
+
+  it("concatenates assistant text blocks across multiple turns", () => {
+    // Simulates what manager.ts feeds: stream-json lines, one per chunk.
+    const buf = [
+      JSON.stringify({ type: "system", subtype: "init" }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "turn 1: vote" }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "turn 2: ack" }] },
+      }),
+      JSON.stringify({ type: "result", result: "final summary" }),
+    ].join("\n");
+    const out = extractAssistantTextFromStreamJson(buf);
+    expect(out).toContain("turn 1: vote");
+    expect(out).toContain("turn 2: ack");
+    expect(out).toContain("final summary");
+  });
+
+  it("ignores non-assistant message types (tool_use, system, etc.)", () => {
+    const buf = [
+      JSON.stringify({ type: "system", subtype: "init" }),
+      JSON.stringify({ type: "user", message: { content: "user msg" } }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "Read", input: {} }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "the only text" }] },
+      }),
+    ].join("\n");
+    const out = extractAssistantTextFromStreamJson(buf);
+    expect(out).toBe("the only text");
+  });
+
+  it("tolerates non-JSON lines mixed into the buffer", () => {
+    const buf = [
+      "progress indicator that isn't JSON",
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "vote text" }] },
+      }),
+      "",
+    ].join("\n");
+    const out = extractAssistantTextFromStreamJson(buf);
+    expect(out).toBe("vote text");
+  });
 });
 
 describe("collectReviews — failure fallbacks", () => {
@@ -166,6 +261,63 @@ describe("collectReviews — failure fallbacks", () => {
     expect(reviews[0].bit).toBe("CHANGES");
     expect(reviews[0].rationale).toMatch(/\[timeout\]/);
     expect(killed).toBe(true);
+  });
+
+  it("recovers vote from outputBuffer when result holds only post-vote prose (multi-turn)", async () => {
+    // Reproduces the 3v2r real-Claude regression: the voter cast the JSON
+    // vote in turn 1, then a background tool result triggered a turn 2 with
+    // narration only. manager.ts overwrites agent.result on each assistant
+    // turn — so result="post-vote prose" while outputBuffer still holds the
+    // full stream-json transcript with the JSON in turn 1.
+    const buffer = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [{
+            type: "text",
+            text: '```json\n{"bit":"APPROVE","rationale":"rule-based wins on dissent guarantee"}\n```',
+          }],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [{
+            type: "text",
+            text: "Background find completed. No action needed.",
+          }],
+        },
+      }),
+    ].join("\n");
+
+    const agents = new Map<string, any>();
+    const deps: CollectReviewsDeps = {
+      spawnHeadlessAgent: () => {
+        const id = "voter-1";
+        agents.set(id, {
+          id,
+          state: "terminated",
+          // What got clobbered — the latest assistant text only.
+          result: "Background find completed. No action needed.",
+          // What survives — the full transcript.
+          outputBuffer: buffer,
+        });
+        return { agentId: id };
+      },
+      getAgent: (id) => agents.get(id) ?? null,
+      killAgent: () => true,
+      storeContentAddressed: () => ({ hash: `sha256:${"d".repeat(64)}` }),
+      pollIntervalMs: 1,
+    };
+    const reviews = await collectReviews(
+      { round: 1, promptSnapshot: "Q", voters: [voter()] },
+      deps,
+    );
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].bit).toBe("APPROVE");
+    expect(reviews[0].rationale).toMatch(/dissent guarantee/);
+    // The parse-fallback marker is the bug-shaped failure we are guarding against.
+    expect(reviews[0].rationale).not.toMatch(/parse-fallback/);
   });
 
   it("returns one review per voter regardless of mixed success/failure", async () => {
