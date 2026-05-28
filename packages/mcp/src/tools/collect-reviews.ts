@@ -66,15 +66,27 @@ const DEFAULT_POLL_MS = 50;
 /**
  * Build the per-voter prompt: shared snapshot + role + explicit JSON contract.
  *
- * The output contract is enforced at the parsing layer (parseVoterOutput) — we
- * tolerate prose around the JSON object so loosely-formatted models still
- * cast a vote. But real-Claude voters reading codebases consistently went
- * past the contract without producing JSON, so this prompt now:
- *   - Explicitly permits internal reasoning ("Think through it as needed")
- *   - Requires the JSON block as the LAST thing in the message
- *   - Caps rationale length to keep parse cost predictable + ensure voters
- *     converge on a vote rather than rambling indefinitely
- *   - Includes a worked APPROVE + CHANGES example so the format is unambiguous
+ * Designed AGAINST exploration spirals. Real-Claude voters with full tool
+ * access default to "comprehensive audit" mode: 30+ tool calls, 60-min runs,
+ * never produce the JSON. The fix isn't more tools or more time — it's
+ * framing the role as a council member casting a snap judgment, not an
+ * auditor doing a deep review.
+ *
+ * Key levers in this prompt:
+ *   1. Time budget stated UP FRONT (5 min, ≤5 tool calls). Sets the model's
+ *      sense of scope before it starts.
+ *   2. "Uncertainty IS a CHANGES vote" reframes the cheap escape: when in
+ *      doubt, voters can vote CHANGES with "I need more context to confirm
+ *      X" rather than spelunking for certainty.
+ *   3. The JSON block is described as the FIRST thing the voter should
+ *      mentally commit to, not the last. Vote first, justify after.
+ *   4. Explicit anti-pattern callouts so the model recognizes its own
+ *      failure mode ("If you find yourself reading >5 files, stop").
+ *   5. Worked examples reinforce the "vote first, briefly justify" cadence.
+ *
+ * The output contract is still enforced at the parsing layer
+ * (parseVoterOutput) — we tolerate prose around the JSON object so
+ * loosely-formatted models still cast a vote.
  */
 export function buildVoterPrompt(promptSnapshot: string, voter: VoterSpec): string {
   const lens = voter.profile?.displayName || voter.profileId;
@@ -83,31 +95,62 @@ export function buildVoterPrompt(promptSnapshot: string, voter: VoterSpec): stri
     promptSnapshot.trim(),
     "",
     "## Your role",
-    `You are reviewing as the ${lens} (profileId=${voter.profileId}).${lensDescription}`,
+    `You are a council member reviewing as the ${lens} (profileId=${voter.profileId}).${lensDescription}`,
     "Cast your vote independently — the council preserves dissent verbatim.",
     "",
+    "## ⏱ Budget — read this first",
+    "You have ~5 minutes and at most 5 tool calls. This is a council vote,",
+    "not an audit. You are ONE voice; other voters are looking at this from",
+    "different angles. You don't need exhaustive certainty — you need an",
+    "informed snap judgment, the kind you'd give in a 5-minute design review.",
+    "",
+    "If you find yourself reading more than ~5 files, STOP. You've over-scoped.",
+    "Vote CHANGES with 'need more context to confirm X' — that's a legitimate",
+    "and useful vote. The council preserves it verbatim and may run another",
+    "round; uncertainty is a first-class signal, not a failure.",
+    "",
     "## Output contract — REQUIRED",
-    "Think through the question as needed (read code, weigh tradeoffs, etc.),",
-    "but your message MUST end with EXACTLY one fenced JSON block. Nothing",
+    "Your message MUST end with EXACTLY one fenced JSON block. Nothing",
     "after the closing ``` fence. The orchestrator will refuse votes that",
-    "don't match this shape and record them as a CHANGES timeout-fallback.",
+    "don't match this shape and record them as a CHANGES timeout-fallback,",
+    "so a clean APPROVE/CHANGES vote with a short rationale is always better",
+    "than running out of time without producing one.",
     "",
     "Required shape:",
     "```json",
     `{"bit": "APPROVE" | "CHANGES", "rationale": "<= 1000 chars, single string"}`,
     "```",
     "",
-    "- `bit: \"APPROVE\"` — the proposal is correct and complete as written.",
-    "- `bit: \"CHANGES\"` — anything needs revision; put requested changes in `rationale`.",
+    "- `bit: \"APPROVE\"` — the proposal is sound on the dimensions you care about.",
+    "- `bit: \"CHANGES\"` — there's a concrete concern, OR you don't have enough",
+    "  context to vote APPROVE confidently. Put the concern OR the missing",
+    "  context in `rationale`.",
     "",
-    "Example APPROVE vote:",
+    "## How to spend your budget (suggested)",
+    "1. **Read the question carefully** (~1 min). What's actually being decided?",
+    "2. **Form a tentative vote from your role's lens** (~1 min). Don't open files yet.",
+    "3. **Targeted check** (~2 min, ≤5 tool calls). Confirm or refute the tentative",
+    "   vote with a small number of focused reads — not a survey.",
+    "4. **Vote** (~1 min). Write the JSON block.",
+    "",
+    "If a step takes much longer than its budget, you've over-scoped.",
+    "Cut to the JSON block immediately with a CHANGES + 'need more context' rationale.",
+    "",
+    "## Examples",
+    "",
+    "Confident APPROVE — vote as the only output:",
     "```json",
-    `{"bit": "APPROVE", "rationale": "Schema is internally consistent. Anti-dropout-bias guard already covers the failure mode I was worried about (see quorum.ts:applyDegradation)."}`,
+    `{"bit": "APPROVE", "rationale": "Schema is internally consistent and the anti-dropout-bias guard at quorum.ts:applyDegradation covers the only failure mode I was concerned about."}`,
     "```",
     "",
-    "Example CHANGES vote:",
+    "Confident CHANGES — concrete concern:",
     "```json",
-    `{"bit": "CHANGES", "rationale": "Migration loses data: the new NOT NULL column has no default and the backfill runs after the constraint is added. Reorder: backfill, then ALTER. Also missing rollback path."}`,
+    `{"bit": "CHANGES", "rationale": "Migration loses data: the new NOT NULL column has no default and the backfill runs after the constraint is added. Reorder: backfill first, then ALTER. Also missing rollback path."}`,
+    "```",
+    "",
+    "Uncertainty CHANGES — a fully legitimate vote, NOT a cop-out:",
+    "```json",
+    `{"bit": "CHANGES", "rationale": "Concept looks reasonable from the architecture lens, but I can't confirm the cost-per-deliberation claim without seeing how synthesisHash gets cached across rounds. Need: example of a real synthesis run with cache stats before I'd APPROVE."}`,
     "```",
     "",
     "End your message with the JSON block. No further prose.",

@@ -32,12 +32,31 @@ describe("buildVoterPrompt", () => {
 
   it("includes worked APPROVE and CHANGES examples (helps Claude end with valid JSON)", () => {
     const p = buildVoterPrompt("Q", voter());
-    // Both example shapes must be present so the model has a concrete pattern.
-    expect(p).toMatch(/Example APPROVE vote/i);
-    expect(p).toMatch(/Example CHANGES vote/i);
-    // The examples include realistic-looking rationales so the model doesn't
-    // copy a placeholder.
-    expect(p).toMatch(/Anti-dropout-bias|Migration loses data/);
+    // All three example archetypes must be present so the model has concrete
+    // patterns to follow — confident APPROVE, concrete CHANGES, uncertainty CHANGES.
+    expect(p).toMatch(/Confident APPROVE/i);
+    expect(p).toMatch(/Confident CHANGES/i);
+    expect(p).toMatch(/Uncertainty CHANGES/i);
+    // The examples include realistic rationales so the model doesn't copy a placeholder.
+    expect(p).toMatch(/anti-dropout-bias|migration loses data/i);
+  });
+
+  it("frames the role as a council member with a tight budget (anti-exploration)", () => {
+    const p = buildVoterPrompt("Q", voter());
+    // Time + tool-call budget must be stated up front so the model doesn't
+    // default to comprehensive-audit mode.
+    expect(p).toMatch(/5 minutes/i);
+    expect(p).toMatch(/5 tool calls/i);
+    expect(p).toMatch(/council member/i);
+    // Explicit anti-pattern callout — recognizable failure mode.
+    expect(p).toMatch(/more than ~5 files.*STOP/is);
+  });
+
+  it("legitimizes uncertainty as a first-class CHANGES vote", () => {
+    const p = buildVoterPrompt("Q", voter());
+    // Voters must know that "I'm not sure" is a CHANGES vote, not a failure.
+    expect(p).toMatch(/uncertainty/i);
+    expect(p).toMatch(/first-class/i);
   });
 
   it("ends with a strong tail instruction", () => {
