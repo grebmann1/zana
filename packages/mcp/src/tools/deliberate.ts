@@ -60,7 +60,27 @@ export interface DeliberateArgs {
   mode?: "synthesis" | "tally";
   riskTag?: "low" | "medium" | "high";
   context?: string[];
+  // When true, await the full orchestration loop before returning the final
+  // Deliberation record. Default false: return immediately with a stub
+  // deliberation in PROPOSED state and let the caller poll
+  // zana_deliberation_status. Async-by-default avoids the MCP-client timeout
+  // problem that real-Claude voters trip (each can take 5-10 min).
+  wait?: boolean;
   deps?: DeliberateDeps;
+}
+
+// In-memory tracking of running orchestration loops, keyed by deliberationId.
+// Used to (a) prevent double-launching the same deliberation and (b) allow
+// future cancellation. Persistence of state already lives in the checkpoint
+// store; this map is purely for live-process coordination.
+const activeRuns = new Map<string, { startedAt: number }>();
+
+/** Test-only: snapshot active runs (used by deliberate-async.test.ts). */
+export function _getActiveRunsForTest(): { deliberationId: string; startedAt: number }[] {
+  return Array.from(activeRuns.entries()).map(([deliberationId, info]) => ({
+    deliberationId,
+    startedAt: info.startedAt,
+  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,6 +165,88 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
       : undefined,
   });
 
+  const ctx: RunDeliberationContext = {
+    deliberationId: proposed.id,
+    candidates,
+    promptSnapshot,
+    deps,
+    rounds,
+    getProfile,
+  };
+
+  // 2. Default: detach the orchestration loop and return the proposed record.
+  //    Caller polls zana_deliberation_status for progress / final outcome.
+  if (args.wait !== true) {
+    activeRuns.set(proposed.id, { startedAt: Date.now() });
+    runDeliberation(ctx).catch(() => {
+      // runDeliberation already records ESCALATED on crash; just clear tracker.
+    }).finally(() => {
+      activeRuns.delete(proposed.id);
+    });
+    return {
+      ...delib.loadDeliberation(proposed.id),
+      _outcome: "running",
+      _async: true,
+    };
+  }
+
+  // 3. wait=true — drive the loop inline (legacy / test mode).
+  try {
+    return await runDeliberation(ctx);
+  } finally {
+    activeRuns.delete(proposed.id);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// runDeliberation — the orchestration loop.
+//
+// Pulled out of deliberateHandler so it can run detached from the MCP request
+// (default async path) AND inline (wait=true). Crashes inside this function
+// must NOT silently leak — record ESCALATED on the deliberation so callers
+// polling status see a terminal state.
+// ─────────────────────────────────────────────────────────────────────────────
+interface RunDeliberationContext {
+  deliberationId: string;
+  candidates: { profileId: string; profile: any }[];
+  promptSnapshot: string;
+  deps: DeliberateDeps;
+  rounds: number;
+  getProfile: (id: string) => any;
+}
+
+async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
+  const work = _work();
+  const delib = _delib();
+  const core = _core();
+  const { deliberationId, candidates, promptSnapshot, deps, rounds, getProfile } = ctx;
+
+  try {
+    return await runDeliberationUnsafe(ctx);
+  } catch (err: any) {
+    // Background-runner crash protocol: drive the deliberation to a terminal
+    // state so polling callers don't get stuck on REVIEWING/CONVERGING forever.
+    try {
+      const fresh = delib.loadDeliberation(deliberationId);
+      if (fresh && fresh.state !== "SETTLED" && fresh.state !== "ESCALATED" && fresh.state !== "EXHAUSTED") {
+        // Attempt a clean transition to ESCALATED. If the legality table
+        // forbids it from the current state, swallow — the original error is
+        // what we want to surface anyway.
+        try {
+          delib.transition(deliberationId, "ESCALATED", { escalationReason: "explicit" }, { expectedVersion: fresh.version });
+        } catch {}
+      }
+    } catch {}
+    throw err;
+  }
+}
+
+async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> {
+  const work = _work();
+  const delib = _delib();
+  const core = _core();
+  const { deliberationId, candidates, promptSnapshot, deps, rounds, getProfile } = ctx;
+
   // 2. Assemble the initial council. assembleCouncil probes each candidate and
   //    transitions PROPOSED → REVIEWING (or PROPOSED → ESCALATED on quorum loss).
   const probeAgent = deps.probeAgent ?? core.agents.manager.probeAgent;
@@ -156,13 +258,13 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
   if (deps.killAgent) assembleDeps.killAgent = deps.killAgent;
 
   const assembleOutcome = await delib.assembleCouncil({
-    deliberationId: proposed.id,
+    deliberationId,
     candidates,
     deps: assembleDeps,
   });
   if (assembleOutcome.kind === "ESCALATED") {
     return {
-      ...delib.loadDeliberation(proposed.id),
+      ...delib.loadDeliberation(deliberationId),
       _outcome: "escalated_at_assembly",
       _assemblyEscalation: {
         reason: assembleOutcome.reason,
@@ -177,11 +279,11 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
     : Math.max(8, rounds * 4 + 4);
   let iter = 0;
 
-  let d: any = delib.loadDeliberation(proposed.id);
+  let d: any = delib.loadDeliberation(deliberationId);
   while (d.state === "REVIEWING" || d.state === "CONVERGING") {
     if (++iter > maxIterations) {
       throw new Error(
-        `zana_deliberate: orchestration loop exceeded ${maxIterations} iterations on deliberation ${proposed.id} (state=${d.state})`,
+        `zana_deliberate: orchestration loop exceeded ${maxIterations} iterations on deliberation ${deliberationId} (state=${d.state})`,
       );
     }
 
@@ -424,11 +526,14 @@ export function deliberationOverrideHandler(args: OverrideArgs): any {
 export const deliberateTool = {
   name: "zana_deliberate",
   description:
-    "Run a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. " +
+    "Start a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. " +
     "Each voter is an independent agent with its own profile/model. Dissent is preserved verbatim across EVERY round. " +
-    "Returns when SETTLED or ESCALATED. " +
-    "Result includes the full Deliberation record plus three orchestration-level fields: " +
-    "`_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' (the orchestrator's terminal classification, useful for routing follow-up). " +
+    "Default behavior: returns IMMEDIATELY with the proposed deliberation record (state=PROPOSED, _outcome='running'). " +
+    "Real-Claude voters can take 5-10 min each; the orchestration loop runs detached on the daemon. " +
+    "Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. " +
+    "Pass `wait: true` to block until completion (legacy / scripted use). " +
+    "When complete, the deliberation record carries: " +
+    "`_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly'. " +
     "`_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). " +
     "`_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).",
   inputSchema: {
@@ -460,6 +565,10 @@ export const deliberateTool = {
         type: "array",
         items: { type: "string" },
         description: "Optional artifact IDs to seed context. Each is read and embedded in the shared prompt.",
+      },
+      wait: {
+        type: "boolean",
+        description: "If true, block until the deliberation reaches a terminal state. Default false (async).",
       },
     },
   },

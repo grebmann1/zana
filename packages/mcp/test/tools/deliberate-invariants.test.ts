@@ -239,6 +239,7 @@ describe("zana_deliberate — invariant stress probe", () => {
       let result: any;
       try {
         result = await deliberateHandler({
+      wait: true,
           question: `scenario ${i}`,
           voters,
           rounds,
@@ -278,6 +279,7 @@ describe("zana_deliberate — invariant stress probe", () => {
     const script = { 1: { solo: { bit: "APPROVE" as const, rationale: "yes" } } };
     const deps = makeDeps(script, state);
     const r = await deliberateHandler({
+      wait: true,
       question: "single-voter sanity",
       voters: ["solo"],
       rounds: 1,
@@ -304,6 +306,7 @@ describe("zana_deliberate — invariant stress probe", () => {
     };
     const deps = makeDeps(script, state);
     const r = await deliberateHandler({
+      wait: true,
       question: "numeric quorum",
       voters: ["a", "b", "c"],
       rounds: 1,
@@ -329,6 +332,7 @@ describe("zana_deliberate — invariant stress probe", () => {
     };
     const deps = makeDeps(script, state, { c: "timeout" });
     const r = await deliberateHandler({
+      wait: true,
       question: "quorum drop",
       voters: ["a", "b", "c"],
       rounds: 1,
@@ -360,6 +364,7 @@ describe("zana_deliberate — invariant stress probe", () => {
     };
     const deps = makeDeps(script, state);
     const r = await deliberateHandler({
+      wait: true,
       question: "dissent integrity",
       voters: ["a", "b", "c"],
       rounds: 2,
@@ -421,6 +426,7 @@ describe("zana_deliberate — invariant stress probe", () => {
     };
 
     const r = await deliberateHandler({
+      wait: true,
       question: "anti-dropout-bias",
       voters: ["a", "b", "c"],
       rounds: 2,
@@ -447,6 +453,7 @@ describe("zana_deliberate — invariant stress probe", () => {
     }
     const deps = makeDeps(script, state);
     const r = await deliberateHandler({
+      wait: true,
       question: "cap stress",
       voters: ["a", "b", "c"],
       rounds: 3,

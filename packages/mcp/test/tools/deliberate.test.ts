@@ -152,6 +152,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     const deps = makeDeps(script, state);
 
     const result = await deliberateHandler({
+      wait: true,
       question: "Adopt argument-based synthesis as the default reducer?",
       voters: ["a", "b", "c"],
       deps,
@@ -185,6 +186,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     const deps = makeDeps(script, state);
 
     const result = await deliberateHandler({
+      wait: true,
       question: "high risk action",
       voters: ["a", "b", "c"],
       riskTag: "high",
@@ -208,6 +210,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     );
 
     const result = await deliberateHandler({
+      wait: true,
       question: "q",
       voters: ["a", "b", "c"],
       deps,
@@ -255,6 +258,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     };
 
     const result = await deliberateHandler({
+      wait: true,
       question: "Should we proceed?",
       voters: ["a", "b", "c"],
       rounds: 3,
@@ -297,6 +301,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     };
 
     const result = await deliberateHandler({
+      wait: true,
       question: "Persistent dissent",
       voters: ["a", "b", "c"],
       rounds: 2,
@@ -347,6 +352,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     };
 
     const result = await deliberateHandler({
+      wait: true,
       question: "Multi-round dissent preservation",
       voters: ["a", "b", "c"],
       rounds: 3,
@@ -390,6 +396,7 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     };
 
     const result = await deliberateHandler({
+      wait: true,
       question: "Dissent must persist on cap_exhausted",
       voters: ["a", "b", "c"],
       rounds: 2,
