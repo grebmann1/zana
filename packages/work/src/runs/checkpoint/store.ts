@@ -2,6 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "node:crypto";
 
+// Tests pin the checkpoints dir explicitly via init(projectDir); production
+// code leaves it null and resolves on demand through workspace-context
+// (project-local `.zana/checkpoints`) or the global `~/.zana/checkpoints`
+// fallback.
 let checkpointsDir = null;
 
 export function init(projectDir) {
@@ -10,12 +14,15 @@ export function init(projectDir) {
 }
 
 function getDir() {
-  if (!checkpointsDir) {
-    const { ZANA_DIR } = require("@zana/core").config;
-    checkpointsDir = path.join(ZANA_DIR, "checkpoints");
-    fs.mkdirSync(checkpointsDir, { recursive: true });
-  }
-  return checkpointsDir;
+  if (checkpointsDir) return checkpointsDir;
+
+  const core = require("@zana/core");
+  const ctx = core.project.workspaceContext;
+  const dir = ctx.isInitialized()
+    ? ctx.getProjectPaths().checkpointsDir
+    : path.join(core.config.ZANA_DIR, "checkpoints");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

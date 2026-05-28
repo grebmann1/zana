@@ -124,6 +124,7 @@ export function getProjectPaths() {
     runsDir: path.join(projectDir, "runs"),
     eventsDir: path.join(projectDir, "events"),
     schedulerDir: path.join(projectDir, "scheduler"),
+    checkpointsDir: path.join(projectDir, "checkpoints"),
     tmpDir: path.join(projectDir, "tmp"),
     configPath: path.join(projectDir, "config.json"),
   };
@@ -171,6 +172,7 @@ export function createForWorkspace(dir) {
       runsDir: path.join(projectDir, "runs"),
       eventsDir: path.join(projectDir, "events"),
       schedulerDir: path.join(projectDir, "scheduler"),
+      checkpointsDir: path.join(projectDir, "checkpoints"),
       tmpDir: path.join(projectDir, "tmp"),
       configPath: path.join(projectDir, "config.json"),
     }),

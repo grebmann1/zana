@@ -7,10 +7,9 @@ const path = require("node:path");
 const REPO = path.resolve(__dirname, "..", "..");
 
 const core = require(path.join(REPO, "packages/core/dist/src/index.js"));
-const work = require(path.join(REPO, "packages/work/dist/src/index.js"));
+require(path.join(REPO, "packages/work/dist/src/index.js"));
 
 try { core.project.workspaceContext.init(REPO); } catch {}
-try { work.runs.checkpoint.store.init(REPO); } catch {}
 
 const { deliberateHandler, deliberationStatusHandler } = require(
   path.join(REPO, "packages/mcp/dist/src/tools/deliberate.js"),

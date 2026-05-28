@@ -11,4 +11,8 @@ dist/
 release/
 .zana/
 .claude-flow/
+.claude-plugin/
 .swarm/
+
+# Leaked checkpoint dir from a pre-fix bug — checkpoints belong under .zana/
+/checkpoints/

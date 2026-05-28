@@ -13,10 +13,9 @@ const fs = require("node:fs");
 const REPO = path.resolve(__dirname, "..", "..");
 
 const core = require(path.join(REPO, "packages/core/dist/src/index.js"));
-const work = require(path.join(REPO, "packages/work/dist/src/index.js"));
+require(path.join(REPO, "packages/work/dist/src/index.js"));
 
 core.project.workspaceContext.init(REPO);
-work.runs.checkpoint.store.init(REPO);
 
 const { deliberateHandler, deliberationStatusHandler } = require(
   path.join(REPO, "packages/mcp/dist/src/tools/deliberate.js"),
