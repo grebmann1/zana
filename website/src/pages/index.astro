@@ -25,12 +25,14 @@ const pillars = [
 ];
 
 const features = [
-  { tag: 'Agents', title: '11 built-in profiles', body: 'Architect, backend-dev, frontend-dev, code-reviewer, debugger, doc-generator, researcher, security-reviewer, test-writer, ux-designer, api-designer.' },
+  { tag: 'Agents', title: '14 built-in profiles', body: 'Architect, backend-dev, frontend-dev, code-reviewer, debugger, doc-generator, full-auto-coder, orchestrator, researcher, security-reviewer, swarm-master, swarm-orchestrator, test-writer, ux-designer.' },
   { tag: 'Teams', title: 'Pipeline · fan-out · supervisor', body: 'Compose topologies for sequential dependencies, independent parallel work, or ongoing coordination.' },
   { tag: 'Tickets', title: 'The unit of dispatch', body: 'Independent, small, verifiable work items — fits inside one agent\'s context, plus margin for tools and tests.' },
   { tag: 'Deliberation', title: 'Multi-voter consensus', body: 'Run security-reviewer, performance-engineer, and architect on a decision. Get a synthesized verdict with dissent intact.' },
-  { tag: 'Schedules', title: 'YAML cron + interval', body: 'Persistent schedules that survive daemon restarts. Spawn agents, run commands, or trigger teams on a cadence.' },
-  { tag: 'MCP', title: '86+ tools, one server', body: 'Agent spawn, ticket management, profiles, skills, memory, event bus, scheduling — exposed to any MCP-aware tool.' },
+  { tag: 'Schedules', title: 'YAML — daemon or /loop', body: 'One YAML schema, two execution paths: heavyweight daemon (cron + interval) or lightweight /loop (no daemon required).' },
+  { tag: 'Runtime', title: 'Pluggable agent runtime', body: 'A RuntimeAdapter interface lets Zana drive Claude Code spawning, the Vercel AI SDK, or any other host the same way.' },
+  { tag: 'MCP', title: '69+ tools, one server', body: 'Agent spawn, ticket management, profiles, skills, memory, event bus, scheduling — exposed to any MCP-aware tool.' },
+  { tag: 'Plugins', title: 'Two slash-command bundles', body: '`zana@zana-marketplace` ships orchestration. `zana-loop@zana-marketplace` ships daemon-free scheduling.' },
 ];
 ---
 
@@ -84,22 +86,24 @@ const features = [
           the <code class="rounded bg-parchment px-1.5 py-0.5 text-sm text-ink">/zana</code>
           slash command spawns agents, opens tickets, and runs deliberations on demand.
         </p>
-        <a href="/docs" class="mt-6 inline-flex text-forest font-medium underline-offset-4 hover:underline">
+        <a href="/docs/" class="mt-6 inline-flex text-forest font-medium underline-offset-4 hover:underline">
           Read the full quickstart →
         </a>
       </div>
       <div class="space-y-4">
-        <CodeBlock caption="Install the daemon" lang="bash">{`# Install globally
-npm i -g @zana/cli
+        <CodeBlock caption="Install Zana" lang="bash">{`# Clone, build, register MCP, init the workspace
+git clone https://github.com/grebmann1/zana.git
+cd zana && bash scripts/install.sh
 
-# Start the daemon
-zana daemon start
-
-# Wire into Claude Code (MCP)
-claude mcp add zana -- zana mcp`}</CodeBlock>
-        <CodeBlock caption="Spawn a team" lang="text">{`/zana spawn team \\
-  --members architect,coder,tester,reviewer \\
-  --task "Add bearer-token auth to /api/v2"`}</CodeBlock>
+# Wire the slash-command plugins into Claude Code
+claude plugin marketplace add "$(pwd)"
+claude plugin install zana@zana-marketplace
+claude plugin install zana-loop@zana-marketplace`}</CodeBlock>
+        <CodeBlock caption="Use it" lang="text">{`/zana                       # orchestrator: spawn teams, run tickets
+/zana:council               # multi-voter deliberation
+/zana:autopilot             # goal-driven loops
+/zana:schedule:list         # daemon-driven schedules
+/zana:loop:start            # daemon-free /loop scheduling`}</CodeBlock>
       </div>
     </div>
   </section>
@@ -115,7 +119,7 @@ claude mcp add zana -- zana mcp`}</CodeBlock>
         ))}
       </div>
       <div class="mt-10">
-        <a href="/features" class="btn-ghost">Explore all features</a>
+        <a href="/features/" class="btn-ghost">Explore all features</a>
       </div>
     </div>
   </section>
@@ -130,8 +134,8 @@ claude mcp add zana -- zana mcp`}</CodeBlock>
           into parallel tickets. All from one place.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a href="/docs" class="btn-primary">Get started</a>
-          <a href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
+          <a href="/docs/" class="btn-primary">Get started</a>
+          <a href="https://github.com/grebmann1/zana" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
         </div>
       </div>
     </div>

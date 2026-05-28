@@ -18,12 +18,22 @@ const primitives = [
   {
     name: 'Deliberation',
     tagline: 'Bounded multi-perspective review.',
-    body: 'Sibling to Team and Autopilot. Voters (security-reviewer, performance-engineer, architect) examine a decision; dissent is preserved; a verdict is synthesized with an audit trail and override path. Use it when the stakes warrant the friction.',
+    body: 'Sibling to Team and Autopilot. Voters examine a decision async; dissent is preserved; a verdict is synthesized with audit trail and override. Snap-judgment voter prompts hit ~65s on real Claude — fast enough to use inline.',
   },
   {
     name: 'Autopilot',
     tagline: 'Goal-driven loops.',
     body: 'Define success criteria and an ordered sequence of agent steps. The autopilot loops, evaluates, and retries until the criteria are met or the retry budget is exhausted. Built-in evaluator; configurable max iterations.',
+  },
+  {
+    name: 'Schedules',
+    tagline: 'One YAML, two execution paths.',
+    body: 'Drop a yml into .zana/scheduler/. Drive it through the daemon (cron or interval, full profile support, run history) — or arm a Claude Code /loop with the zana-loop plugin (no daemon required, lightweight). Same file, your choice.',
+  },
+  {
+    name: 'Runtime',
+    tagline: 'Pluggable agent host.',
+    body: 'A RuntimeAdapter interface decouples Zana\'s primitives from how an agent is actually spawned. Default ships with claude-spawn (mirrors Claude Code spawning). Switch to vercel-ai or your own adapter via ZANA_RUNTIME — the MCP surface stays the same.',
   },
 ];
 
@@ -75,7 +85,7 @@ const lifecycle = [
   <!-- Primitives -->
   <section class="container-zana py-20">
     <MythicDivider />
-    <h2 class="mt-10 font-display text-4xl text-forest">Four primitives.</h2>
+    <h2 class="mt-10 font-display text-4xl text-forest">Six primitives.</h2>
     <p class="mt-3 max-w-2xl text-moss">Composable, named, observable. Each survives daemon restarts; each leaves an audit trail.</p>
     <div class="mt-12 grid gap-8 md:grid-cols-2">
       {primitives.map((p, i) => (

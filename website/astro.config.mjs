@@ -7,6 +7,10 @@ import sitemap from '@astrojs/sitemap';
 export default defineConfig({
   site: 'https://zana.dev',
   output: 'static',
+  trailingSlash: 'always',
   integrations: [tailwind({ applyBaseStyles: false }), mdx(), sitemap()],
-  build: { inlineStylesheets: 'auto' },
+  build: {
+    inlineStylesheets: 'auto',
+    format: 'directory',
+  },
 });

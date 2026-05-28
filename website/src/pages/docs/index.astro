@@ -9,7 +9,9 @@ const toc = [
   { id: 'first-team', label: '3. Spawn your first team' },
   { id: 'deliberation', label: '4. Run a deliberation' },
   { id: 'schedules', label: '5. Schedule recurring work' },
-  { id: 'next', label: '6. Where to next' },
+  { id: 'loop', label: '6. Lightweight loops (no daemon)' },
+  { id: 'runtime', label: '7. Pick a runtime' },
+  { id: 'next', label: '8. Where to next' },
 ];
 ---
 
@@ -39,24 +41,31 @@ const toc = [
       <article class="prose-zana max-w-prose space-y-12">
         <section id="install">
           <h2 class="font-display text-3xl text-forest">1. Install</h2>
-          <p class="mt-2 text-moss">Node 20+ required.</p>
+          <p class="mt-2 text-moss">Node 20+ required. Clone the repo and run the bundled installer.</p>
           <div class="mt-4">
-            <CodeBlock caption="terminal" lang="bash">{`npm i -g @zana/cli
-zana doctor --fix    # checks deps, paths, permissions
-zana daemon start    # starts the long-lived orchestrator`}</CodeBlock>
+            <CodeBlock caption="terminal" lang="bash">{`git clone https://github.com/grebmann1/zana.git
+cd zana
+bash scripts/install.sh
+
+# or remote-pipe
+curl -fsSL https://raw.githubusercontent.com/grebmann1/zana/main/scripts/install.sh | bash`}</CodeBlock>
           </div>
+          <p class="mt-3 text-moss">The installer handles npm install, runtime build, MCP server registration, and a guided <code class="rounded bg-parchment px-1.5 py-0.5">zana init wizard</code> for the workspace.</p>
         </section>
 
         <section id="wire">
           <h2 class="font-display text-3xl text-forest">2. Wire into Claude Code</h2>
-          <p class="mt-2 text-moss">Register Zana as an MCP server. Claude Code will pick up the 86+ tools automatically.</p>
+          <p class="mt-2 text-moss">Register the marketplace and install the two plugins. The marketplace is named <code class="rounded bg-parchment px-1.5 py-0.5">zana-marketplace</code>.</p>
           <div class="mt-4">
-            <CodeBlock caption="terminal" lang="bash">{`claude mcp add zana -- zana mcp
+            <CodeBlock caption="terminal" lang="bash">{`claude plugin marketplace add /absolute/path/to/zana
+claude plugin install zana@zana-marketplace        # orchestrator + daemon-driven schedules
+claude plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling
 
 # verify
-claude mcp list`}</CodeBlock>
+claude mcp list | grep zana
+claude plugin details zana@zana-marketplace`}</CodeBlock>
           </div>
-          <p class="mt-3 text-moss">Open a Claude Code session and type <code class="rounded bg-parchment px-1.5 py-0.5">/zana ping</code>. You should see a heartbeat and the active profile list.</p>
+          <p class="mt-3 text-moss">Restart Claude Code. Type <code class="rounded bg-parchment px-1.5 py-0.5">/zana</code> and you'll see the orchestrator command, autopilot, council, ticket, schedule, and loop families.</p>
         </section>
 
         <section id="first-team">
@@ -83,31 +92,62 @@ claude mcp list`}</CodeBlock>
 
         <section id="schedules">
           <h2 class="font-display text-3xl text-forest">5. Schedule recurring work</h2>
-          <p class="mt-2 text-moss">YAML schedules survive daemon restarts. Cron or interval. Spawn agents, run commands, or fire teams.</p>
+          <p class="mt-2 text-moss">Drop one YAML file per schedule into <code class="rounded bg-parchment px-1.5 py-0.5">.zana/scheduler/</code>. Each file is a portable contract — drive it through the daemon (cron or interval) or through <code class="rounded bg-parchment px-1.5 py-0.5">/loop</code>.</p>
           <div class="mt-4">
-            <CodeBlock caption=".zana/schedules.yaml" lang="yaml">{`schedules:
-  - id: nightly-test-audit
-    cron: "0 2 * * *"
-    action:
-      type: spawn
-      profile: test-writer
-      task: "Audit coverage gaps in packages/work; write a TODO list"
+            <CodeBlock caption=".zana/scheduler/code-and-docs-audit.yml" lang="yaml">{`id: code-and-docs-audit
+name: Code + docs freshness audit
+description: Spawn code-reviewer every 10 minutes against the most-recently changed file.
+enabled: true
 
-  - id: weekly-deps-review
-    interval: 7d
-    action:
-      type: team
-      members: [security-reviewer, researcher]
-      task: "Audit dependency CVEs and produce a triage list"`}</CodeBlock>
+schedule:
+  every: 10m            # also accepts 30s, 1h, 2d, or cron: "0 2 * * *"
+
+action:
+  type: spawn-agent     # or type: command, with command: ["bin","arg"]
+  profileId: code-reviewer
+  prompt: |
+    Audit the most-recently changed file. Report findings as
+    Blocker/Major/Minor/Nit. Read-only.
+
+history:
+  enabled: true
+  retain: 24`}</CodeBlock>
           </div>
+          <p class="mt-3 text-moss">Reload after editing: <code class="rounded bg-parchment px-1.5 py-0.5">/zana:schedule:reload</code>. List with <code class="rounded bg-parchment px-1.5 py-0.5">/zana:schedule:list</code>; fire one ad-hoc with <code class="rounded bg-parchment px-1.5 py-0.5">/zana:schedule:trigger &lt;id&gt;</code>.</p>
+        </section>
+
+        <section id="loop">
+          <h2 class="font-display text-3xl text-forest">6. Lightweight loops (no daemon)</h2>
+          <p class="mt-2 text-moss">The <code class="rounded bg-parchment px-1.5 py-0.5">zana-loop</code> plugin drives the same YAML files via Claude Code's built-in <code class="rounded bg-parchment px-1.5 py-0.5">/loop</code> — no daemon, no MCP, just a background sleeper. Use it when you don't want to run the long-lived daemon.</p>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · zana-loop commands" lang="text">{`/zana:loop:define              # walk through authoring a new yml
+/zana:loop:start               # pick a schedule (or 'all enabled') and arm a /loop
+/zana:loop:start <scheduleId>  # arm one specific schedule
+/zana:loop:stop                # kill all zana loops in this session
+/zana:loop:stop <scheduleId>   # kill one specific loop`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Each loop is identified by a sentinel of the form <code class="rounded bg-parchment px-1.5 py-0.5">AGENT_LOOP_TICK_zana_&lt;id&gt;</code>. Cron schedules are daemon-only — <code class="rounded bg-parchment px-1.5 py-0.5">/zana:loop:start</code> refuses them and points you to the daemon path.</p>
+        </section>
+
+        <section id="runtime">
+          <h2 class="font-display text-3xl text-forest">7. Pick a runtime</h2>
+          <p class="mt-2 text-moss">Zana speaks to multiple agent runtimes through a single <code class="rounded bg-parchment px-1.5 py-0.5">RuntimeAdapter</code> interface. Default is the Claude Code spawn adapter, which mirrors the way Claude Code itself spawns agents. You can switch via the <code class="rounded bg-parchment px-1.5 py-0.5">ZANA_RUNTIME</code> environment variable.</p>
+          <div class="mt-4">
+            <CodeBlock caption="terminal" lang="bash">{`# default — spawns agents the way Claude Code does
+ZANA_RUNTIME=claude-spawn zana headless /path/to/workspace --background
+
+# experimental — Vercel AI SDK dispatcher (Phase 3)
+ZANA_RUNTIME=vercel-ai zana headless /path/to/workspace --background`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">The runtime is a clean seam: profiles, tickets, deliberation, and the MCP surface stay the same regardless of who's actually running the worker.</p>
         </section>
 
         <section id="next">
-          <h2 class="font-display text-3xl text-forest">6. Where to next</h2>
+          <h2 class="font-display text-3xl text-forest">8. Where to next</h2>
           <ul class="mt-3 space-y-2 text-moss">
-            <li>· <a href="/how-it-works" class="text-forest hover:text-berry">How it works</a> — primitives in depth.</li>
-            <li>· <a href="/features" class="text-forest hover:text-berry">All features</a> — the full surface area.</li>
-            <li>· <a href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">GitHub repository</a> — issues, profiles, contributions.</li>
+            <li>· <a href="/how-it-works/" class="text-forest hover:text-berry">How it works</a> — primitives in depth.</li>
+            <li>· <a href="/features/" class="text-forest hover:text-berry">All features</a> — the full surface area.</li>
+            <li>· <a href="https://github.com/grebmann1/zana" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">GitHub repository</a> — issues, profiles, contributions.</li>
           </ul>
         </section>
 

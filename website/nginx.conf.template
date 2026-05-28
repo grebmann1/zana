@@ -4,6 +4,12 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
+  # Heroku terminates TLS at the router and forwards to the dyno on a dynamic
+  # internal port. Without these, nginx leaks that port in trailing-slash
+  # redirects (e.g. http://host:57745/docs/).
+  absolute_redirect off;
+  port_in_redirect off;
+
   # Gzip
   gzip on;
   gzip_types text/plain text/css application/javascript application/json image/svg+xml;

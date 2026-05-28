@@ -7,7 +7,7 @@ const groups = [
   {
     label: 'Orchestration',
     features: [
-      { title: 'Agent profiles', body: '11 built-ins ship in core: architect, backend-dev, frontend-dev, code-reviewer, debugger, doc-generator, researcher, security-reviewer, test-writer, ux-designer, api-designer. Add your own under ~/.zana/profiles/.' },
+      { title: 'Agent profiles', body: '14 built-ins ship in core: architect, backend-dev, frontend-dev, code-reviewer, debugger, doc-generator, full-auto-coder, orchestrator, researcher, security-reviewer, swarm-master, swarm-orchestrator, test-writer, ux-designer. Add your own under ~/.zana/profiles/.' },
       { title: 'Topologies', body: 'Pipeline, fan-out, supervisor, and hierarchical-mesh. The right shape for sequential dependencies, independent parallel work, or ongoing coordination.' },
       { title: 'Headless by default', body: 'Workers run without UI. Scriptable, CI-friendly. Spawn from Claude Code, the CLI, an MCP client, or another Zana daemon.' },
       { title: 'SendMessage coordination', body: 'Named agents message each other directly. No polling, no shared mutable state, no lost hand-offs.' },
@@ -17,22 +17,34 @@ const groups = [
     label: 'Decision-making',
     features: [
       { title: 'Bounded deliberation', body: 'Multiple voters examine a decision; dissent preserved; verdict synthesized; full audit trail. Sibling primitive to Team and Autopilot.' },
+      { title: 'Async-by-default voting', body: 'zana_deliberate returns immediately with a deliberation id; poll for status. Snap-judgment voter prompts cut latency from ~520s to ~65s on real Claude.' },
       { title: 'Goal-driven autopilot', body: 'Define success criteria + a step sequence. The autopilot loops, evaluates, retries, and stops on either success or budget exhaustion.' },
       { title: 'Override paths', body: 'Every verdict carries an override. Human-in-the-loop is a feature, not a fallback.' },
     ],
   },
   {
-    label: 'Operations',
+    label: 'Scheduling',
     features: [
-      { title: 'YAML schedules', body: 'Persistent cron and interval triggers. Spawn agents, run commands, fire teams. Survives daemon restarts.' },
-      { title: '86+ MCP tools', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, and scheduling — all exposed to any MCP-aware tool.' },
-      { title: 'Replayable event bus', body: 'Every spawn, message, ticket transition, and verdict is an event. Replay for debugging or audit.' },
+      { title: 'YAML — one schema, two paths', body: 'Drop a yml into .zana/scheduler/. Drive it through the daemon (cron + interval, full profile support) or through Claude Code\'s /loop (lightweight, no daemon). Same file, same fields.' },
+      { title: 'Daemon path', body: '/zana:schedule:list, /zana:schedule:reload, /zana:schedule:trigger. Survives daemon restarts. Opt-in run history with retain-N policy.' },
+      { title: '/loop path (zana-loop plugin)', body: '/zana:loop:start, /zana:loop:stop, /zana:loop:define. Arms a Claude Code /loop with a sentinel of the form AGENT_LOOP_TICK_zana_<id>. No daemon required.' },
+      { title: 'spawn-agent · command · workflow · mcp_tool', body: 'Four action types. Run a profile, exec a binary array (no shell strings), fire a workflow, or call any MCP tool on a cadence.' },
+    ],
+  },
+  {
+    label: 'Runtime · Operations',
+    features: [
+      { title: 'Pluggable RuntimeAdapter', body: 'Switch the agent runtime via ZANA_RUNTIME. Ships with claude-spawn (default) and an experimental vercel-ai dispatcher. Same MCP surface, same profiles, swappable host.' },
+      { title: '69+ MCP tools', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, deliberation, scheduling — all exposed to any MCP-aware tool.' },
+      { title: 'Replayable event bus', body: 'Every spawn, message, ticket transition, and verdict is an event. Size-based log rotation via ZANA_EVENT_LOG_MAX_BYTES.' },
+      { title: 'Reliability hardening', body: 'Zombie reaper for orphaned agents. Load-throttle starvation fixed, team-start hard gate enforced. Hook-server: error propagation, agent-id validation, graceful drain, 30s handler timeout, fan-out cap.' },
       { title: 'Multi-daemon swarm', body: 'Scale beyond one machine: child daemons, router-broadcast events, cross-daemon ticket dispatch.' },
     ],
   },
   {
     label: 'Extensibility',
     features: [
+      { title: 'Two-plugin marketplace', body: 'zana@zana-marketplace ships orchestration (23 skills). zana-loop@zana-marketplace ships daemon-free scheduling (4 skills). Install one, both, or neither.' },
       { title: 'Pluggable skills', body: 'Inject custom instructions and tools into all agents — without forking core. Per-workspace skill modules.' },
       { title: 'Custom profiles', body: 'Any string is a valid agent type. Define a profile JSON; ship it in your repo; share it across teams.' },
       { title: 'Vector memory', body: 'HNSW-backed pattern memory. After every successful run, store what worked. Before every task, search what came before.' },
@@ -77,8 +89,8 @@ const groups = [
     <div class="mt-10 text-center">
       <h2 class="font-display text-4xl text-forest">Ready to summon the council?</h2>
       <div class="mt-6 flex justify-center gap-3">
-        <a href="/docs" class="btn-primary">Get started</a>
-        <a href="/how-it-works" class="btn-ghost">How it works</a>
+        <a href="/docs/" class="btn-primary">Get started</a>
+        <a href="/how-it-works/" class="btn-ghost">How it works</a>
       </div>
     </div>
   </section>

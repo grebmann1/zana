@@ -1,9 +1,9 @@
 ---
 const links = [
-  { href: '/how-it-works', label: 'How it works' },
-  { href: '/features', label: 'Features' },
-  { href: '/docs', label: 'Docs' },
-  { href: '/about', label: 'About' },
+  { href: '/how-it-works/', label: 'How it works' },
+  { href: '/features/', label: 'Features' },
+  { href: '/docs/', label: 'Docs' },
+  { href: '/about/', label: 'About' },
 ];
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
 ---
@@ -32,7 +32,7 @@ const path = Astro.url.pathname.replace(/\/$/, '') || '/';
         </a>
       ))}
       <a
-        href="https://github.com/grebmann/zana"
+        href="https://github.com/grebmann1/zana"
         target="_blank"
         rel="noopener noreferrer"
         class="btn-primary !py-2 !px-4 text-sm"
@@ -55,7 +55,7 @@ const path = Astro.url.pathname.replace(/\/$/, '') || '/';
           {links.map((l) => (
             <li><a href={l.href} class="block text-forest font-medium">{l.label}</a></li>
           ))}
-          <li><a href="https://github.com/grebmann/zana" target="_blank" rel="noopener noreferrer" class="btn-primary !py-2 !px-4 text-sm">GitHub</a></li>
+          <li><a href="https://github.com/grebmann1/zana" target="_blank" rel="noopener noreferrer" class="btn-primary !py-2 !px-4 text-sm">GitHub</a></li>
         </ul>
       </div>
     </details>

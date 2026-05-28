@@ -17,12 +17,15 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 - `packages/intelligence` — task routing, GOAP planning, vector memory
 - `packages/extras` — settings + plugin loader
 - `packages/mcp` — MCP server exposing zana to Claude Code
-- `plugins/zana/core` — Claude Code plugin (slash command + skills)
+- `plugins/zana/core` — Claude Code plugin (`/zana`, `/zana:autopilot`, `/zana:council`, etc.)
+- `plugins/zana/loop` — Claude Code plugin for lightweight scheduling (`/zana:loop:start|stop|define`, daemon-free)
 
 ## Built-ins
 
 - 14 agent profiles in `packages/core/profiles/`: architect, backend-dev, frontend-dev, test-writer, code-reviewer, debugger, doc-generator, full-auto-coder, ux-designer, researcher, security-reviewer, orchestrator, swarm-master, swarm-orchestrator
 - 1 example module in `packages/core/modules/example/`
+- Two slash-command plugins in the `zana-marketplace` marketplace: `zana@zana-marketplace` (orchestration + daemon-driven schedules) and `zana-loop@zana-marketplace` (lightweight `/loop`-driven schedules — no daemon required)
+- Pluggable agent runtime via `ZANA_RUNTIME`: defaults to `claude-spawn`; experimental `vercel-ai` adapter available
 
 ## Getting started
 
@@ -53,8 +56,12 @@ For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the 6 `zana_swarm
 
 - Tests: 458/458 (45 test files)
 - Recent work:
+  - `zana-loop` plugin: `/zana:loop:start|stop|define` drive `.zana/scheduler/*.yml` via Claude Code's `/loop` — no daemon required
+  - `ZANA_RUNTIME=vercel-ai` dispatcher (Phase 3) + ClaudeSpawnAdapter (Phase 0–1, Phase 2)
+  - Async-by-default `zana_deliberate` — returns immediately, snap-judgment voter prompt cuts latency from ~520s to ~65s, 20-min timeout, `zana_deliberate_cancel`, recovers voter JSON from full transcript
+  - Reliability: zombie reaper for orphaned headless agents, load-throttle starvation fix, team-start hard gate
   - Hook-server hardening (Tier 1+2): error propagation, agentId regex, graceful drain, 30s handler timeout, fan-out cap, jq-safe terminal-id injection
-  - Scheduler `workflow` and `mcp_tool` actions wired
+  - Scheduler `workflow` and `mcp_tool` actions wired; CLI subcommands + 65 unit tests + reload/history endpoints
   - Opt-in run-history with retain-N policy (`history: { enabled, retain }` in YAML)
   - Event log + audit log size-based rotation (`ZANA_EVENT_LOG_MAX_BYTES`)
   - Structured logger module (`packages/core/src/util/logger.ts`)
