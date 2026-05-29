@@ -1,12 +1,17 @@
 {
-  "version": 1,
-  "name": "zana",
-  "createdAt": "2026-05-18T00:00:00.000Z",
-  "createdBy": "zana-init",
+  "modules": {},
   "system": {
+    "initTimeout": 10000,
+    "suspendTimeout": 5000,
+    "hotReload": false,
+    "maxConcurrentAgents": 7,
     "cpuLoadThreshold": 9.99,
+    "cpuLoadHardCap": 2,
     "minFreeMemoryPct": 0,
-    "agentTimeoutMinutes": 4
-  },
-  "modules": {}
+    "agentTimeoutMinutes": 4,
+    "spawnThrottleStreakLimit": 5,
+    "zombieReaperEnabled": true,
+    "zombieReaperIntervalMs": 60000,
+    "zombieReaperGraceMs": 300000
+  }
 }
