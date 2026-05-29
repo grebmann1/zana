@@ -1008,6 +1008,8 @@ function main() {
     "",
     "This file is the source of truth for slash-command authors. Use the documented field names and enum values verbatim — do not guess.",
     "",
+    "Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md`](RECIPES.md) — every recipe there is mirrored by a live Claude integration test under `scripts/qa/`.",
+    "",
     "---",
     "",
   ].join("\n");

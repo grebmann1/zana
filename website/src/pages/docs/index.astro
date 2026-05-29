@@ -12,7 +12,8 @@ const toc = [
   { id: 'loop', label: '6. Lightweight loops (no daemon)' },
   { id: 'runtime', label: '7. Pick a runtime' },
   { id: 'terminal', label: '8. Drive Zana from the terminal' },
-  { id: 'next', label: '9. Where to next' },
+  { id: 'recipes', label: '9. End-to-end recipes' },
+  { id: 'next', label: '10. Where to next' },
 ];
 ---
 
@@ -177,8 +178,147 @@ zana migrate /path/to/workspace`}</CodeBlock>
           <p class="mt-3 text-moss">Two binaries are installed: <code class="rounded bg-parchment px-1.5 py-0.5">zana</code> (top-level dispatcher) and <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon</code> (the long-lived process). The daemon also exposes <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon service install</code> (launchd/systemd) and <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon plugin link &lt;path&gt;</code> for plugin development. Full reference: <a href="https://github.com/grebmann1/zana/blob/main/INSTALL.md#terminal-cli-reference" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">INSTALL.md</a>.</p>
         </section>
 
+        <section id="recipes">
+          <h2 class="font-display text-3xl text-forest">9. End-to-end recipes</h2>
+          <p class="mt-2 text-moss">
+            Four recipes that walk a primitive end-to-end. Every one of them is mirrored by a live integration test under <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/</code> that spawns real Claude Code workers and asserts the full lifecycle. If a recipe drifts, the test fails. Full text: <a href="https://github.com/grebmann1/zana/blob/main/docs/RECIPES.md" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">docs/RECIPES.md</a>.
+          </p>
+
+          <h3 class="mt-8 font-display text-xl text-forest">Recurring agent on a schedule</h3>
+          <p class="mt-2 text-moss">Drop a YAML file in <code class="rounded bg-parchment px-1.5 py-0.5">.zana/scheduler/</code>, reload, trigger. The MCP tool returns immediately on spawn — the agent runs detached on the daemon and lands in history when done.</p>
+          <div class="mt-4">
+            <CodeBlock caption=".zana/scheduler/qa-spawn.yml" lang="yaml">{`id: qa-spawn
+name: QA spawn-agent schedule
+enabled: true
+schedule:
+  every: 24h          # or 5m, 1h, 2d — or cron: "0 2 * * *" (daemon-only)
+action:
+  type: spawn-agent
+  profileId: researcher
+  prompt: "Reply with the single word: PONG"
+history:
+  enabled: true
+  retain: 5`}</CodeBlock>
+          </div>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · MCP" lang="text">{`zana_schedule_trigger({ scheduleId: "qa-spawn" })
+// → { ok: true, result: { status: "success", agentId, finalStatus: "pending" } }
+
+// poll until terminated
+zana_list_agents({})
+zana_agent_result({ agentId })
+// → { completed: true, state: "terminated", result: "PONG" }`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Live test: <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-scheduler-agent-live.sh</code> — 4/4 passing.</p>
+
+          <h3 class="mt-10 font-display text-xl text-forest">Ticket-driven worker</h3>
+          <p class="mt-2 text-moss">Create → claim → spawn worker → complete. Every transition is auditable on the ticket record. Priority enum is <code class="rounded bg-parchment px-1.5 py-0.5">critical|high|medium|low</code> (not P0/P1), and initial status is always <code class="rounded bg-parchment px-1.5 py-0.5">backlog</code>.</p>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · MCP" lang="text">{`zana_ticket_create({
+  title: "QA-live: confirm PONG",
+  description: "Reply with PONG to confirm.",
+  priority: "low"
+})
+// → { id, status: "backlog", … }
+
+zana_ticket_claim({ ticketId, agentId, agentName: "QA Live" })
+zana_spawn_agent({ profileId: "researcher", prompt: "Reply with the single word: PONG" })
+
+// poll agent until state==="terminated", then:
+zana_ticket_complete({
+  ticketId,
+  resultSummary: "Worker confirmed: PONG",
+  completedBy: agentId
+})
+// → { ok: true, status: "done" }`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Live test: <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-ticket-live.sh</code> — 7/7 passing.</p>
+
+          <h3 class="mt-10 font-display text-xl text-forest">Goal-driven autopilot</h3>
+          <p class="mt-2 text-moss">Submit a goal with ordered steps and success criteria. Autopilot runs each step, an evaluator agent judges the criteria, then either settles or kicks off another iteration (default cap: 5).</p>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · MCP" lang="text">{`zana_autopilot_goal_driven({
+  title: "Confirm two-step sequence",
+  criteria: "Each step produced a non-empty answer.",
+  steps: [
+    { profile: "researcher", prompt: "Reply with: STEP1-OK" },
+    { profile: "researcher", prompt: "Reply with: STEP2-OK" }
+  ]
+})
+// → { goalId, status: "running" }
+
+// poll
+zana_autopilot_goal_status({ goalId })
+// → { status, iteration, results: [...], lastEvaluation: "VERDICT: PASS" | "VERDICT: FAIL\\nReason: …" }
+
+// cancel anytime
+zana_autopilot_goal_cancel({ goalId })`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Live test: <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-autopilot-live.sh</code> — 6/6 passing.</p>
+
+          <h3 class="mt-10 font-display text-xl text-forest">One-shot query and deliberation</h3>
+          <p class="mt-2 text-moss">For small throwaway questions: <code class="rounded bg-parchment px-1.5 py-0.5">zana_oneshot_query</code>. For high-stakes decisions: <code class="rounded bg-parchment px-1.5 py-0.5">zana_deliberate</code> — multiple voters, dissent preserved verbatim, settle-or-escalate.</p>
+          <div class="mt-4">
+            <CodeBlock caption="claude code · MCP" lang="text">{`// fast path
+zana_oneshot_query({
+  profileId: "researcher",
+  prompt: "Summarize this file in one sentence.",
+  timeout: 90000
+})
+// → "..."
+
+// council path
+zana_deliberate({
+  question: "Should we drop Node 18 support in v2.0?",
+  voters: ["architect", "security-reviewer", "researcher"],
+  rounds: 3,
+  riskTag: "high"
+})
+// → { id, state: "PROPOSED", _outcome: "running" }
+
+zana_deliberation_status({ deliberationId: id })
+// → { state: "SETTLED" | "ESCALATED", verdict, voters }`}</CodeBlock>
+          </div>
+          <p class="mt-3 text-moss">Live test: <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-runtime.sh</code> — 2/2 passing (oneshot returns PONG; cheap deliberation snap proves real Claude voters run end-to-end).</p>
+
+          <h3 class="mt-10 font-display text-xl text-forest">More primitives in the full recipes file</h3>
+          <p class="mt-2 text-moss">
+            Beyond the four headline recipes, <a href="https://github.com/grebmann1/zana/blob/main/docs/RECIPES.md" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">RECIPES.md</a> covers the full surface — every primitive below has a copy-paste-ready example with literal MCP arguments.
+          </p>
+          <ul class="mt-3 grid gap-x-6 gap-y-1.5 text-sm text-moss md:grid-cols-2">
+            <li>· <strong>Teams</strong> — orchestrator + workers in one call</li>
+            <li>· <strong>Sprints</strong> — group tickets, kanban board read</li>
+            <li>· <strong>Schedule action types</strong> — <code class="rounded bg-parchment px-1 py-0.5">command</code>, <code class="rounded bg-parchment px-1 py-0.5">workflow</code>, <code class="rounded bg-parchment px-1 py-0.5">mcp_tool</code></li>
+            <li>· <strong>Workflows</strong> — multi-step skills with templated args</li>
+            <li>· <strong>Inter-agent messaging</strong> — typed messages, ack-required, inbox</li>
+            <li>· <strong>Vector memory</strong> — HNSW store + tagged search</li>
+            <li>· <strong>Channels &amp; events</strong> — pub/sub topics, replayable bus</li>
+            <li>· <strong>Profiles &amp; skills</strong> — runtime CRUD</li>
+            <li>· <strong>Module config</strong> — tune autopilot &amp; deliberation live</li>
+            <li>· <strong>Checkpoints</strong> — named, resumable points inside a run</li>
+            <li>· <strong>Multi-daemon swarm</strong> — spawn child daemons, broadcast, route</li>
+            <li>· <strong>Validated spawn</strong> — output guardrails + auto-retry</li>
+            <li>· <strong>Artifacts</strong> — versioned shared planning docs</li>
+          </ul>
+
+          <h3 class="mt-10 font-display text-xl text-forest">Run the live tests yourself</h3>
+          <p class="mt-2 text-moss">Every recipe above is exercised by a real-Claude smoke test. They cost real tokens (no mocks) but are hermetic — temp workspace + isolated daemon registry.</p>
+          <div class="mt-4">
+            <CodeBlock caption="terminal" lang="bash">{`# preconditions: \`claude\` CLI on PATH and logged in, repo built
+npm run build
+
+bash scripts/qa/run-runtime.sh                 # oneshot + deliberation
+bash scripts/qa/run-scheduler-agent-live.sh    # schedule fires real worker
+bash scripts/qa/run-ticket-live.sh             # ticket lifecycle
+bash scripts/qa/run-autopilot-live.sh          # goal-driven loop
+
+# or all four (kills stale daemons between suites)
+bash scripts/qa/run-live-all.sh`}</CodeBlock>
+          </div>
+        </section>
+
         <section id="next">
-          <h2 class="font-display text-3xl text-forest">9. Where to next</h2>
+          <h2 class="font-display text-3xl text-forest">10. Where to next</h2>
           <ul class="mt-3 space-y-2 text-moss">
             <li>· <a href="/how-it-works/" class="text-forest hover:text-berry">How it works</a> — primitives in depth.</li>
             <li>· <a href="/features/" class="text-forest hover:text-berry">All features</a> — the full surface area.</li>
