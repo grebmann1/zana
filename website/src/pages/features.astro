@@ -19,6 +19,7 @@ const groups = [
       { title: 'Bounded deliberation', body: 'Multiple voters examine a decision; dissent preserved; verdict synthesized; full audit trail. Sibling primitive to Team and Autopilot.' },
       { title: 'Async-by-default voting', body: 'zana_deliberate returns immediately with a deliberation id; poll for status. Snap-judgment voter prompts cut latency from ~520s to ~65s on real Claude.' },
       { title: 'Goal-driven autopilot', body: 'Define success criteria + a step sequence. The autopilot loops, evaluates, retries, and stops on either success or budget exhaustion.' },
+      { title: 'Auto-judge for deadlocks', body: 'Pass escalationStrategy: "judge" (or "hybrid") and a deadlocked council is settled by a single judge agent that reads the transcript and emits a verdict. riskTag: "high" still routes to a human. verdictSource on the record marks "council" | "judge" | "human".' },
       { title: 'Override paths', body: 'Every verdict carries an override. Human-in-the-loop is a feature, not a fallback.' },
     ],
   },
@@ -35,7 +36,7 @@ const groups = [
     label: 'Runtime · Operations',
     features: [
       { title: 'Pluggable RuntimeAdapter', body: 'Switch the agent runtime via ZANA_RUNTIME. Ships with claude-spawn (default) and an experimental vercel-ai dispatcher. Same MCP surface, same profiles, swappable host.' },
-      { title: '69+ MCP tools', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, deliberation, scheduling — all exposed to any MCP-aware tool.' },
+      { title: '91 MCP tools', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, deliberation, scheduling — all exposed to any MCP-aware tool. Full reference auto-generated from handler sources.' },
       { title: 'Replayable event bus', body: 'Every spawn, message, ticket transition, and verdict is an event. Size-based log rotation via ZANA_EVENT_LOG_MAX_BYTES.' },
       { title: 'Reliability hardening', body: 'Zombie reaper for orphaned agents. Load-throttle starvation fixed, team-start hard gate enforced. Hook-server: error propagation, agent-id validation, graceful drain, 30s handler timeout, fan-out cap.' },
       { title: 'Multi-daemon swarm', body: 'Scale beyond one machine: child daemons, router-broadcast events, cross-daemon ticket dispatch.' },

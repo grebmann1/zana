@@ -1,0 +1,94 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import CodeBlock from '../../../../components/CodeBlock.astro';
+import DocsSubnav from '../../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../../components/MythicDivider.astro';
+---
+
+<BaseLayout
+  title="Recipe · Ticket-driven worker"
+  description="Create → claim → spawn worker → complete. Every transition is auditable on the ticket record."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="text-sm text-moss">
+      <a href="/docs/recipes/" class="hover:text-forest">← All recipes</a>
+    </p>
+    <p class="ornament mt-4 text-xs text-gold">— ticket-driven worker —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Ticket → worker → done.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      The <strong>ticket</strong> is Zana's unit of dispatch. Create one with
+      a sized scope, spawn a worker against it, complete it when finished.
+      Every transition is auditable on the ticket record. Initial status is
+      always <code class="rounded bg-parchment px-1.5 py-0.5">backlog</code>;
+      priority is <code class="rounded bg-parchment px-1.5 py-0.5">critical|high|medium|low</code>
+      (not P0/P1).
+    </p>
+
+    <article class="prose-zana mt-12 max-w-prose space-y-10">
+      <section>
+        <h2 class="font-display text-2xl text-forest">The full lifecycle</h2>
+        <CodeBlock caption="claude code · MCP" lang="text">{`zana_ticket_create({
+  title: "QA-live: confirm PONG",
+  description: "Reply with PONG to confirm.",
+  priority: "low"
+})
+// → { id: "tkt_abc", status: "backlog", … }
+
+zana_ticket_claim({
+  ticketId: "tkt_abc",
+  agentId: "ag_42",
+  agentName: "QA Live"
+})
+// → { ok: true, status: "in_progress" }
+
+zana_spawn_agent({
+  profileId: "researcher",
+  prompt: "Reply with the single word: PONG"
+})
+// → { agentId: "ag_42" }
+
+// poll agent until state==="terminated", then:
+zana_ticket_complete({
+  ticketId: "tkt_abc",
+  resultSummary: "Worker confirmed: PONG",
+  completedBy: "ag_42"
+})
+// → { ok: true, status: "done" }`}</CodeBlock>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Why a ticket?</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          A ticket is a <em>contract</em>: a sized scope, a status the daemon
+          can reason about, and an audit trail every step of the way. Zana
+          will refuse to spawn a worker against a ticket that's already
+          <code class="rounded bg-parchment px-1.5 py-0.5">done</code>, and
+          listing tickets gives you a kanban-shaped view of what every agent
+          in the workspace is currently doing.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Live test</h2>
+        <p class="mt-2 text-moss">
+          Every line above is asserted end-to-end against real Claude in
+          <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-ticket-live.sh</code>
+          — currently 7/7 passing.
+        </p>
+      </section>
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Next</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <a href="/docs/recipes/scheduled-agent/" class="text-forest hover:text-berry">Scheduled agent</a> — run a worker on a cron/interval.</li>
+          <li>· <a href="/docs/recipes/autopilot/" class="text-forest hover:text-berry">Goal-driven autopilot</a> — chain workers behind a success criterion.</li>
+          <li>· <a href="https://github.com/grebmann1/zana/blob/main/docs/RECIPES.md#tickets" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">Full ticket recipe in RECIPES.md</a></li>
+        </ul>
+      </section>
+    </article>
+  </section>
+</BaseLayout>

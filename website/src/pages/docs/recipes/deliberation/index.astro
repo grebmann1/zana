@@ -1,0 +1,154 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import CodeBlock from '../../../../components/CodeBlock.astro';
+import DocsSubnav from '../../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../../components/MythicDivider.astro';
+---
+
+<BaseLayout
+  title="Recipe · Deliberation (with optional auto-judge)"
+  description="Multi-voter consensus with dissent preserved verbatim. Pass escalationStrategy: 'judge' to settle deadlocks without a human."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="text-sm text-moss">
+      <a href="/docs/recipes/" class="hover:text-forest">← All recipes</a>
+    </p>
+    <p class="ornament mt-4 text-xs text-gold">— deliberation —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Deliberation.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      For high-stakes decisions: spawn multiple voters, preserve dissent
+      verbatim, get a verdict with a full audit trail. The deliberation can
+      <strong>settle</strong> (consensus reached), <strong>escalate</strong>
+      (council deadlocked), or <strong>be judged</strong> by a single judge
+      agent that reads the transcript and decides.
+    </p>
+
+    <article class="prose-zana mt-12 max-w-prose space-y-10">
+      <section>
+        <h2 class="font-display text-2xl text-forest">Run a council</h2>
+        <CodeBlock caption="claude code · MCP" lang="text">{`zana_deliberate({
+  question: "Should we drop Node 18 support in v2.0?",
+  voters: ["architect", "security-reviewer", "researcher"],
+  rounds: 3,
+  riskTag: "high"
+})
+// → { id: "delib_abc", state: "PROPOSED", _outcome: "running" }
+
+zana_deliberation_status({ deliberationId: "delib_abc" })
+// → {
+//     state: "SETTLED" | "ESCALATED",
+//     verdict: "approve" | "reject" | "rework",
+//     verdictSource: "council" | "judge" | "human",
+//     voters: [{ profileId, bit, rationaleHash }, …]
+//   }`}</CodeBlock>
+        <p class="mt-3 text-moss">
+          <code class="rounded bg-parchment px-1.5 py-0.5">zana_deliberate</code> is async by
+          default — it returns a deliberation id immediately. Pass
+          <code class="rounded bg-parchment px-1.5 py-0.5">wait: true</code> if you'd rather block
+          on the result.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Auto-judge: settle deadlocks without a human</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          When the council can't reach consensus, the deliberation lands on
+          <code class="rounded bg-parchment px-1.5 py-0.5">ESCALATED</code> and waits for a
+          human override. In autopilot or scheduled contexts where nothing is watching,
+          that means the work stalls. The <strong>auto-judge</strong> path resolves it.
+        </p>
+        <CodeBlock caption="claude code · MCP" lang="text">{`zana_deliberate({
+  question: "Adopt feature flag for rollout?",
+  voters: ["architect", "security-reviewer", "performance-engineer"],
+  rounds: 2,
+  escalationStrategy: "judge"   // or "hybrid" — see below
+})
+
+// when the council deadlocks:
+zana_deliberation_status({ deliberationId })
+// → {
+//     state: "SETTLED",
+//     verdict: "approve",
+//     verdictSource: "judge",
+//     override: { humanId: "judge:judge", decision: "approve", reasonHash, … },
+//     _outcome: "judged"
+//   }`}</CodeBlock>
+
+        <h3 class="mt-6 font-display text-lg text-forest">Strategies</h3>
+        <div class="mt-3 overflow-x-auto rounded-xl border border-forest/15">
+          <table class="w-full text-sm">
+            <thead class="bg-parchment/60 text-forest">
+              <tr>
+                <th class="px-4 py-3 text-left font-semibold"><code class="rounded bg-cream px-1 py-0.5">escalationStrategy</code></th>
+                <th class="px-4 py-3 text-left font-semibold">Behavior on deadlock</th>
+              </tr>
+            </thead>
+            <tbody class="text-moss">
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top"><code class="rounded bg-parchment px-1 py-0.5">"human"</code> <span class="text-xs text-gold">(default)</span></td>
+                <td class="px-4 py-3 align-top">Stays ESCALATED. Waits for <code class="rounded bg-parchment px-1 py-0.5">zana_deliberation_override</code>.</td>
+              </tr>
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top"><code class="rounded bg-parchment px-1 py-0.5">"judge"</code></td>
+                <td class="px-4 py-3 align-top">Spawns the judge agent unconditionally <em>(except riskTag: "high" — see below)</em>.</td>
+              </tr>
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top"><code class="rounded bg-parchment px-1 py-0.5">"hybrid"</code></td>
+                <td class="px-4 py-3 align-top">Judge for low/medium risk; human for high. The pragmatic default for autopilot use.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 rounded-xl border-l-4 border-berry bg-berry/5 p-4">
+          <p class="text-sm text-ink/85"><strong>High-risk always routes to a human.</strong> Even with <code class="rounded bg-cream px-1 py-0.5">escalationStrategy: "judge"</code>, a deliberation tagged <code class="rounded bg-cream px-1 py-0.5">riskTag: "high"</code> stays ESCALATED until a human overrides. This is a hard gate — by design.</p>
+        </div>
+
+        <h3 class="mt-6 font-display text-lg text-forest">What the judge actually does</h3>
+        <ol class="mt-3 list-decimal space-y-2 pl-6 text-moss">
+          <li>Loads the full transcript: question, escalation reason, every voter's rationale, dissent verbatim, round-by-round tallies.</li>
+          <li>Spawns a single one-shot agent against the dedicated <code class="rounded bg-parchment px-1.5 py-0.5">judge</code> profile.</li>
+          <li>Parses <code class="rounded bg-parchment px-1.5 py-0.5">VERDICT: approve | reject | rework</code> from the output.</li>
+          <li>Calls <code class="rounded bg-parchment px-1.5 py-0.5">recordOverride</code> with <code class="rounded bg-parchment px-1.5 py-0.5">humanId: "judge:&lt;profileId&gt;"</code>, landing the deliberation on SETTLED with <code class="rounded bg-parchment px-1.5 py-0.5">verdictSource: "judge"</code>.</li>
+        </ol>
+        <p class="mt-3 text-moss">
+          If the judge crashes or emits malformed output, the deliberation
+          stays ESCALATED and <code class="rounded bg-parchment px-1.5 py-0.5">_judgeError</code>
+          surfaces in the response so a human can take over.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Provenance: <code class="rounded bg-parchment px-1.5 py-0.5">verdictSource</code></h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          Every settled deliberation carries a <code class="rounded bg-parchment px-1.5 py-0.5">verdictSource</code> field for audit clarity:
+        </p>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">"council"</code> — the voters reached consensus on their own.</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">"judge"</code> — auto-judge resolved a deadlock.</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">"human"</code> — a human override (escalation or post-settle correction).</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Live test</h2>
+        <p class="mt-2 text-moss">
+          <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-runtime.sh</code>
+          — 2/2 passing. The cheap deliberation snap proves real Claude voters run end-to-end.
+        </p>
+      </section>
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Next</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <a href="/docs/recipes/autopilot/" class="text-forest hover:text-berry">Goal-driven autopilot</a> — pair with <code class="rounded bg-parchment px-1.5 py-0.5">"hybrid"</code> deliberation as a build-step.</li>
+          <li>· <a href="https://github.com/grebmann1/zana/blob/main/docs/RECIPES.md#deliberation" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">Full deliberation recipe in RECIPES.md</a></li>
+        </ul>
+      </section>
+    </article>
+  </section>
+</BaseLayout>

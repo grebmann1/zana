@@ -1,0 +1,83 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import DocsSubnav from '../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../components/MythicDivider.astro';
+---
+
+<BaseLayout
+  title="Docs · CLI reference"
+  description="Drive Zana from the terminal. Useful for scripting, CI, ops, or any context where Claude Code isn't running."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="ornament text-xs text-gold">— terminal cli —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Drive Zana from the terminal.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      Everything you can do through Claude slash commands has a CLI mirror.
+      Useful for scripting, CI, ops, or any context where Claude Code isn't
+      running. After <code class="rounded bg-parchment px-1.5 py-0.5">scripts/install.sh</code>,
+      the <code class="rounded bg-parchment px-1.5 py-0.5">zana</code> binary
+      is on your <code class="rounded bg-parchment px-1.5 py-0.5">PATH</code>.
+    </p>
+
+    <article class="prose-zana mt-12 max-w-prose space-y-10">
+      <section>
+        <h2 class="font-display text-2xl text-forest">The two binaries</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana</code> — top-level dispatcher. Subcommands cover bootstrap, ticket and run management, scheduling, config.</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon</code> — the long-lived process. Also exposes <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon service install</code> (launchd/systemd) and <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon plugin link &lt;path&gt;</code> for plugin development.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Common subcommands</h2>
+        <CodeBlock caption="terminal · zana CLI" lang="bash">{`zana --help                            # full subcommand list
+
+# bootstrap
+zana init wizard /path/to/workspace --repair-mcp
+
+# daemon control
+zana headless /path/to/workspace --background     # fork daemon (port 47402)
+zana status                                        # list running daemons
+zana stop --all                                    # stop every daemon
+
+# work-tracking (need a running daemon)
+zana ticket list --status backlog
+zana ticket rules list
+zana run list --limit 10
+
+# scheduling (live with a daemon, also reads disk)
+zana schedule list --json
+zana schedule trigger code-and-docs-audit
+zana schedule history code-and-docs-audit -n 5
+zana schedule disable-all && zana schedule reload
+
+# config + migrations
+zana config list
+zana config get system
+zana config set system maxConcurrentAgents 12
+zana migrate /path/to/workspace`}</CodeBlock>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Full reference</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          The complete subcommand reference (every flag, every output shape) lives in
+          <a href="https://github.com/grebmann1/zana/blob/main/INSTALL.md#terminal-cli-reference" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">INSTALL.md → Terminal CLI reference</a>.
+        </p>
+      </section>
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Next</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <a href="/docs/recipes/" class="text-forest hover:text-berry">Recipes</a> — copy-paste examples for the MCP surface.</li>
+          <li>· <a href="/docs/concepts/" class="text-forest hover:text-berry">Concepts</a> — deliberation, schedules, runtime adapter.</li>
+        </ul>
+      </section>
+    </article>
+  </section>
+</BaseLayout>

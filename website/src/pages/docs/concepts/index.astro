@@ -1,0 +1,121 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import DocsSubnav from '../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../components/MythicDivider.astro';
+---
+
+<BaseLayout
+  title="Docs · Concepts"
+  description="Deliberation, schedules, /loop vs daemon, runtime adapter — the building blocks behind Zana's recipes."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="ornament text-xs text-gold">— concepts —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Concepts.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      The building blocks behind the recipes. Read these when you want to
+      understand <em>why</em> a primitive shapes the way it does — not how to
+      call it (that's <a href="/docs/recipes/" class="text-forest hover:text-berry font-semibold">Recipes</a>).
+    </p>
+
+    <article class="prose-zana mt-12 max-w-prose space-y-12">
+      <section>
+        <h2 class="font-display text-3xl text-forest">Deliberation</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          Zana's deliberation is a bounded multi-voter judgement primitive — not a
+          chat group. Voters run in parallel, each emit a single
+          <code class="rounded bg-parchment px-1.5 py-0.5">APPROVE</code> or
+          <code class="rounded bg-parchment px-1.5 py-0.5">CHANGES</code> bit plus a rationale,
+          and the engine checks unanimity within the latest round (not majority — a 2A/1C at
+          cap correctly escalates rather than papering over the dissent).
+        </p>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <strong>States:</strong> PROPOSED → REVIEWING → SYNTHESIZING → CONVERGING → SETTLED | ESCALATED | EXHAUSTED.</li>
+          <li>· <strong>Dissent</strong> is preserved verbatim into the synthesis report.</li>
+          <li>· <strong>Audit:</strong> every rationale is content-addressed; every transition is replayable from the event log.</li>
+          <li>· <strong>Auto-judge</strong> resolves deadlocks without a human when <code class="rounded bg-parchment px-1.5 py-0.5">escalationStrategy: "judge" | "hybrid"</code> is set. <code class="rounded bg-parchment px-1.5 py-0.5">riskTag: "high"</code> still routes to a human regardless.</li>
+        </ul>
+        <p class="mt-3 text-moss">→ <a href="/docs/recipes/deliberation/" class="text-forest hover:text-berry font-semibold">Deliberation recipe</a></p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-3xl text-forest">Schedules — daemon vs <code class="rounded bg-parchment px-1.5 py-0.5">/loop</code></h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          One YAML schema, two execution paths. Drop a yml into
+          <code class="rounded bg-parchment px-1.5 py-0.5">.zana/scheduler/</code> and pick how
+          to drive it:
+        </p>
+        <div class="mt-4 overflow-x-auto rounded-xl border border-forest/15">
+          <table class="w-full text-sm">
+            <thead class="bg-parchment/60 text-forest">
+              <tr>
+                <th class="px-4 py-3 text-left font-semibold"></th>
+                <th class="px-4 py-3 text-left font-semibold">Daemon</th>
+                <th class="px-4 py-3 text-left font-semibold"><code class="rounded bg-cream px-1 py-0.5">/loop</code></th>
+              </tr>
+            </thead>
+            <tbody class="text-moss">
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top font-semibold">Cadence</td>
+                <td class="px-4 py-3 align-top"><code class="rounded bg-parchment px-1 py-0.5">cron</code> + <code class="rounded bg-parchment px-1 py-0.5">every</code></td>
+                <td class="px-4 py-3 align-top"><code class="rounded bg-parchment px-1 py-0.5">every</code> only — refuses cron</td>
+              </tr>
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top font-semibold">Lifetime</td>
+                <td class="px-4 py-3 align-top">Long-lived process, survives Claude restarts</td>
+                <td class="px-4 py-3 align-top">Lives inside one Claude Code session</td>
+              </tr>
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top font-semibold">History</td>
+                <td class="px-4 py-3 align-top">Full retention with <code class="rounded bg-parchment px-1 py-0.5">retain: N</code></td>
+                <td class="px-4 py-3 align-top">Session-scoped</td>
+              </tr>
+              <tr class="border-t border-forest/10">
+                <td class="px-4 py-3 align-top font-semibold">Setup</td>
+                <td class="px-4 py-3 align-top"><code class="rounded bg-parchment px-1 py-0.5">zana headless --background</code></td>
+                <td class="px-4 py-3 align-top">Just <code class="rounded bg-parchment px-1 py-0.5">/zana:loop:start</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-3 text-moss">→ <a href="/docs/recipes/scheduled-agent/" class="text-forest hover:text-berry font-semibold">Scheduled agent recipe</a></p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-3xl text-forest">Runtime adapter</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          Zana speaks to multiple agent runtimes through a single
+          <code class="rounded bg-parchment px-1.5 py-0.5">RuntimeAdapter</code> interface.
+          Profiles, tickets, deliberation, and the MCP surface all stay identical regardless
+          of which runtime is actually spawning the worker — that's the seam.
+        </p>
+        <CodeBlock caption="terminal" lang="bash">{`# default — spawns agents the way Claude Code does
+ZANA_RUNTIME=claude-spawn zana headless /path/to/workspace --background
+
+# experimental — Vercel AI SDK dispatcher (Phase 3)
+ZANA_RUNTIME=vercel-ai zana headless /path/to/workspace --background`}</CodeBlock>
+      </section>
+
+      <section>
+        <h2 class="font-display text-3xl text-forest">Tickets — the unit of dispatch</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          A ticket is a sized scope: small enough to fit inside one agent's context (with margin
+          for tools and tests), independent enough to be claimed in parallel, verifiable enough
+          to mark <code class="rounded bg-parchment px-1.5 py-0.5">done</code> without ambiguity.
+          Every status transition is auditable; every claim is exclusive; every completion
+          carries a result summary.
+        </p>
+        <p class="mt-3 text-moss">→ <a href="/docs/recipes/ticket-worker/" class="text-forest hover:text-berry font-semibold">Ticket-worker recipe</a></p>
+      </section>
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">More</h2>
+        <p class="mt-2 text-moss">For the full primitive surface — sprints, workflows, vector memory, channels, profiles, skills, checkpoints, multi-daemon swarm, validated spawn, artifacts — see <a href="/how-it-works/" class="text-forest hover:text-berry font-semibold">How it works</a> and the auto-generated <a href="https://github.com/grebmann1/zana/blob/main/docs/MCP-TOOL-REFERENCE.md" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">MCP tool reference</a>.</p>
+      </section>
+    </article>
+  </section>
+</BaseLayout>

@@ -1,0 +1,86 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import CodeBlock from '../../../../components/CodeBlock.astro';
+import DocsSubnav from '../../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../../components/MythicDivider.astro';
+---
+
+<BaseLayout
+  title="Recipe · Goal-driven autopilot"
+  description="Submit a goal with ordered steps and success criteria. Autopilot loops, evaluates, retries until settled or budget exhausted."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="text-sm text-moss">
+      <a href="/docs/recipes/" class="hover:text-forest">← All recipes</a>
+    </p>
+    <p class="ornament mt-4 text-xs text-gold">— autopilot —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Goal-driven autopilot.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      Hand the loop a <strong>goal</strong> with ordered steps and a
+      <strong>success criterion</strong>. Autopilot runs each step, an
+      evaluator agent judges the criterion against the results, then either
+      settles or kicks off another iteration (default cap: 5).
+    </p>
+
+    <article class="prose-zana mt-12 max-w-prose space-y-10">
+      <section>
+        <h2 class="font-display text-2xl text-forest">Submit a goal</h2>
+        <CodeBlock caption="claude code · MCP" lang="text">{`zana_autopilot_goal_driven({
+  title: "Confirm two-step sequence",
+  criteria: "Each step produced a non-empty answer.",
+  steps: [
+    { profile: "researcher", prompt: "Reply with: STEP1-OK" },
+    { profile: "researcher", prompt: "Reply with: STEP2-OK" }
+  ]
+})
+// → { goalId: "goal_xyz", status: "running" }`}</CodeBlock>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Poll for status</h2>
+        <CodeBlock caption="claude code · MCP" lang="text">{`zana_autopilot_goal_status({ goalId: "goal_xyz" })
+// → {
+//     status: "running" | "settled" | "exhausted",
+//     iteration: 1,
+//     results: ["STEP1-OK", "STEP2-OK"],
+//     lastEvaluation: "VERDICT: PASS"
+//   }
+
+// cancel anytime
+zana_autopilot_goal_cancel({ goalId: "goal_xyz" })
+// → { ok: true }`}</CodeBlock>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">How the loop terminates</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <strong>Settled</strong> — evaluator returns <code class="rounded bg-parchment px-1.5 py-0.5">VERDICT: PASS</code>.</li>
+          <li>· <strong>Exhausted</strong> — iteration cap hit without a PASS. The goal record carries every iteration's results and rationale for review.</li>
+          <li>· <strong>Cancelled</strong> — <code class="rounded bg-parchment px-1.5 py-0.5">goal_cancel</code> fires; in-flight steps are killed.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Live test</h2>
+        <p class="mt-2 text-moss">
+          <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-autopilot-live.sh</code>
+          — 6/6 passing against real Claude. Asserts both PASS and FAIL paths and that the
+          history record matches what the MCP tool returned.
+        </p>
+      </section>
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Next</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <a href="/docs/recipes/deliberation/" class="text-forest hover:text-berry">Deliberation</a> — multi-voter judgement when the goal is a <em>decision</em>, not a sequence.</li>
+          <li>· <a href="/docs/recipes/scheduled-agent/" class="text-forest hover:text-berry">Scheduled agent</a> — fire goals on a cron.</li>
+          <li>· <a href="https://github.com/grebmann1/zana/blob/main/docs/RECIPES.md#autopilot" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">Full autopilot recipe in RECIPES.md</a></li>
+        </ul>
+      </section>
+    </article>
+  </section>
+</BaseLayout>
