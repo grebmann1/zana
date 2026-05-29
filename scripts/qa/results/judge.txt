@@ -1,0 +1,9 @@
+J1   PASS  judge resolved escalation: state=SETTLED verdictSource=judge humanId=judge:judge
+J2   PASS  high-risk bypassed judge: state=ESCALATED verdictSource=undefined outcome=escalated
+J3   PASS  hybrid strategy invoked judge: state=SETTLED verdictSource=judge
+
+=== SUMMARY ===
+PASS: 3
+FAIL: 0
+SKIP: 0
+TOTAL: 3
