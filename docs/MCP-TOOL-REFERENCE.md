@@ -585,13 +585,14 @@ _No input parameters._
 
 ## zana_deliberate
 
-**Description:** Start a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. Each voter is an independent agent with its own profile/model. Dissent is preserved verbatim across EVERY round. Default behavior: returns IMMEDIATELY with the proposed deliberation record (state=PROPOSED, _outcome='running'). Real-Claude voters can take 5-10 min each; the orchestration loop runs detached on the daemon. Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. Pass `wait: true` to block until completion (legacy / scripted use). When complete, the deliberation record carries: `_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly'. `_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). `_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).
+**Description:** Start a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. Each voter is an independent agent with its own profile/model. Dissent is preserved verbatim across EVERY round. Default behavior: returns IMMEDIATELY with the proposed deliberation record (state=PROPOSED, _outcome='running'). Real-Claude voters can take 5-10 min each; the orchestration loop runs detached on the daemon. Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. Pass `wait: true` to block until completion (legacy / scripted use). When complete, the deliberation record carries: `_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' | 'judged'. `_judge` — present only on 'judged'; { verdict, humanId } describing how the auto-judge resolved an escalation. `_judgeError` — present only when the configured strategy was judge/hybrid but adjudication failed; deliberation stays ESCALATED for manual override. `_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). `_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
 | context | array<string> | no | Optional artifact IDs to seed context. Each is read and embedded in the shared prompt. |
+| escalationStrategy | string | no | `human` \| `judge` \| `hybrid` — Override the deliberation module's escalationStrategy for this call. 'judge' / 'hybrid' auto-resolve a non-high-risk ESCALATED outcome by spawning a judge agent that reads the transcript and emits a verdict. 'human' leaves the deliberation ESCALATED so an operator can call zana_deliberation_override. riskTag='high' always escalates to a human regardless of this setting. |
 | mode | string | no | `synthesis` \| `tally` — Reduction mode (default from module config). |
 | question | string | yes | What the council is deliberating on. |
 | quorum | string \| number | no | majority \| all \| <integer>. Default from module config. |
@@ -633,7 +634,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:685`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:759`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberateHandler`
 
 **Common pitfalls:**
@@ -656,7 +657,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:780`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:865`
 
 ---
 
@@ -694,7 +695,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:748`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:833`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationListHandler`
 
 **Common pitfalls:**
@@ -739,7 +740,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:763`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:848`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationOverrideHandler`
 
 **Common pitfalls:**
@@ -785,7 +786,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:736`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:821`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationStatusHandler`
 
 **Common pitfalls:**

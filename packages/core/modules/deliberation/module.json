@@ -25,6 +25,9 @@
     "probeRawMaxBytes": { "type": "number", "default": 1024, "description": "Max bytes of raw probe response captured in ProbeFailure.raw" },
     "probeCacheTtlMs": { "type": "number", "default": 300000, "description": "TTL (ms) on probeAgent result cache, keyed by profileId+modelId. 0 disables." },
     "synthesisSimilarityThreshold": { "type": "number", "default": 0.45, "description": "Dice coefficient threshold for cross-voter finding grouping" },
-    "voterTimeoutMs": { "type": "number", "default": 1200000, "description": "Per-voter timeout in collectReviews. Default 20 min — real-Claude voters reading codebases need more than 10." }
+    "voterTimeoutMs": { "type": "number", "default": 1200000, "description": "Per-voter timeout in collectReviews. Default 20 min — real-Claude voters reading codebases need more than 10." },
+    "escalationStrategy": { "type": "string", "default": "human", "description": "human | judge | hybrid. 'judge' auto-resolves cap_exhausted/quorum_lost via a judge agent. 'hybrid' = judge for low/medium risk, human for high risk. riskTag=high always escalates to human regardless of this setting." },
+    "judgeProfileId": { "type": "string", "default": "judge", "description": "Profile id used to spawn the adjudication agent when escalationStrategy is 'judge' or 'hybrid'." },
+    "judgeTimeoutMs": { "type": "number", "default": 600000, "description": "Per-call timeout for the judge agent. Default 10 min." }
   }
 }

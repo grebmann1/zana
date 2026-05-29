@@ -280,6 +280,7 @@ zana_deliberation_status({ deliberationId: id })
 // → { state: "SETTLED" | "ESCALATED", verdict, voters }`}</CodeBlock>
           </div>
           <p class="mt-3 text-moss">Live test: <code class="rounded bg-parchment px-1.5 py-0.5">scripts/qa/run-runtime.sh</code> — 2/2 passing (oneshot returns PONG; cheap deliberation snap proves real Claude voters run end-to-end).</p>
+          <p class="mt-4 text-moss">Want a deliberation to settle without a human in the loop? Pass <code class="rounded bg-parchment px-1.5 py-0.5">escalationStrategy: "judge"</code> — when the council can't reach consensus, a single <em>judge</em> agent reads the transcript (rationales + dissent verbatim) and emits a verdict, landing the deliberation on <strong>SETTLED</strong> with <code class="rounded bg-parchment px-1.5 py-0.5">verdictSource: "judge"</code>. <code class="rounded bg-parchment px-1.5 py-0.5">riskTag: "high"</code> still requires a human regardless.</p>
 
           <h3 class="mt-10 font-display text-xl text-forest">More primitives in the full recipes file</h3>
           <p class="mt-2 text-moss">

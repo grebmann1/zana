@@ -21,6 +21,16 @@ export interface DeliberationRuntimeConfig {
   // codebases need more than the original 10-min default; bumped to 20 min
   // after the May 2026 real-Claude smoke test caught all 3 voters timing out.
   voterTimeoutMs: number;
+  // Auto-judge for ESCALATED deliberations.
+  //   "human"  — leave ESCALATED, wait for zana_deliberation_override.
+  //   "judge"  — spawn a single judge agent that reads the transcript and
+  //              emits a verdict; lands on SETTLED via recordOverride.
+  //   "hybrid" — equivalent to "judge" today (riskTag=high is always
+  //              human-only regardless of strategy, so the difference between
+  //              "judge" and "hybrid" is only in operator intent).
+  escalationStrategy: "human" | "judge" | "hybrid";
+  judgeProfileId: string;
+  judgeTimeoutMs: number;
 }
 
 const DEFAULTS: DeliberationRuntimeConfig = {
@@ -34,6 +44,9 @@ const DEFAULTS: DeliberationRuntimeConfig = {
   probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
   voterTimeoutMs: 20 * 60 * 1000,
+  escalationStrategy: "human",
+  judgeProfileId: "judge",
+  judgeTimeoutMs: 10 * 60 * 1000,
 };
 
 let active: DeliberationRuntimeConfig = { ...DEFAULTS };

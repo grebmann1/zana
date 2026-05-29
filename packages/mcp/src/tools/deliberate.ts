@@ -21,6 +21,11 @@ import {
   type CollectReviewsDeps,
   type VoterSpec,
 } from "./collect-reviews";
+import {
+  adjudicateEscalation,
+  shouldJudge,
+  type AdjudicateDeps,
+} from "./judge";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lazy module loaders (matches the pattern used in mcp-server.ts).
@@ -64,6 +69,15 @@ export interface DeliberateDeps extends CollectReviewsDeps {
   // Default: 4 × rounds + 4 (covers REVIEWING + per-round CONVERGING + a few
   // applyDecision retries) — generous but finite.
   maxIterations?: number;
+  // Judge wiring (only used when escalationStrategy resolves to judge/hybrid).
+  // Defaults to core.agents.spawner.spawnOneShot. Tests stub this.
+  spawnOneShot?: (
+    profile: any,
+    prompt: string,
+    options?: { cwd?: string; timeout?: number },
+  ) => Promise<{ output: string; exitCode: number }>;
+  // CAS reader for voter rationales — defaults to work.runs.artifacts.readContentAddressed.
+  readContentAddressed?: (hash: string) => Buffer | null;
 }
 
 export interface DeliberateArgs {
@@ -80,6 +94,11 @@ export interface DeliberateArgs {
   // zana_deliberation_status. Async-by-default avoids the MCP-client timeout
   // problem that real-Claude voters trip (each can take 5-10 min).
   wait?: boolean;
+  // Per-call override of the deliberation module's escalationStrategy
+  // setting. "judge"/"hybrid" auto-resolves a non-high-risk ESCALATED
+  // outcome via the judge profile; "human" leaves ESCALATED for manual
+  // override. Omit to use the module-config default.
+  escalationStrategy?: "human" | "judge" | "hybrid";
   deps?: DeliberateDeps;
 }
 
@@ -202,6 +221,12 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
   };
   activeRuns.set(proposed.id, activeRun);
 
+  // Resolve escalation strategy: per-call arg wins over module config.
+  const escalationStrategy: "human" | "judge" | "hybrid" =
+    args.escalationStrategy
+    ?? (rt.escalationStrategy as "human" | "judge" | "hybrid" | undefined)
+    ?? "human";
+
   const ctx: RunDeliberationContext = {
     deliberationId: proposed.id,
     candidates,
@@ -210,6 +235,7 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
     rounds,
     getProfile,
     activeRun,
+    escalationStrategy,
   };
 
   // 2. Default: detach the orchestration loop and return the proposed record.
@@ -253,6 +279,9 @@ interface RunDeliberationContext {
   // Live coordination handle — runner checks `cancelled` between rounds and
   // registers spawned voter agents so zana_deliberate_cancel can kill them.
   activeRun: ActiveRun;
+  // Resolved at deliberateHandler entry: per-call arg | module config | "human".
+  // Threaded into the post-loop finalize step where the auto-judge gate runs.
+  escalationStrategy: "human" | "judge" | "hybrid";
 }
 
 async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
@@ -260,7 +289,8 @@ async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
   const { deliberationId } = ctx;
 
   try {
-    return await runDeliberationUnsafe(ctx);
+    const result = await runDeliberationUnsafe(ctx);
+    return await maybeAdjudicate(ctx, result);
   } catch (err: any) {
     // Background-runner crash protocol: drive the deliberation to a terminal
     // state so polling callers don't get stuck on REVIEWING/CONVERGING forever.
@@ -297,6 +327,50 @@ async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
       return { ...final, _outcome: "cancelled" };
     }
     throw err;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post-loop adjudication gate.
+//
+// If the orchestration loop landed on ESCALATED and the configured strategy
+// asks for it, spawn the judge to auto-resolve. Errors from the judge are
+// caught here — the deliberation stays ESCALATED so a human can call
+// zana_deliberation_override as a fallback. The error is surfaced to the
+// caller via `_judgeError` on the result.
+// ─────────────────────────────────────────────────────────────────────────────
+async function maybeAdjudicate(ctx: RunDeliberationContext, result: any): Promise<any> {
+  const delib = _delib();
+
+  // Re-load fresh — runDeliberationUnsafe's return value may be a snapshot
+  // from before the final transition (e.g. assembly-escalation early returns).
+  const fresh = delib.loadDeliberation(ctx.deliberationId);
+  if (!fresh) return result;
+
+  if (!shouldJudge(fresh, ctx.escalationStrategy)) {
+    return result;
+  }
+
+  // Build judge deps from caller-provided overrides where applicable.
+  const judgeDeps: AdjudicateDeps = {};
+  if (typeof (ctx.deps as any).spawnOneShot === "function") {
+    judgeDeps.spawnOneShot = (ctx.deps as any).spawnOneShot;
+  }
+  if (ctx.deps.getProfile) judgeDeps.getProfile = ctx.deps.getProfile;
+  if (typeof (ctx.deps as any).readContentAddressed === "function") {
+    judgeDeps.readContentAddressed = (ctx.deps as any).readContentAddressed;
+  }
+
+  try {
+    const verdict = await adjudicateEscalation(ctx.deliberationId, judgeDeps);
+    const after = delib.loadDeliberation(ctx.deliberationId);
+    return {
+      ...after,
+      _outcome: "judged",
+      _judge: { verdict: verdict.verdict, humanId: verdict.humanId },
+    };
+  } catch (err: any) {
+    return { ...result, _judgeError: err?.message ?? String(err) };
   }
 }
 
@@ -692,7 +766,9 @@ export const deliberateTool = {
     "Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. " +
     "Pass `wait: true` to block until completion (legacy / scripted use). " +
     "When complete, the deliberation record carries: " +
-    "`_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly'. " +
+    "`_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' | 'judged'. " +
+    "`_judge` — present only on 'judged'; { verdict, humanId } describing how the auto-judge resolved an escalation. " +
+    "`_judgeError` — present only when the configured strategy was judge/hybrid but adjudication failed; deliberation stays ESCALATED for manual override. " +
     "`_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). " +
     "`_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).",
   inputSchema: {
@@ -728,6 +804,15 @@ export const deliberateTool = {
       wait: {
         type: "boolean",
         description: "If true, block until the deliberation reaches a terminal state. Default false (async).",
+      },
+      escalationStrategy: {
+        type: "string",
+        enum: ["human", "judge", "hybrid"],
+        description:
+          "Override the deliberation module's escalationStrategy for this call. " +
+          "'judge' / 'hybrid' auto-resolve a non-high-risk ESCALATED outcome by spawning a judge agent that reads the transcript and emits a verdict. " +
+          "'human' leaves the deliberation ESCALATED so an operator can call zana_deliberation_override. " +
+          "riskTag='high' always escalates to a human regardless of this setting.",
       },
     },
   },

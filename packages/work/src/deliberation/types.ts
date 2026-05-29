@@ -105,6 +105,14 @@ export interface Deliberation {
   escalationReason?: EscalationReason;
   override?: Override;
 
+  // Audit-grade provenance of the final verdict. Only meaningful once the
+  // deliberation is terminal (SETTLED or ESCALATED-then-overridden).
+  //   "council" — voters reached consensus on their own (decide() → SETTLE).
+  //   "judge"   — auto-judge resolved an escalation; override.humanId is
+  //               "judge:<profileId>".
+  //   "human"   — operator called zana_deliberation_override.
+  verdictSource?: "council" | "judge" | "human";
+
   // Lifecycle
   createdAt: string;
   updatedAt: string;

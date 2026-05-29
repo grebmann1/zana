@@ -114,6 +114,7 @@ const PATCHABLE_FIELDS = new Set<keyof Deliberation>([
   // T6-FU-3 — degradation is append-only; quorum.ts builds the new array
   // (existing entries + new entry) and passes it through here.
   "degradation",
+  "verdictSource",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,6 +333,7 @@ export function transition(
     if (patch.settledAt !== undefined) d.settledAt = patch.settledAt;
     // T6-FU-3 — caller passes the *new* full array (existing + new entry).
     if (patch.degradation !== undefined) d.degradation = patch.degradation;
+    if (patch.verdictSource !== undefined) d.verdictSource = patch.verdictSource;
   }
 
   const fromState = d.state;
@@ -480,6 +482,14 @@ export function recordOverride(
   const originalSettledAt = wasSettled ? d.settledAt : undefined;
 
   d.override = { ...override };
+  // Provenance: humanId carrying a "judge:" prefix marks the override as
+  // having come from the auto-judge path; everything else is treated as a
+  // human override. The council path sets verdictSource="council" directly
+  // via the SETTLE patch in round-controller.ts.
+  d.verdictSource =
+    typeof override.humanId === "string" && override.humanId.startsWith("judge:")
+      ? "judge"
+      : "human";
   if (d.state !== "SETTLED") {
     // Override always lands the deliberation on SETTLED — record explicitly so
     // legality table is honored (ESCALATED → SETTLED is allowed).

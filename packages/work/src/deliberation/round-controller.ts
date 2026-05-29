@@ -133,6 +133,7 @@ function applyOnce(
         {
           verdict: decision.verdict,
           settledAt: new Date().toISOString(),
+          verdictSource: "council",
         },
         expectedVersion === undefined ? undefined : { expectedVersion },
       );

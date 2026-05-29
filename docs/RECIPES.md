@@ -325,6 +325,50 @@ A snap of `1 voter / 1 round / cap` legitimately escalates — the
 unanimity-within-latest-round rule treats one CHANGES vote as no consensus.
 That's the contract, not a bug.
 
+#### Auto-judge: turn ESCALATED into SETTLED without a human
+
+By default, an ESCALATED deliberation waits for `zana_deliberation_override`
+from a human. In autopilot or scheduled contexts no human is watching, so the
+deliberation stalls. Pass `escalationStrategy: "judge"` to spawn a single
+`judge` profile agent that reads the full transcript (question, voter
+rationales, dissent verbatim, escalation reason, per-round tally) and emits
+a verdict — landing the deliberation on `SETTLED` with `verdictSource: "judge"`.
+
+```jsonc
+zana_deliberate({
+  question: "Drop Node 18 support in v2.0?",
+  voters: ["architect", "security-reviewer", "researcher"],
+  rounds: 2,
+  riskTag: "low",                       // high → judge is skipped, human-only
+  escalationStrategy: "judge",          // or set globally in module config
+  wait: true
+})
+// On a non-converging council:
+// → {
+//     state: "SETTLED",
+//     verdict: "approve" | "reject" | "rework",
+//     verdictSource: "judge",
+//     override: { humanId: "judge:judge", decision, reasonHash, ts },
+//     _outcome: "judged",
+//     _judge: { verdict, humanId: "judge:judge" }
+//   }
+```
+
+Rules:
+
+- **`riskTag: "high"` always escalates to a human** regardless of strategy —
+  the high-stakes gate is non-negotiable.
+- **Set globally** in `.zana/config.json` under the `deliberation` module:
+  `escalationStrategy: "judge" | "hybrid" | "human"` (default `"human"`).
+  Per-call `escalationStrategy` arg overrides the module config.
+- **Audit trail:** the council vs. judge vs. human path is recorded on the
+  deliberation record as `verdictSource: "council" | "judge" | "human"`.
+  The judge's rationale lands in the content-addressed store via
+  `override.reasonHash` — readable like any other audit blob.
+- **Failure mode:** if the judge crashes or its output can't be parsed, the
+  deliberation stays `ESCALATED` and `_judgeError` is surfaced on the result.
+  A human can still call `zana_deliberation_override` as a fallback.
+
 **Live test result (`scripts/qa/run-runtime.sh`):**
 
 ```

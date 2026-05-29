@@ -1,6 +1,6 @@
 // FU-config — verifies the deliberation core module:
-//   - manifest is well-formed (id, configSchema, all 10 keys with defaults)
-//   - applySchemaDefaults seeds an empty config block with all 10 defaults
+//   - manifest is well-formed (id, configSchema, all 13 keys with defaults)
+//   - applySchemaDefaults seeds an empty config block with all 13 defaults
 //   - the @zana/work runtime-config bridge round-trips set/get/reset
 //   - the @zana/core probe-config bridge round-trips set/get/reset
 //   - module init() publishes to BOTH bridges from ctx.config
@@ -44,6 +44,9 @@ const EXPECTED_KEYS = [
   "probeCacheTtlMs",
   "synthesisSimilarityThreshold",
   "voterTimeoutMs",
+  "escalationStrategy",
+  "judgeProfileId",
+  "judgeTimeoutMs",
 ];
 
 const EXPECTED_DEFAULTS: Record<string, unknown> = {
@@ -57,6 +60,9 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
   voterTimeoutMs: 1200000,
+  escalationStrategy: "human",
+  judgeProfileId: "judge",
+  judgeTimeoutMs: 600000,
 };
 
 describe("deliberation core module (FU-config)", () => {
@@ -106,7 +112,7 @@ describe("deliberation core module (FU-config)", () => {
     );
   });
 
-  it("configSchema declares all 10 keys with the expected defaults", () => {
+  it("configSchema declares all 13 keys with the expected defaults", () => {
     const schema = manifest.configSchema;
     expect(schema).toBeDefined();
     for (const key of EXPECTED_KEYS) {
@@ -123,7 +129,7 @@ describe("deliberation core module (FU-config)", () => {
   // applySchemaDefaults — config bootstrapping
   // ──────────────────────────────────────────────────────────────────────────
 
-  it("applySchemaDefaults seeds the module config block with all 10 defaults", () => {
+  it("applySchemaDefaults seeds the module config block with all 13 defaults", () => {
     moduleConfig.applySchemaDefaults("deliberation", manifest.configSchema);
     const mc = moduleConfig.getModuleConfig("deliberation");
     for (const key of EXPECTED_KEYS) {
@@ -160,7 +166,7 @@ describe("deliberation core module (FU-config)", () => {
     expect(cfg.checkpointTTLDays).toBe(14);     // second call applied
   });
 
-  it("resetRuntimeConfig restores all 10 deliberation defaults", () => {
+  it("resetRuntimeConfig restores all 13 deliberation defaults", () => {
     const work = require("@zana/work");
     work.deliberation.setRuntimeConfig({
       defaultRounds: 99,
