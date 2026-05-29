@@ -1,0 +1,8 @@
+R1   PASS  claude-spawn oneshot returned PONG (R1_OUTPUT: {"output":"PONG","exitCode":0})
+R2   PASS  deliberation snap: real Claude voter ran ([done] 333.1s — state=ESCALATED verdict=—)
+
+=== SUMMARY ===
+PASS: 2
+FAIL: 0
+SKIP: 0
+TOTAL: 2

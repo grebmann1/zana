@@ -12,8 +12,7 @@ let responseResolvers: Array<(msg: any) => void> = [];
 
 function sendMessage(msg: object) {
   const json = JSON.stringify(msg);
-  const header = `Content-Length: ${Buffer.byteLength(json)}\r\n\r\n`;
-  proc.stdin!.write(header + json);
+  proc.stdin!.write(json + "\n");
 }
 
 function waitResponse(timeoutMs = 15000): Promise<any> {
@@ -27,27 +26,15 @@ function waitResponse(timeoutMs = 15000): Promise<any> {
 }
 
 function parseResponses() {
-  const DELIMITER = Buffer.from("\r\n\r\n");
+  // Server uses newline-delimited JSON, not LSP-style Content-Length framing.
   while (true) {
-    const headerEnd = responseBuffer.indexOf(DELIMITER);
-    if (headerEnd === -1) break;
-
-    const header = responseBuffer.slice(0, headerEnd).toString("ascii");
-    const match = header.match(/Content-Length:\s*(\d+)/i);
-    if (!match) {
-      responseBuffer = responseBuffer.slice(headerEnd + 4);
-      continue;
-    }
-
-    const contentLength = parseInt(match[1], 10);
-    const contentStart = headerEnd + 4;
-    if (responseBuffer.length < contentStart + contentLength) break;
-
-    const content = responseBuffer.slice(contentStart, contentStart + contentLength).toString("utf8");
-    responseBuffer = responseBuffer.slice(contentStart + contentLength);
-
+    const newlineIdx = responseBuffer.indexOf(0x0a);
+    if (newlineIdx === -1) break;
+    const line = responseBuffer.slice(0, newlineIdx).toString("utf8").trim();
+    responseBuffer = responseBuffer.slice(newlineIdx + 1);
+    if (!line) continue;
     try {
-      const msg = JSON.parse(content);
+      const msg = JSON.parse(line);
       const resolver = responseResolvers.shift();
       if (resolver) resolver(msg);
     } catch {}
@@ -115,23 +102,18 @@ describe("MCP Server (real stdio process)", () => {
       const timer = setTimeout(() => reject(new Error("timeout")), 10000);
       freshProc.stdout!.on("data", (chunk: Buffer) => {
         freshBuffer = Buffer.concat([freshBuffer, chunk]);
-        const headerEnd = freshBuffer.indexOf(Buffer.from("\r\n\r\n"));
-        if (headerEnd === -1) return;
-        const header = freshBuffer.slice(0, headerEnd).toString("ascii");
-        const match = header.match(/Content-Length:\s*(\d+)/i);
-        if (!match) return;
-        const contentLength = parseInt(match[1], 10);
-        const contentStart = headerEnd + 4;
-        if (freshBuffer.length < contentStart + contentLength) return;
-        const content = freshBuffer.slice(contentStart, contentStart + contentLength).toString("utf8");
+        const newlineIdx = freshBuffer.indexOf(0x0a);
+        if (newlineIdx === -1) return;
+        const line = freshBuffer.slice(0, newlineIdx).toString("utf8").trim();
+        if (!line) return;
         clearTimeout(timer);
-        resolve(JSON.parse(content));
+        resolve(JSON.parse(line));
       });
     });
 
     // Send tools/list WITHOUT initializing first
     const json = JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/list", params: {} });
-    freshProc.stdin!.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
+    freshProc.stdin!.write(json + "\n");
 
     const res = await freshPromise;
     expect(res.error).toBeDefined();

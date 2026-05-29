@@ -1,0 +1,23 @@
+S1   PASS  initialize handshake returns serverInfo.name === "zana"
+S2   PASS  tools/list per spec (initialize → notifications/initialized → tools/list) returns 85 tools (>=80 required)
+S3   PASS  required core tools all present: zana_list_profiles, zana_ticket_list, zana_schedule_list, zana_deliberate, zana_spawn_agent
+S4   PASS  tools/call zana_list_profiles returns result (no error) after handshake
+S5   PASS  invalid method foo/bar returns error code -32601 "Method not found"
+S6   PASS  malformed JSON does not crash session; server replies to follow-up id=2
+S7   PASS  claude mcp list shows "zana: ... ✓ Connected"
+
+--- detail S2/S3/S4 ---
+Earlier run failed because the test harness skipped the notifications/initialized step.
+The spec markdown (mcp.md) already includes the notification on lines 71/116/161/209/262.
+Re-run with the canonical handshake and all three pass.
+
+--- additional fix ---
+test/integration/mcp-server.test.ts updated to use newline-delimited JSON
+(matching the actual server transport) instead of LSP Content-Length framing.
+
+=== SUMMARY ===
+PASS: 7
+FAIL: 0
+DEFERRED: 0
+SKIP: 0
+TOTAL: 7

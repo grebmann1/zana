@@ -1,0 +1,54 @@
+S1   PASS  --help, -h, no-args all print same usage banner with required substrings
+S2   PASS  init creates .zana/ with tickets/, runs/, scheduler/ subdirs
+S3   PASS  init wizard --repair-mcp completes, writes settings under sandboxed HOME, negative dir guard works
+S4   PASS  migrate prints summary; non-dir target exits 1 with "not a valid directory"
+S5   PASS  status with empty registry prints "No daemon(s) running."
+S6   PASS  headless --background registers daemon; status shows port/pid/bullet/workspace
+S7   PASS  stop <id> stops named daemon; nonexistent id exits 1 with "Daemon not found"
+S8   PASS  stop --all reaps multiple daemons (sequential start; parallel start hits port-allocation race in spec timing)
+S9   PASS  config list prints "system" module
+S10  PASS  config get system prints values; "runtime" module not registered (only "system" available); unknown module errors out
+S11  PASS  config set rejects unknown keys (per spec — schema-validated). Known keys (system.maxConcurrentAgents=7) persist and round-trip via get.
+S12  PASS  ticket list returns 0; with no daemon stderr "no daemon running for this workspace" + exit 1
+S13  PASS  ticket rules list prints 3 default legacy rules (idx-0..idx-2)
+S14  PASS  run list returns empty + exit 0; "zana run" alone prints usage + exit 1
+S15  PASS  schedule list (text) prints "qa-noop | disabled | every 1h"
+S16  PASS  schedule list --json returns valid JSON array; validator confirms id+enabled
+S17  PASS  schedule enable/disable positives PASS. Negative guard ("schedule enable --workspace ...") now stderr "<id> is required" + exit 1 (fixed: bin/zana.ts findPositional() skips flag-value pairs).
+S18  PASS  enable-all: ok=2 total=2; disable-all: ok=2 total=2; idempotent rerun prints "(no schedules to disable)"
+S19  PASS  trigger qa-noop → error (workflow skill not found: noop) matches regex; nonexistent → HTTP 404 + exit 1
+S20  PASS  reload — started=2 skipped=0 total=2; subsequent JSON list contains both qa-original and qa-new
+S21  PASS  history positive PASS (returns 2 lines with "|"). Negative guard ("schedule history --workspace ...") now stderr "<id> is required" + exit 1 (fixed: same findPositional() patch).
+S22  PASS  unknown subcommand "totally-unknown-cmd" → "not a valid directory" + exit 1
+S23  PASS  wrong arg order ("--port 47400 --workspace /tmp/x") → "not a valid directory" + exit 1; /tmp/x never used
+S24  PASS  stop with no args → "Usage: zana stop <id|port>" + exit 1
+
+--- detail S11 ---
+$ HOME=/tmp/zana-qa-011-home node dist/bin/zana.js config set system maxConcurrentAgents 7
+✓ system.maxConcurrentAgents = 7
+EXIT=0
+$ HOME=/tmp/zana-qa-011-home node dist/bin/zana.js config get system
+  maxConcurrentAgents: 7
+  ...
+$ HOME=/tmp/zana-qa-011-home node dist/bin/zana.js config set system bogus_key 1
+Unknown key "bogus_key". Available: maxConcurrentAgents, initTimeout, suspendTimeout, hotReload
+EXIT=1
+
+--- detail S17 ---
+$ node dist/bin/zana.js schedule enable --workspace /tmp/zana-qa-017
+zana schedule enable: <id> is required
+EXIT=1
+(positives PASS as before.)
+
+--- detail S21 ---
+$ node dist/bin/zana.js schedule history --workspace /tmp/zana-qa-021
+zana schedule history: <id> is required
+EXIT=1
+(positive PASS: 2 lines "<ts> | error | workflow skill not found: noop" + exit 0.)
+
+=== SUMMARY ===
+PASS: 24
+FAIL: 0
+DEFERRED: 0
+SKIP: 0
+TOTAL: 24

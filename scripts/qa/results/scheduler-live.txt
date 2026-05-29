@@ -1,0 +1,19 @@
+Scheduler live end-to-end smoke — bash scripts/qa/run-scheduler-live.sh
+
+T1   PASS  schedule list shows qa-touch
+T2   PASS  schedule list --json parses, qa-touch enabled
+T3   PASS  trigger fired command action — file written
+T4   PASS  history records the trigger as success
+T5   PASS  disable persisted (enabled=false in list)
+T6   PASS  enable-all re-enabled qa-touch
+T7   PASS  reload picked up YAML edit (name changed)
+T8   PASS  stop --all clears registry (0 entries)
+T9   PASS  loop-path triggerSchedule fired action without daemon (zana-loop daemon-free path)
+T10  PASS  cron-typed yml is parsed and listed (daemon path accepts it)
+
+=== SUMMARY ===
+PASS: 10
+FAIL: 0
+DEFERRED: 0
+SKIP: 0
+TOTAL: 10

@@ -1,0 +1,29 @@
+QA daemon results — 2026-05-29
+
+S1 PASS --help and -h both print "Usage: zana-daemon", include "service install" and "plugin init", no stderr
+S2 PASS service status prints "installed: false" and "status: stopped"
+S3 DEFERRED ZANA_QA_INSTALL_SERVICE not set
+S4 DEFERRED ZANA_QA_INSTALL_SERVICE not set
+S5 PASS service logs 10 returned 10 lines, exit 0, no stderr
+S6 PASS plugin list printed "No plugins installed."
+S7 PASS plugin init scaffolded directory with valid plugin.json
+S8 PASS plugin enable wrote enabled=true to settings.json (settings.json restored from backup)
+S9 PASS plugin disable wrote enabled=false to settings.json (settings.json restored from backup)
+S10 PASS plugin link created symlink that resolves to fixture path
+S11 PASS plugin unlink removed the symlink
+S12 PASS config list shows "system: maxConcurrentAgents=10 initTimeout=10000 ..."
+S13 PASS config get system shows all 4 keys (maxConcurrentAgents, initTimeout, suspendTimeout, hotReload)
+S14 PASS config set system maxConcurrentAgents 7 persists; config get reflects 7
+S15 PASS config reset system restores defaults (maxConcurrentAgents=10, initTimeout=10000, suspendTimeout=5000, hotReload=false)
+S16 PASS background launches forked daemons; both registry records have correct workspace + port; positional-args bug regression confirmed (workspace not swallowed by --port). NOTE: scenario specifies TMPPORT2=47500 which collides with first daemon's apiPort (TMPPORT+1=47500); used 47600 instead. Test intent (workspace not swallowed by --port) is preserved.
+N1 PASS bogus-subcommand exits 1 with stderr "directory does not exist:"
+N2 PASS plugin enable (no id) exits 1 with stderr "plugin enable requires <id>"
+N3 PASS plugin link /nonexistent exits 1 with stderr "no plugin.json found at"
+N4 PASS plugin unlink ghost-id exits 1 with stderr "plugin not found:"
+
+=== SUMMARY ===
+PASS: 18
+FAIL: 0
+DEFERRED: 2
+SKIP: 0
+TOTAL: 20

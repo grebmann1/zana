@@ -12,6 +12,24 @@ const args = process.argv.slice(2);
 
 const hasFlag = (flag) => args.includes(flag);
 
+// Find the first positional arg, skipping known flag-value pairs. Without
+// this, `restArgs.find(a => !a.startsWith("--"))` misidentifies a flag's
+// value as a positional (e.g. `--workspace /tmp/x` makes /tmp/x look like
+// the schedule id). Declared at module top so handlers run before
+// the late-file declaration would otherwise fall in the temporal dead zone.
+const VALUED_FLAGS = ["--workspace", "--status", "--limit", "-n", "--port", "--token", "--pid-file"];
+function findPositional(restArgs) {
+  for (let i = 0; i < restArgs.length; i++) {
+    const a = restArgs[i];
+    if (a.startsWith("-")) {
+      if (VALUED_FLAGS.includes(a) && i + 1 < restArgs.length) i++;
+      continue;
+    }
+    return a;
+  }
+  return null;
+}
+
 // --- Subcommands ---
 
 const subcommand = args[0];
@@ -253,7 +271,7 @@ function runInitWizard(initArgs) {
 // --- Headless mode ---
 
 function launchHeadless(restArgs) {
-  let target = restArgs.find((a) => !a.startsWith("-")) || process.cwd();
+  let target = findPositional(restArgs) || process.cwd();
   const workspace = path.resolve(target);
 
   if (!fs.existsSync(workspace) || !fs.statSync(workspace).isDirectory()) {
@@ -374,7 +392,7 @@ function runMigrate(restArgs) {
   const force = restArgs.includes("--force");
   const verbose = restArgs.includes("--verbose");
 
-  const target = restArgs.find((a) => !a.startsWith("-")) || process.cwd();
+  const target = findPositional(restArgs) || process.cwd();
   const workspace = path.resolve(target);
 
   if (!fs.existsSync(workspace) || !fs.statSync(workspace).isDirectory()) {
@@ -792,7 +810,7 @@ function listSchedules(restArgs) {
 // --- schedule enable / disable / trigger (single-id) ---
 
 async function scheduleAction(verb, restArgs) {
-  const id = restArgs.find((a) => !a.startsWith("--"));
+  const id = findPositional(restArgs);
   if (!id) {
     console.error(`zana schedule ${verb}: <id> is required`);
     process.exit(1);
@@ -850,7 +868,7 @@ async function scheduleReload(restArgs) {
 // --- schedule history <id> [-n N] ---
 
 async function scheduleHistory(restArgs) {
-  const id = restArgs.find((a) => !a.startsWith("-"));
+  const id = findPositional(restArgs);
   if (!id) {
     console.error("zana schedule history: <id> is required");
     process.exit(1);
