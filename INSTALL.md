@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/grebmann1/zana/main/scripts/install
 The script handles: prereq checks, `npm install`, `npm run build:runtime`,
 global CLI install, Claude MCP server registration (`zana` namespace, replaces
 any legacy `hive` entry), `zana init wizard` for the workspace, and a final
-`zana doctor` diagnostic.
+`zana status` diagnostic.
 
 Flags:
 
@@ -52,7 +52,17 @@ Flags:
 | `--no-doctor` | Skip post-install diagnostics |
 | `--no-repair-mcp` | Don't pass `--repair-mcp` to init wizard |
 
-Skip to [Verification](#verification) after the script completes.
+The script does **not** install the slash-command plugins (`/zana`,
+`/zana:autopilot`, etc.). After it finishes, run:
+
+```bash
+claude plugin marketplace add "$(pwd)"
+claude plugin install zana@zana-marketplace
+claude plugin install zana-loop@zana-marketplace
+# then restart Claude Code
+```
+
+Then jump to [Verification](#verification).
 
 ---
 
@@ -85,7 +95,7 @@ npm run build:runtime
 
 Compiles every package into its `dist/` directory and copies runtime assets
 (profiles, modules) into `packages/core/dist/`. Re-run after pulling source
-changes — Claude Code spawns `packages/mcp/dist/src/mcp-server.js`, not the
+changes — Claude Code spawns `packages/mcp/dist/bin/zana-mcp-server.js`, not the
 TypeScript source, so a stale `dist/` is the most common "it worked yesterday"
 failure.
 
@@ -131,10 +141,10 @@ The MCP server is what Claude Code talks to over stdio when you invoke a
 
 ```bash
 # Local (per-project) — recommended for most users
-claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/src/mcp-server.js
+claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/bin/zana-mcp-server.js
 
 # OR user-wide
-claude mcp add -s user zana node /absolute/path/to/zana/packages/mcp/dist/src/mcp-server.js
+claude mcp add -s user zana node /absolute/path/to/zana/packages/mcp/dist/bin/zana-mcp-server.js
 ```
 
 Verify:
@@ -258,7 +268,7 @@ node /absolute/path/to/zana/dist/bin/zana.js status
 
 # 2. MCP transport works (NDJSON handshake)
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"diag","version":"0"}}}' \
-  | node /absolute/path/to/zana/packages/mcp/dist/src/mcp-server.js 2>/dev/null | head -1
+  | node /absolute/path/to/zana/packages/mcp/dist/bin/zana-mcp-server.js 2>/dev/null | head -1
 # expected: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05",...}}
 
 # 3. Claude Code sees it
@@ -296,7 +306,7 @@ that doesn't exist. Re-register:
 
 ```bash
 claude mcp remove zana
-claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/src/mcp-server.js
+claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/bin/zana-mcp-server.js
 ```
 
 ### `/zana:autopilot` etc. don't appear in the slash-command picker
@@ -389,8 +399,8 @@ git --version >/dev/null
 [ -f package.json ] && grep -q '"name": "zana"' package.json
 npm install
 npm run build:runtime
-[ -f packages/mcp/dist/src/mcp-server.js ]
-claude mcp add -s local zana node "$(pwd)/packages/mcp/dist/src/mcp-server.js" 2>&1 | head -1
+[ -f packages/mcp/dist/bin/zana-mcp-server.js ]
+claude mcp add -s local zana node "$(pwd)/packages/mcp/dist/bin/zana-mcp-server.js" 2>&1 | head -1
 claude mcp list 2>&1 | grep -q 'zana.* ✓ Connected'
 claude plugin marketplace add "$(pwd)" 2>&1 | tail -1
 claude plugin install zana@zana-marketplace

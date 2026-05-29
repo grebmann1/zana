@@ -22,31 +22,49 @@ import MythicDivider from '../../components/MythicDivider.astro';
 
     <article class="prose-zana mt-12 max-w-prose space-y-12">
       <section>
-        <h2 class="font-display text-3xl text-forest">1. Install</h2>
-        <p class="mt-2 text-moss">Node 20+ required. Clone and run the bundled installer.</p>
+        <h2 class="font-display text-3xl text-forest">Prerequisites</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <strong>Node.js 20+</strong> (<code class="rounded bg-parchment px-1.5 py-0.5">node -v</code>)</li>
+          <li>· <strong>npm</strong> (bundled with Node)</li>
+          <li>· <strong>git</strong></li>
+          <li>· <strong>Claude Code CLI</strong> — recommended (<code class="rounded bg-parchment px-1.5 py-0.5">claude --version</code>)</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="font-display text-3xl text-forest">1. Install the daemon + CLI</h2>
+        <p class="mt-2 text-moss">One command from a clone. Also runs the guided workspace bootstrap.</p>
         <CodeBlock caption="terminal" lang="bash">{`git clone https://github.com/grebmann1/zana.git
 cd zana
 bash scripts/install.sh
 
-# or remote-pipe
+# or remote-pipe (no clone)
 curl -fsSL https://raw.githubusercontent.com/grebmann1/zana/main/scripts/install.sh | bash`}</CodeBlock>
-        <p class="mt-3 text-moss">The installer handles npm install, runtime build, MCP server registration, and a guided <code class="rounded bg-parchment px-1.5 py-0.5">zana init wizard</code> for the workspace.</p>
+        <p class="mt-3 text-moss">The installer runs <code class="rounded bg-parchment px-1.5 py-0.5">npm install</code>, <code class="rounded bg-parchment px-1.5 py-0.5">npm run build:runtime</code>, <code class="rounded bg-parchment px-1.5 py-0.5">npm install -g .</code> (puts <code class="rounded bg-parchment px-1.5 py-0.5">zana</code> on your PATH), <code class="rounded bg-parchment px-1.5 py-0.5">claude mcp add zana</code>, and finally <code class="rounded bg-parchment px-1.5 py-0.5">zana init wizard --repair-mcp</code> for <code class="rounded bg-parchment px-1.5 py-0.5">$PWD</code>.</p>
+        <p class="mt-3 text-moss text-sm">Useful flags: <code class="rounded bg-parchment px-1.5 py-0.5">--workspace &lt;path&gt;</code>, <code class="rounded bg-parchment px-1.5 py-0.5">--no-init</code>, <code class="rounded bg-parchment px-1.5 py-0.5">--no-setup-mcp</code>, <code class="rounded bg-parchment px-1.5 py-0.5">--no-doctor</code>. See <a href="https://github.com/grebmann1/zana/blob/main/INSTALL.md#path-b--manual-per-step-scriptable-for-agents" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">INSTALL.md</a> for the manual per-step path.</p>
       </section>
 
       <section>
-        <h2 class="font-display text-3xl text-forest">2. Wire into Claude Code</h2>
-        <p class="mt-2 text-moss">Register the marketplace and install the plugins.</p>
+        <h2 class="font-display text-3xl text-forest">2. Install the slash-command plugins</h2>
+        <p class="mt-2 text-moss">The script wires the MCP server but not the slash commands. Register the marketplace and install both plugins:</p>
         <CodeBlock caption="terminal" lang="bash">{`claude plugin marketplace add /absolute/path/to/zana
-claude plugin install zana@zana-marketplace        # orchestrator + daemon-driven schedules
-claude plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling
+claude plugin install zana@zana-marketplace        # orchestrator (23 skills) + daemon schedules
+claude plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling (4 skills)
 
-# verify
-claude mcp list | grep zana`}</CodeBlock>
-        <p class="mt-3 text-moss">Restart Claude Code. Type <code class="rounded bg-parchment px-1.5 py-0.5">/zana</code> and you'll see the orchestrator, autopilot, council, ticket, schedule, and loop families.</p>
+# then restart Claude Code so the new commands register`}</CodeBlock>
+        <p class="mt-3 text-moss">After restart, type <code class="rounded bg-parchment px-1.5 py-0.5">/zana</code> and you'll see the orchestrator, autopilot, council, ticket, schedule, and loop families.</p>
       </section>
 
       <section>
-        <h2 class="font-display text-3xl text-forest">3. Spawn your first agent</h2>
+        <h2 class="font-display text-3xl text-forest">3. Verify</h2>
+        <CodeBlock caption="terminal" lang="bash">{`zana status                           # ●  <id>  port:474XX  pid:<pid>
+claude mcp list | grep zana           # zana: ... ✓ Connected
+claude plugin details zana@zana-marketplace | head -5`}</CodeBlock>
+        <p class="mt-3 text-moss">If <code class="rounded bg-parchment px-1.5 py-0.5">claude mcp list</code> shows <code class="rounded bg-parchment px-1.5 py-0.5">✗ Failed to connect</code>, the runtime build is stale — rerun <code class="rounded bg-parchment px-1.5 py-0.5">npm run build:runtime</code>.</p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-3xl text-forest">4. Spawn your first agent</h2>
         <p class="mt-2 text-moss">Hello-world is one MCP call. <code class="rounded bg-parchment px-1.5 py-0.5">zana_oneshot_query</code> spawns a profile, waits for output, returns the answer.</p>
         <CodeBlock caption="claude code · MCP" lang="text">{`zana_oneshot_query({
   profileId: "researcher",

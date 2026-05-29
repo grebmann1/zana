@@ -94,11 +94,12 @@ const features = [
         </a>
       </div>
       <div class="space-y-4">
-        <CodeBlock caption="1 · install" lang="bash">{`git clone https://github.com/grebmann1/zana.git
+        <CodeBlock caption="1 · install (node 20+)" lang="bash">{`git clone https://github.com/grebmann1/zana.git
 cd zana && bash scripts/install.sh
 
 claude plugin marketplace add "$(pwd)"
-claude plugin install zana@zana-marketplace`}</CodeBlock>
+claude plugin install zana@zana-marketplace
+claude plugin install zana-loop@zana-marketplace`}</CodeBlock>
         <CodeBlock caption="2 · ticket → worker → done (real MCP)" lang="text">{`zana_ticket_create({
   title: "Confirm PONG", priority: "low",
   description: "Reply with PONG to confirm."
