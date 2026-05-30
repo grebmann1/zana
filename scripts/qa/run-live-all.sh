@@ -22,6 +22,7 @@ declare -a SUITES=(
   "scripts/qa/run-ticket-live.sh"
   "scripts/qa/run-autopilot-live.sh"
   "scripts/qa/run-judge-live.sh"
+  "scripts/qa/run-commands-live.sh"
 )
 
 OVERALL_FAIL=0

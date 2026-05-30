@@ -41,7 +41,7 @@ uses (Claude Code subscription, API key, etc.) is the auth Zana inherits.
 No `ANTHROPIC_API_KEY` is required.
 
 ```bash
-# All five in sequence
+# All six in sequence
 bash scripts/qa/run-live-all.sh
 
 # Or individually:
@@ -50,6 +50,7 @@ bash scripts/qa/run-scheduler-agent-live.sh   # schedule fires spawn-agent → r
 bash scripts/qa/run-ticket-live.sh            # ticket create → claim → spawn worker → complete
 bash scripts/qa/run-autopilot-live.sh         # goal-driven autopilot, one cycle, then cancel
 bash scripts/qa/run-judge-live.sh             # auto-judge: cap_exhausted → judge, high-risk bypass, hybrid
+bash scripts/qa/run-commands-live.sh          # every slash command's underlying MCP tool, via real stdio transport
 ```
 
 Each script gates on `claude` being on PATH; without it prints `SKIP all`
