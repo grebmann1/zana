@@ -62,11 +62,67 @@ zana migrate /path/to/workspace`}</CodeBlock>
       </section>
 
       <section>
-        <h2 class="font-display text-2xl text-forest">Full reference</h2>
+        <h2 class="font-display text-2xl text-forest">Full subcommand table</h2>
+        <div class="mt-3 overflow-x-auto rounded-xl border border-forest/15">
+          <table class="w-full text-sm">
+            <thead class="bg-parchment/60 text-forest">
+              <tr>
+                <th class="px-4 py-3 text-left font-semibold">Command</th>
+                <th class="px-4 py-3 text-left font-semibold">Effect</th>
+                <th class="px-4 py-3 text-left font-semibold">Daemon?</th>
+              </tr>
+            </thead>
+            <tbody class="text-moss">
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana --help</code></td><td class="px-4 py-3">Print top-level help.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana init [path]</code></td><td class="px-4 py-3">Create <code class="rounded bg-parchment px-1.5 py-0.5">.zana/</code> in a workspace.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana init wizard [path] [--repair-mcp]</code></td><td class="px-4 py-3">Init + register the MCP server in Claude settings (<code class="rounded bg-parchment px-1.5 py-0.5">--repair-mcp</code> overwrites stale config).</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana migrate [path] [--dry-run]</code></td><td class="px-4 py-3">Run pending workspace migrations from <code class="rounded bg-parchment px-1.5 py-0.5">~/.zana/</code> to the project.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana headless [path] [--background]</code></td><td class="px-4 py-3">Start the daemon (foreground or fork). Workspace is positional and comes BEFORE flags.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana status</code></td><td class="px-4 py-3">List running daemons (id, port, pid, workspace, uptime).</td><td class="px-4 py-3">reads disk</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana stop &lt;id|port&gt;</code></td><td class="px-4 py-3">Stop a single daemon (SIGTERM, then SIGKILL after 2s).</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana stop --all</code></td><td class="px-4 py-3">Stop every running daemon and clean the registry.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana config list</code></td><td class="px-4 py-3">Print all module configs.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana config get &lt;module&gt;</code></td><td class="px-4 py-3">Print one module's config.</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana config set &lt;module&gt; &lt;k&gt; &lt;v&gt;</code></td><td class="px-4 py-3">Set a module config key (e.g. <code class="rounded bg-parchment px-1.5 py-0.5">system maxConcurrentAgents 12</code>).</td><td class="px-4 py-3">no</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana ticket list [--status s] [--workspace p]</code></td><td class="px-4 py-3">List tickets in the active daemon's workspace.</td><td class="px-4 py-3">yes</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana ticket rules list [--workspace p]</code></td><td class="px-4 py-3">List automation hook rules + validation warnings.</td><td class="px-4 py-3">yes</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana run list [--limit N] [--workspace p]</code></td><td class="px-4 py-3">Last N runs from <code class="rounded bg-parchment px-1.5 py-0.5">.zana/runs/</code> (default 20).</td><td class="px-4 py-3">no (reads disk)</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana schedule list [--json]</code></td><td class="px-4 py-3">List schedules in <code class="rounded bg-parchment px-1.5 py-0.5">.zana/scheduler/</code>.</td><td class="px-4 py-3">live status needs daemon</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana schedule enable &lt;id&gt;</code> / <code class="rounded bg-parchment px-1.5 py-0.5">disable &lt;id&gt;</code></td><td class="px-4 py-3">Toggle one schedule (persists, (re-)arms trigger).</td><td class="px-4 py-3">yes</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana schedule enable-all</code> / <code class="rounded bg-parchment px-1.5 py-0.5">disable-all</code></td><td class="px-4 py-3">Bulk toggle.</td><td class="px-4 py-3">yes</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana schedule trigger &lt;id&gt;</code></td><td class="px-4 py-3">Fire one schedule once now (independent of cron/interval).</td><td class="px-4 py-3">yes</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana schedule reload</code></td><td class="px-4 py-3">Re-read YAMLs and re-arm triggers.</td><td class="px-4 py-3">yes</td></tr>
+              <tr class="border-t border-forest/10 align-top"><td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5">zana schedule history &lt;id&gt; [-n N]</code></td><td class="px-4 py-3">Last N run entries (default 10).</td><td class="px-4 py-3">yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-3 text-moss text-sm">Most subcommands accept <code class="rounded bg-parchment px-1.5 py-0.5">--workspace &lt;path&gt;</code> to target a specific project.</p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest"><code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon</code> ops surface</h2>
         <p class="mt-2 text-moss leading-relaxed">
-          The complete subcommand reference (every flag, every output shape) lives in
-          <a href="https://github.com/grebmann1/zana/blob/main/INSTALL.md#terminal-cli-reference" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">INSTALL.md → Terminal CLI reference</a>.
+          You usually drive the daemon through <code class="rounded bg-parchment px-1.5 py-0.5">zana headless</code>, but
+          <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon</code> exposes more for ops and plugin development:
         </p>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon service install</code> / <code class="rounded bg-parchment px-1.5 py-0.5">uninstall</code> / <code class="rounded bg-parchment px-1.5 py-0.5">status</code> / <code class="rounded bg-parchment px-1.5 py-0.5">logs [n]</code> — manage as a login service (launchd on macOS, systemd on Linux).</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon plugin list</code> / <code class="rounded bg-parchment px-1.5 py-0.5">enable &lt;id&gt;</code> / <code class="rounded bg-parchment px-1.5 py-0.5">disable &lt;id&gt;</code> — toggle installed plugins.</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon plugin link &lt;path&gt;</code> / <code class="rounded bg-parchment px-1.5 py-0.5">unlink &lt;id&gt;</code> — symlink a local plugin for development.</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon plugin init &lt;name&gt;</code> — scaffold a new plugin.</li>
+          <li>· <code class="rounded bg-parchment px-1.5 py-0.5">zana-daemon config list / get / set / reset</code> — module config (mirror of <code class="rounded bg-parchment px-1.5 py-0.5">zana config</code>).</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest"><code class="rounded bg-parchment px-1.5 py-0.5">zana-mcp-server</code> — stdio transport</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          What Claude Code launches over stdio. You don't run it manually except for diagnostics — the standard handshake check:
+        </p>
+        <CodeBlock caption="terminal · MCP handshake smoke" lang="bash">{`echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"diag","version":"0"}}}' \\
+  | zana-mcp-server | head -1
+# expected: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05",...}}`}</CodeBlock>
+        <p class="mt-3 text-moss text-sm">No output? <code class="rounded bg-parchment px-1.5 py-0.5">dist/</code> is stale — run <code class="rounded bg-parchment px-1.5 py-0.5">npm run build:runtime:mcp</code>.</p>
       </section>
 
       <MythicDivider />

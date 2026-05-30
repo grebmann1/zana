@@ -1,0 +1,153 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import DocsSubnav from '../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../components/MythicDivider.astro';
+
+type Cmd = { name: string; args?: string; desc: string };
+type Group = { tag: string; title: string; plugin: 'zana' | 'zana-loop'; commands: Cmd[] };
+
+const groups: Group[] = [
+  {
+    tag: 'orchestrator',
+    title: 'Orchestrator',
+    plugin: 'zana',
+    commands: [
+      { name: '/zana', args: '<task>', desc: 'Top-level coordinator. Spawns teams, manages sprints, runs autopilot — you become the executive.' },
+      { name: '/zana:status', desc: 'Read-only dashboard: running agents, teams, sprints, autopilot goals, deliberations.' },
+      { name: '/zana:memory', args: '<query>', desc: 'Vector-search Zana memory for prior patterns, decisions, run notes. Search-only.' },
+    ],
+  },
+  {
+    tag: 'tickets',
+    title: 'Tickets',
+    plugin: 'zana',
+    commands: [
+      { name: '/zana:ticket', args: '<title> [--priority c|h|m|l] [--label foo,bar]', desc: 'Quick-create a ticket. Returns ticketId.' },
+      { name: '/zana:ticket:list', args: '[status] [--label X]', desc: 'List tickets, optionally filtered. Read-only.' },
+      { name: '/zana:ticket:complete', args: '<ticketId> <resultSummary…>', desc: 'Claim if needed and close with a result summary. Lands done.' },
+    ],
+  },
+  {
+    tag: 'teams',
+    title: 'Teams',
+    plugin: 'zana',
+    commands: [
+      { name: '/zana:team', args: '<teamId> <prompt>', desc: 'Spawn a curated team — orchestrator + worker slots — to run a prompt.' },
+      { name: '/zana:team:list', desc: 'List configured templates and currently running teams.' },
+      { name: '/zana:team:status', args: '<teamId>', desc: 'Read live state of a running team. Read-only.' },
+      { name: '/zana:team:stop', args: '<teamId>', desc: 'Stop a running team. Kills orchestrator + every worker. Confirms before mutating.' },
+    ],
+  },
+  {
+    tag: 'autopilot',
+    title: 'Autopilot',
+    plugin: 'zana',
+    commands: [
+      { name: '/zana:autopilot', args: '<goal>', desc: 'Start a goal-driven run — loop steps until evaluator says PASS or maxIterations hit.' },
+      { name: '/zana:autopilot:list', args: '[status]', desc: 'List goals, optionally filtered (running, completed, failed, exhausted, cancelled).' },
+      { name: '/zana:autopilot:status', args: '<goalId>', desc: 'Render a goal’s state, iteration count, latest evaluator verdict.' },
+      { name: '/zana:autopilot:cancel', args: '<goalId>', desc: 'Cancel a running goal. In-flight steps complete; no further iterations scheduled.' },
+    ],
+  },
+  {
+    tag: 'council',
+    title: 'Council (deliberation)',
+    plugin: 'zana',
+    commands: [
+      { name: '/zana:council', args: '<question>', desc: 'Multi-voter deliberation with synthesis, convergence rounds, settle/escalate. Dissent preserved verbatim.' },
+      { name: '/zana:council:list', args: '[state]', desc: 'List deliberations, optionally filtered (PROPOSED, REVIEWING, SETTLED, ESCALATED, …).' },
+      { name: '/zana:council:status', args: '<deliberationId>', desc: 'Render full record: votes, dissent, synthesis, verdict.' },
+      { name: '/zana:council:override', args: '<deliberationId> <approve|reject|rework> <reason>', desc: 'Human override; lands SETTLED. Reason is content-addressed.' },
+    ],
+  },
+  {
+    tag: 'schedules',
+    title: 'Schedules (daemon path)',
+    plugin: 'zana',
+    commands: [
+      { name: '/zana:schedule:list', desc: 'List every schedule registered with the daemon. Read-only.' },
+      { name: '/zana:schedule:reload', desc: 'Re-read .zana/scheduler/ + re-register triggers. Use after editing YAML.' },
+      { name: '/zana:schedule:trigger', args: '<scheduleId>', desc: 'Fire a schedule once now, regardless of cron/interval.' },
+    ],
+  },
+  {
+    tag: 'loop',
+    title: 'Loop (daemon-free)',
+    plugin: 'zana-loop',
+    commands: [
+      { name: '/zana:loop:define', args: '[scheduleId]', desc: 'Walk through authoring a new .zana/scheduler/<id>.yml. Works for both /loop and daemon paths.' },
+      { name: '/zana:loop:start', args: '[scheduleId]', desc: 'Arm a Claude Code /loop for one (or all enabled) yml files. No daemon required.' },
+      { name: '/zana:loop:stop', args: '[scheduleId]', desc: 'Stop one or all /loop schedules armed in this session. Kills matching sleepers.' },
+    ],
+  },
+];
+
+const totalCmds = groups.reduce((n, g) => n + g.commands.length, 0);
+---
+
+<BaseLayout
+  title="Docs · Commands"
+  description="Every Zana slash command, grouped by family. Two plugins ship 24 commands total."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="ornament text-xs text-gold">— slash commands —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">All commands.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      Two plugins ship <strong>{totalCmds}</strong> slash commands total —
+      <code class="rounded bg-parchment px-1.5 py-0.5">zana@zana-marketplace</code>
+      bundles {groups.filter(g => g.plugin === 'zana').reduce((n, g) => n + g.commands.length, 0)},
+      <code class="rounded bg-parchment px-1.5 py-0.5">zana-loop@zana-marketplace</code>
+      bundles {groups.filter(g => g.plugin === 'zana-loop').reduce((n, g) => n + g.commands.length, 0)}.
+      Each command shells out to one or more <code class="rounded bg-parchment px-1.5 py-0.5">mcp__zana__zana_*</code>
+      MCP tools — see the <a href="https://github.com/grebmann1/zana/blob/main/docs/MCP-TOOL-REFERENCE.md" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">MCP tool reference</a>
+      for the underlying surface.
+    </p>
+
+    <article class="mt-12 max-w-prose space-y-12">
+      {groups.map((g) => (
+        <section>
+          <p class="ornament text-xs text-gold">— {g.tag} —</p>
+          <h2 class="mt-2 font-display text-3xl text-forest">{g.title}</h2>
+          <p class="mt-1 text-sm text-moss">Plugin: <code class="rounded bg-parchment px-1.5 py-0.5">{g.plugin}@zana-marketplace</code></p>
+          <div class="mt-4 overflow-x-auto rounded-xl border border-forest/15">
+            <table class="w-full text-sm">
+              <thead class="bg-parchment/60 text-forest">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold">Command</th>
+                  <th class="px-4 py-3 text-left font-semibold">Args</th>
+                  <th class="px-4 py-3 text-left font-semibold">What it does</th>
+                </tr>
+              </thead>
+              <tbody class="text-moss">
+                {g.commands.map((c) => (
+                  <tr class="border-t border-forest/10 align-top">
+                    <td class="px-4 py-3 whitespace-nowrap"><code class="rounded bg-parchment px-1.5 py-0.5 font-semibold text-ink">{c.name}</code></td>
+                    <td class="px-4 py-3 whitespace-nowrap text-xs">{c.args ? <code class="rounded bg-parchment px-1.5 py-0.5">{c.args}</code> : <span class="text-moss/60">—</span>}</td>
+                    <td class="px-4 py-3 leading-relaxed">{c.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Where commands come from</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          Each command is a <code class="rounded bg-parchment px-1.5 py-0.5">.md</code> file in
+          <code class="rounded bg-parchment px-1.5 py-0.5">plugins/zana/&lt;core|loop&gt;/commands/</code>
+          with frontmatter (<code class="rounded bg-parchment px-1.5 py-0.5">name</code>,
+          <code class="rounded bg-parchment px-1.5 py-0.5">argument-hint</code>,
+          <code class="rounded bg-parchment px-1.5 py-0.5">allowed-tools</code>) plus the prompt body.
+          Authoritative source: see <a href="https://github.com/grebmann1/zana/tree/main/plugins/zana/core/commands" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">plugins/zana/core/commands/</a> and <a href="https://github.com/grebmann1/zana/tree/main/plugins/zana/loop/commands" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">plugins/zana/loop/commands/</a>.
+        </p>
+        <p class="mt-3 text-moss">For terminal CLI subcommands (<code class="rounded bg-parchment px-1.5 py-0.5">zana ticket list</code>, <code class="rounded bg-parchment px-1.5 py-0.5">zana schedule trigger</code>, …) see <a href="/docs/cli/" class="text-forest hover:text-berry font-semibold">CLI reference</a>.</p>
+      </section>
+    </article>
+  </section>
+</BaseLayout>
