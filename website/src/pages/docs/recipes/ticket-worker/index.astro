@@ -37,11 +37,9 @@ import MythicDivider from '../../../../components/MythicDivider.astro';
 // → { id: "tkt_abc", status: "backlog", … }
 
 zana_ticket_claim({
-  ticketId: "tkt_abc",
-  agentId: "ag_42",
-  agentName: "QA Live"
+  ticketId: "tkt_abc"
 })
-// → { ok: true, status: "in_progress" }
+// → { ok: true, status: "in-progress" }
 
 zana_spawn_agent({
   profileId: "researcher",
@@ -52,8 +50,7 @@ zana_spawn_agent({
 // poll agent until state==="terminated", then:
 zana_ticket_complete({
   ticketId: "tkt_abc",
-  resultSummary: "Worker confirmed: PONG",
-  completedBy: "ag_42"
+  resultSummary: "Worker confirmed: PONG"
 })
 // → { ok: true, status: "done" }`}</CodeBlock>
       </section>

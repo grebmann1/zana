@@ -6,26 +6,47 @@ Coordination primitives between Zana agents. Use these when an agent needs to ta
 
 Each agent has an inbox identified by its agent ID (or a stable name).
 
-- `zana_send_message(to, summary, message)` — drop a message into another agent's inbox.
-- `zana_check_inbox()` — list pending messages addressed to the current agent.
+- `zana_send_message` — drop a typed message into another agent's inbox.
+- `zana_check_inbox` — list pending messages addressed to the current agent.
+
+```
+zana_send_message({
+  toAgentId: "ag_42",
+  type: "handoff",
+  payload: { kind: "handoff", ticketId: "tkt_abc", content: "Schema design ready — see artifact art_77." },
+  requiresAck: true
+})
+zana_check_inbox({})
+// → [{ from, type, payload, ts, messageId }]
+```
 
 Use this for targeted, low-volume traffic: "researcher → architect: here are the findings" or "tester → coder: tests for `foo` fail in this case." Inboxes are persistent; messages survive a daemon restart.
 
 Patterns:
 
-- **Hand-off**: A finishes a phase, sends a single summary to B with the artifacts B needs. B drains its inbox at the start of its run and proceeds.
-- **Request/reply**: A sends a message tagged with a `replyTo` field. B sends back to that ID. Use `zana_send_ack` to confirm receipt explicitly when ordering matters.
+- **Hand-off**: A finishes a phase, sends a single summary to B with the artifacts B needs (`type: "handoff"`, `payload.kind: "handoff"`, attach `ticketId`). B drains its inbox at the start of its run and proceeds.
+- **Request/reply**: A sends `type: "question"` with `requiresAck: true` and a stable correlation ID in `payload.content`. B replies via `zana_send_ack({ messageId, status, response })`.
 
 ## Channels — pub/sub coordination
 
 Channels are named topics any agent can publish to or subscribe to.
 
-- `zana_publish_channel(channel, message)` — emit a message on a topic.
-- `zana_subscribe_channel(channel)` — register the current agent as a subscriber.
-- `zana_channel_history(channel, limit)` — fetch the last N messages, useful for newcomers catching up.
-- `zana_list_channels()` — discover what channels exist.
+- `zana_publish_channel` — emit a typed message on a topic.
+- `zana_subscribe_channel` — register the current agent as a subscriber.
+- `zana_channel_history` — fetch the last N messages, useful for newcomers catching up.
+- `zana_list_channels` — discover what channels exist.
 
-Use channels when many agents care about the same stream of events (e.g., `build:results`, `tickets:updated`, `swarm:progress`). Prefer channels over inbox fan-out — one publish reaches every subscriber and the channel keeps history for late joiners.
+```
+zana_publish_channel({
+  channel: "build:status",
+  type: "status",
+  payload: { kind: "structured", data: { ok: true, sha: "abc123", durationMs: 8421 } }
+})
+zana_subscribe_channel({ channel: "build:status" })
+zana_channel_history({ channel: "build:status", limit: 20 })
+```
+
+Use channels when many agents care about the same stream of events (e.g., `build:status`, `tickets:updated`, `swarm:progress`). Prefer channels over inbox fan-out — one publish reaches every subscriber and the channel keeps history for late joiners.
 
 ## Acknowledgments and request/reply
 
@@ -41,12 +62,24 @@ Treat acks as advisory, not transactional. The system does not retry failed send
 
 Inboxes and channels are for short messages. For anything bigger than a paragraph, use artifacts.
 
-- `zana_artifact_create(title, type, content)` — store a versioned blob (architecture-doc, requirement-spec, design-doc, etc.). Returns an `artifactId`.
-- `zana_artifact_list()` — discover existing artifacts.
-- `zana_artifact_read(artifactId)` — fetch the full content.
-- `zana_artifact_update(artifactId, content)` — bump to a new revision.
+- `zana_artifact_create` — store a versioned blob (architecture-doc, requirement-spec, design-doc, etc.). Returns an `artifactId`.
+- `zana_artifact_list` — discover existing artifacts.
+- `zana_artifact_read` — fetch the full content.
+- `zana_artifact_update` — bump to a new revision.
 
-Pattern: an architect agent produces a design as an artifact, sends only the artifact ID via inbox to the implementer, and the implementer reads the artifact when it starts. This keeps inboxes tidy and creates an audit trail.
+```
+zana_artifact_create({
+  title: "Auth schema v2",
+  type: "design-doc",
+  content: "# Auth schema v2\n\n…",
+  tags: ["auth"],
+  linkedTickets: ["tkt_abc"]
+})
+// → { artifactId: "art_77", … }
+zana_artifact_read({ artifactId: "art_77" })
+```
+
+Pattern: an architect agent produces a design as an artifact, sends only the artifact ID via inbox to the implementer (`payload.content` references `art_77`), and the implementer reads the artifact when it starts. This keeps inboxes tidy and creates an audit trail.
 
 For ephemeral key/value storage that doesn't deserve a full artifact, use `zana_memory_store(key, value)` and `zana_memory_search(query)`. Memory is project-scoped and indexed for fuzzy lookup.
 
@@ -54,12 +87,26 @@ For ephemeral key/value storage that doesn't deserve a full artifact, use `zana_
 
 Long-running coordination (multi-step pipelines, autopilot loops) should checkpoint progress so a daemon restart doesn't lose state.
 
-- `zana_checkpoint_save(workflowId, state)` — persist named state.
-- `zana_checkpoint_list(workflowId)` — enumerate available checkpoints.
-- `zana_checkpoint_get(checkpointId)` — fetch one checkpoint.
-- `zana_checkpoint_resume(checkpointId)` — resume a workflow from a saved state.
+- `zana_checkpoint_save` — persist a snapshot of a team run, including the agents that still need to spawn.
+- `zana_checkpoint_list` — enumerate checkpoints, optionally filtered by `teamId` or `status`.
+- `zana_checkpoint_get` — fetch full detail for one checkpoint.
+- `zana_checkpoint_resume` — re-spawn the pending agents from a checkpoint with the completed agents' output as context.
 
-Save a checkpoint after each phase that completes successfully (research done, plan written, code written, tests green). On restart, find the latest checkpoint for the workflow and resume.
+```
+zana_checkpoint_save({
+  teamId: "team_42",
+  pendingAgents: [
+    { profileId: "test-writer", prompt: "Add tests for the auth changes from ag_42 above.", dependencies: ["ag_42"] }
+  ]
+})
+// → { checkpointId: "ckpt_abc" }
+
+// Later — same or fresh daemon:
+zana_checkpoint_list({ teamId: "team_42", status: "stopped" })
+zana_checkpoint_resume({ checkpointId: "ckpt_abc" })
+```
+
+Save a checkpoint after each phase that completes successfully (research done, plan written, code written, tests green). On restart, list checkpoints for the workflow and resume the latest stopped one.
 
 ## Event coordination
 

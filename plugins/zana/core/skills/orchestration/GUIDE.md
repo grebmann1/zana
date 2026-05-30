@@ -20,6 +20,40 @@ Before spawning anyone, decompose. A useful ticket is:
 
 Use `zana_ticket_create` for each piece, then `zana_sprint_create` to group them and `zana_sprint_start` to begin. Tickets are not bureaucracy — they are the unit of dispatch and the thing you mark `complete` so the orchestration loop stays honest about progress.
 
+## The review pipeline (auto-driven)
+
+Once a ticket is in `review`, Zana runs the cycle on autopilot via the ticket watcher (`packages/work/src/tickets/watcher.ts`). You don't have to dispatch a reviewer — the daemon does it. You DO have to know the contract.
+
+State graph the watcher enforces:
+
+```
+backlog → in-progress → review → done
+                          ↓ ↑
+                       rework (auto re-spawn original assignee)
+                          ↓ (after 3 cycles)
+                       blocked (human required)
+```
+
+Default automation rules (loaded at daemon start):
+
+| Trigger | Action | Agent prompt expects |
+|---|---|---|
+| `status: review`, `reviewPhase: qa` | spawn `code-reviewer` | `VERDICT: PASS` → advance to architecture phase; `VERDICT: FAIL` → rework |
+| `status: review`, `reviewPhase: architecture` | spawn `architect` | `VERDICT: PASS` → done; `VERDICT: FAIL` → rework |
+| `status: rework` | spawn `{{assigneeProfileId}}` (the original worker) | `VERDICT: READY` → re-enter review (qa); `VERDICT: BLOCKED <reason>` → blocked |
+
+Hard limit: 3 rework cycles → ticket auto-blocks with comment "BLOCKED: failed review 3 times" and emits `ticket:blocked` event for human triage.
+
+What this means for you, the orchestrator:
+
+- After spawning the implementer, **`zana_ticket_update_status({ ticketId, status: "review" })` is the hand-off** — the QA reviewer auto-spawns. Do not manually spawn a `code-reviewer` after the implementer; the watcher will, and you'll double-spawn.
+- **Worker prompts must end in a `VERDICT:` line** when they're spawned by a watcher rule. Inspect the rule's `promptTemplate` if unsure (`zana ticket rules list`). Workers spawned directly by you don't need a verdict — only watcher-spawned ones do.
+- If the user wants to **skip auto-review** for a ticket (e.g., trivial doc fix), close it from `in-progress → done` with `zana_ticket_update_status` directly. Skipping review is a deliberate choice, not the default.
+- If a ticket lands in `blocked`, treat it like a deliberation escalation: read the comments, then either `zana_ticket_update_status` to `in-progress` with a corrective spawn, or `cancelled` if the work was wrong.
+- `zana ticket rules list` (CLI) shows the loaded rules + any validation warnings. Useful when default rules feel surprising.
+
+There is **no auto-claim from backlog** — `backlog → in-progress` is always orchestrator-initiated. If you want a "QA agent picks up qa-tagged tickets" flow, you'd `zana_ticket_list({ label: "qa", status: "backlog" })` and dispatch yourself.
+
 ## The execution path
 
 You drive every step. The orchestrator plans, dispatches, and verifies — Zana does not guess about success on your behalf.
@@ -176,6 +210,138 @@ Runtime:
 5. Verdict: `SETTLED` with dissent → auto-routed to `pending_human`. The human reads the minority report and decides; the override lands as a typed `deliberation:override` event.
 
 The whole run is replayable from the event log + content-addressed rationales.
+
+## Autopilot
+
+Use **autopilot** when the user wants a *verified outcome*, not just a list of subtasks: a goal + ordered steps + an evaluator that loops until the criteria pass or the iteration cap is hit. Manual fan-out gives you results to read; autopilot gives you a closed loop.
+
+### When to use autopilot vs a team
+
+- **Autopilot**: there is a single measurable success criterion ("tests pass", "no `logger.*` call sites remain", "the API contract validates against schema X"). The evaluator can decide PASS/FAIL by reading agent output.
+- **Team**: open-ended exploration, design work, anything where "done" is a judgment call. Autopilot has nothing to evaluate against.
+
+### How to invoke
+
+```
+zana_autopilot_goal_driven({
+  title: "Migrate logger calls to structured format",
+  criteria: "Every logger.* call in packages/server/src/ uses structured fields. Tests pass.",
+  steps: [
+    { profile: "researcher",   prompt: "List every logger.* call site under packages/server/src/. Output JSON: [{file,line,call}]." },
+    { profile: "backend-dev",  prompt: "Convert each call from the previous step's output to structured logging." },
+    { profile: "test-writer",  prompt: "Add a test that fails on a regex-style logger.* match in packages/server/src/." }
+  ]
+})
+// → { goalId: "goal_xyz" }
+```
+
+Each iteration runs all steps in order, then spawns the evaluator profile (default `code-reviewer`) with the goal title, criteria, and a results summary. The evaluator must emit a line matching `VERDICT: PASS` for the goal to settle.
+
+### Polling
+
+```
+zana_autopilot_goal_status({ goalId: "goal_xyz" })
+// → { status, iteration, results, lastEvaluation }
+```
+
+Status enum: `running` → `completed` (PASS) | `exhausted` (cap hit without PASS) | `failed` (profile lookup or spawn error) | `cancelled` (manual). Poll until `status !== "running"`.
+
+`zana_autopilot_goal_list({ status })` to enumerate; `zana_autopilot_goal_cancel({ goalId })` to abort an in-flight loop.
+
+### Configuration
+
+Per-workspace knobs via `zana_module_config_set("autopilot", "<key>", "<value>")`:
+
+- `maxIterations` — full step-sequence repeat cap (default 5)
+- `evaluatorProfile` — profile that judges PASS/FAIL (default `code-reviewer`; the `judge` profile is a stricter alternative)
+
+If the loop exhausts, read `results[]` and `lastEvaluation` to diagnose — usually the failure mode is either "criteria are unfalsifiable" or "evaluator can't see the artifact it needs to judge". Tighten one or the other and rerun, don't just bump `maxIterations`.
+
+### Discovery — gather context before invoking
+
+The single biggest cause of an exhausted goal is a vague invocation. Autopilot has no native discovery phase: `zana_autopilot_goal_driven` assumes `criteria` and `steps` are already concrete. **You** are the discovery phase.
+
+Before the tool call, run a discovery pass — either inline with the user, or via `/zana:autopilot:discover` for a structured walkthrough:
+
+1. **Restate the goal** as a one-line imperative. "Make the build faster" → "Cut `npm run build` wall-clock from 90s to <30s."
+2. **Force-falsifiable criteria**. If the user says "looks good" or "robust", push back: "What specific check would tell us we're done?" Tests passing, a metric below a threshold, a regex-style absence — these the evaluator can judge. "Looks good" — it cannot.
+3. **Locate the work**. File paths, package names, the git ref baseline. Workers spawn with no conversation context; the prompt is everything they see.
+4. **Confirm scope boundaries**. What is *out of scope* — what should the worker NOT touch?
+5. **Pick step shapes**. 1–3 steps, each one specialty (researcher → coder → test-writer is a common shape). Don't pre-specify how each step solves the problem; specify what each step must produce.
+6. **Echo the plan back to the user** before invoking. One block: title, criteria, steps. Wait for confirmation.
+
+If any of these are uncertain after one pass at the user, ask follow-ups before invoking. Autopilot iterations are expensive — five iterations of a vague goal cost ~10× one round of clarification.
+
+### Memory — pre-flight and post-mortem
+
+Vector memory (`zana_memory_search` / `zana_memory_store`) lets autopilot improve over time. Two patterns:
+
+**Pre-flight, before invoking:**
+
+```
+zana_memory_search({ query: "<title verbatim>", limit: 3 })
+// → [{ content, tags, score, ... }]
+```
+
+If a similar prior goal succeeded, lift its `criteria` shape and the step profiles that worked. If it `exhausted`, read why — usually a missing constraint that the new goal can bake in.
+
+**Post-mortem, after the goal lands:**
+
+```
+zana_memory_store({
+  content: "Goal: <title>. Outcome: <completed|exhausted>. Iterations: <n>. Working steps: <profiles>. Lesson: <one sentence>.",
+  tags: ["autopilot", "<status>"]
+})
+```
+
+Store every terminal goal, success or failure. The store is what makes the next autopilot smarter; without it every run starts from zero.
+
+### Tickets-as-evidence
+
+For consequential autopilot runs (anything that mutates the codebase), wrap each step in a ticket so failures are debuggable:
+
+```
+// Before invoking:
+const t1 = zana_ticket_create({ title: "Step 1: list logger.* call sites", priority: "low", labels: ["autopilot"] });
+const t2 = zana_ticket_create({ title: "Step 2: convert to structured logging", priority: "low", labels: ["autopilot"] });
+const t3 = zana_ticket_create({ title: "Step 3: add regression test", priority: "low", labels: ["autopilot"] });
+
+// Then in each step's prompt, include:
+//   "When done, call zana_ticket_complete({ ticketId: 't_X', resultSummary: '...' })."
+```
+
+This gives you four wins:
+
+1. `zana_ticket_list({ labels: ["autopilot"] })` reconstructs the run if the goal is `exhausted` and the in-memory `results[]` is gone.
+2. The result summaries become CAS-stored evidence the evaluator can quote in `lastEvaluation`.
+3. If a step's ticket lands in `rework` (because the watcher's QA reviewer caught a bug), the next autopilot iteration sees a richer history.
+4. The user gets a paper trail in `zana_ticket_list` that doesn't disappear with the goal.
+
+Skip tickets for one-shot read-only goals (research, gather-and-summarize) — the overhead isn't worth it.
+
+### Deliberation as evaluator (high-risk goals)
+
+Default evaluator is a single `code-reviewer` agent. For goals where one judge is too thin a signal — schema migrations, security-sensitive changes, anything with `riskTag: "high"` — consider running deliberation manually after each iteration instead of relying on the built-in evaluator:
+
+```
+// After your steps complete (NOT via autopilot — orchestrator-driven):
+zana_deliberate({
+  question: "Does the iteration's output meet: <criteria>?",
+  voters: ["architect", "security-reviewer", "test-writer"],
+  rounds: 2,
+  riskTag: "high",     // forces human-in-the-loop on dissent
+  context: { resultSummaries: [...] }
+})
+```
+
+This is a bigger pattern — you're hand-rolling the loop. Use it when the cost of a wrong PASS is high. For routine goals stick with the built-in evaluator and a tightened `evaluatorProfile: "judge"`.
+
+### What autopilot does NOT do (orchestrator must own these)
+
+- **Persistence across daemon restart**: goals are in-memory. If the daemon dies mid-run the goal is lost. Use the tickets-as-evidence pattern above for anything important.
+- **Auto-clarify**: there's no "ask the user before starting" hook — that's the discovery phase, your responsibility.
+- **Auto-respawn on exhaustion**: when status flips to `exhausted` the loop stops. Either call again with tightened criteria, or hand off to a human.
+- **Schedule integration**: autopilot is one-shot. For continuous quality gates ("re-verify the criteria every hour") author a `.zana/scheduler/<id>.yml` with a `spawn-agent` action that runs the evaluator prompt — see the scheduler skill.
 
 ## Sprints vs ad-hoc tickets
 

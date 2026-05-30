@@ -42,7 +42,7 @@ import MythicDivider from '../../../../components/MythicDivider.astro';
         <h2 class="font-display text-2xl text-forest">Poll for status</h2>
         <CodeBlock caption="claude code · MCP" lang="text">{`zana_autopilot_goal_status({ goalId: "goal_xyz" })
 // → {
-//     status: "running" | "settled" | "exhausted",
+//     status: "running" | "completed" | "failed" | "exhausted" | "cancelled",
 //     iteration: 1,
 //     results: ["STEP1-OK", "STEP2-OK"],
 //     lastEvaluation: "VERDICT: PASS"
@@ -56,7 +56,7 @@ zana_autopilot_goal_cancel({ goalId: "goal_xyz" })
       <section>
         <h2 class="font-display text-2xl text-forest">How the loop terminates</h2>
         <ul class="mt-3 space-y-2 text-moss">
-          <li>· <strong>Settled</strong> — evaluator returns <code class="rounded bg-parchment px-1.5 py-0.5">VERDICT: PASS</code>.</li>
+          <li>· <strong>Completed</strong> — evaluator returns <code class="rounded bg-parchment px-1.5 py-0.5">VERDICT: PASS</code>.</li>
           <li>· <strong>Exhausted</strong> — iteration cap hit without a PASS. The goal record carries every iteration's results and rationale for review.</li>
           <li>· <strong>Cancelled</strong> — <code class="rounded bg-parchment px-1.5 py-0.5">goal_cancel</code> fires; in-flight steps are killed.</li>
         </ul>

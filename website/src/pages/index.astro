@@ -25,7 +25,7 @@ const pillars = [
 ];
 
 const features = [
-  { tag: 'Agents', title: '14 built-in profiles', body: 'Architect, backend-dev, frontend-dev, code-reviewer, debugger, doc-generator, full-auto-coder, orchestrator, researcher, security-reviewer, swarm-master, swarm-orchestrator, test-writer, ux-designer.' },
+  { tag: 'Agents', title: '18 built-in profiles', body: 'api-designer, architect, backend-dev, code-reviewer, debugger, doc-generator, frontend-dev, full-auto-coder, judge, orchestrator, performance-engineer, researcher, security-reviewer, slack-notifier, swarm-master, swarm-orchestrator, test-writer, ux-designer.' },
   { tag: 'Teams', title: 'Pipeline · fan-out · supervisor', body: 'Compose topologies for sequential dependencies, independent parallel work, or ongoing coordination.' },
   { tag: 'Tickets', title: 'The unit of dispatch', body: 'Independent, small, verifiable work items — fits inside one agent\'s context, plus margin for tools and tests.' },
   { tag: 'Deliberation', title: 'Multi-voter consensus', body: 'Run security-reviewer, performance-engineer, and architect on a decision. Get a synthesized verdict with dissent intact.' },
@@ -111,8 +111,7 @@ zana_spawn_agent({ profileId: "researcher",
 // → { agentId: "ag_42" }
 
 zana_ticket_complete({ ticketId: "tkt_abc",
-  resultSummary: "Worker confirmed: PONG",
-  completedBy: "ag_42" })
+  resultSummary: "Worker confirmed: PONG" })
 // → { ok: true, status: "done" }`}</CodeBlock>
       </div>
     </div>

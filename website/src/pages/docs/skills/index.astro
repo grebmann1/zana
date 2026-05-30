@@ -1,0 +1,181 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import DocsSubnav from '../../../components/DocsSubnav.astro';
+import MythicDivider from '../../../components/MythicDivider.astro';
+
+type Skill = {
+  name: string;
+  plugin: 'zana' | 'zana-loop';
+  description: string;
+  whenToUse: string;
+  userInvocable: boolean;
+  teaches: string[];
+  tools: string[];
+  sourceUrl: string;
+};
+
+const skills: Skill[] = [
+  {
+    name: 'orchestration',
+    plugin: 'zana',
+    description: 'Orchestrate multi-agent workflows — spawn teams, manage tickets/sprints, run autopilot loops, run deliberations.',
+    whenToUse: 'User asks to spawn agents, run a team, orchestrate work, run autopilot, or manage sprints/tickets.',
+    userInvocable: false,
+    teaches: [
+      'When to spawn one agent vs a team vs a child swarm.',
+      'How to decompose work into tickets and sprints (`zana_ticket_create`, `zana_sprint_create`, `zana_sprint_start`).',
+      'The 5-step execution loop: list profiles → spawn → monitor → fetch result → close ticket.',
+      'Prompt engineering — bad-vs-good examples, what every worker prompt must include.',
+      'Deliberation: state machine, voter lenses, escalation paths, and when to use it over manual fan-out.',
+      'Autopilot: goal-driven loop with verifier, status enum, configuration knobs.',
+    ],
+    tools: [
+      'zana_list_profiles', 'zana_spawn_agent', 'zana_swarm_spawn', 'zana_list_agents',
+      'zana_agent_status', 'zana_agent_result', 'zana_kill_agent',
+      'zana_ticket_create', 'zana_ticket_complete', 'zana_sprint_create', 'zana_sprint_start', 'zana_sprint_end',
+      'zana_deliberate', 'zana_deliberation_status', 'zana_deliberation_list', 'zana_deliberation_override',
+      'zana_autopilot_goal_driven', 'zana_autopilot_goal_status', 'zana_autopilot_goal_list', 'zana_autopilot_goal_cancel',
+      'zana_module_config_set',
+    ],
+    sourceUrl: 'https://github.com/grebmann1/zana/blob/main/plugins/zana/core/skills/orchestration/GUIDE.md',
+  },
+  {
+    name: 'collaboration',
+    plugin: 'zana',
+    description: 'Agent collaboration primitives — messaging, shared memory, channels, checkpoints, event coordination between Zana agents.',
+    whenToUse: 'Agent needs to communicate with other agents, share context, or coordinate work within Zana.',
+    userInvocable: false,
+    teaches: [
+      'Inboxes for direct agent-to-agent handoff (`zana_send_message` / `zana_check_inbox`) — typed payloads (`question`, `finding`, `handoff`, `status`, `request`).',
+      'Channels for pub/sub coordination (`zana_publish_channel`, `zana_subscribe_channel`, `zana_channel_history`).',
+      'Artifacts for large planning documents (`zana_artifact_create` / `_read` / `_update`) instead of stuffing inboxes.',
+      'Vector memory for ephemeral fuzzy lookup (`zana_memory_store` / `_search`).',
+      'Checkpoints for resumable team runs (`zana_checkpoint_save` / `_resume`).',
+      'Event log for telemetry-style coordination (`zana_event_emit` / `_query`).',
+    ],
+    tools: [
+      'zana_send_message', 'zana_check_inbox', 'zana_send_ack',
+      'zana_publish_channel', 'zana_subscribe_channel', 'zana_channel_history', 'zana_list_channels',
+      'zana_artifact_create', 'zana_artifact_read', 'zana_artifact_list', 'zana_artifact_update',
+      'zana_memory_store', 'zana_memory_search',
+      'zana_checkpoint_save', 'zana_checkpoint_list', 'zana_checkpoint_get', 'zana_checkpoint_resume',
+      'zana_event_emit', 'zana_event_query',
+    ],
+    sourceUrl: 'https://github.com/grebmann1/zana/blob/main/plugins/zana/core/skills/collaboration/GUIDE.md',
+  },
+  {
+    name: 'scheduler',
+    plugin: 'zana-loop',
+    description: 'Author and run Zana schedules — one YAML schema, two execution paths (daemon and Claude Code /loop).',
+    whenToUse: 'User asks to schedule recurring work, define a cron, or arm a `/loop` from a YAML schedule file.',
+    userInvocable: false,
+    teaches: [
+      'The shared YAML schema for `.zana/scheduler/<id>.yml` — id, schedule (`every` / `cron` / `intervalMs`), action types.',
+      'When to use the daemon path (cron support, full history, profile features) vs `/loop` (lightweight, no daemon).',
+      'Translation table: yml → `/loop <interval> <command-or-prompt>` for the loop path.',
+      'Four action types: `spawn-agent`, `command`, `workflow`, `mcp_tool` — what each fires.',
+      'History retention via `history.retain: N` (daemon-only).',
+    ],
+    tools: [
+      '/zana:schedule:list', '/zana:schedule:reload', '/zana:schedule:trigger',
+      '/zana:loop:start', '/zana:loop:stop', '/zana:loop:define',
+    ],
+    sourceUrl: 'https://github.com/grebmann1/zana/blob/main/plugins/zana/loop/skills/scheduler/SKILL.md',
+  },
+];
+---
+
+<BaseLayout
+  title="Docs · Skills"
+  description="The skill files Zana injects into agent context. Three skills total — orchestration, collaboration, scheduler — covering teams, deliberation, autopilot, tickets, channels, and schedules."
+>
+  <DocsSubnav />
+
+  <section class="container-zana py-16">
+    <p class="ornament text-xs text-gold">— claude code skills —</p>
+    <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Skills.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
+      Skills are Markdown guides Claude Code auto-loads when it detects a matching
+      task — never typed manually. They turn the raw <code class="rounded bg-parchment px-1.5 py-0.5">mcp__zana__zana_*</code>
+      tool surface into actionable knowledge: when to spawn one agent vs a team,
+      how to compose a deliberation, how to author a schedule yml. Two plugins ship
+      <strong>3</strong> skills: <code class="rounded bg-parchment px-1.5 py-0.5">zana@zana-marketplace</code>
+      bundles {skills.filter(s => s.plugin === 'zana').length} (orchestration + collaboration);
+      <code class="rounded bg-parchment px-1.5 py-0.5">zana-loop@zana-marketplace</code>
+      bundles {skills.filter(s => s.plugin === 'zana-loop').length} (scheduler).
+    </p>
+    <p class="mt-3 max-w-2xl text-moss text-sm leading-relaxed">
+      All three are <strong>not user-invocable</strong> — they activate via
+      <code class="rounded bg-parchment px-1.5 py-0.5">when_to_use</code> matchers,
+      not slash commands. To see what slash commands ship, see <a href="/docs/commands/" class="text-forest hover:text-berry font-semibold">Commands</a>.
+    </p>
+
+    <article class="mt-12 max-w-prose space-y-14">
+      {skills.map((s) => (
+        <section>
+          <p class="ornament text-xs text-gold">— {s.plugin}@zana-marketplace —</p>
+          <h2 class="mt-2 font-display text-3xl text-forest">{s.name}</h2>
+          <p class="mt-2 text-moss leading-relaxed">{s.description}</p>
+
+          <div class="mt-4 grid gap-3 text-sm md:grid-cols-2">
+            <div class="rounded-xl border border-forest/15 bg-parchment/40 px-4 py-3">
+              <p class="text-xs uppercase tracking-widest text-gold">when to use</p>
+              <p class="mt-1 text-moss">{s.whenToUse}</p>
+            </div>
+            <div class="rounded-xl border border-forest/15 bg-parchment/40 px-4 py-3">
+              <p class="text-xs uppercase tracking-widest text-gold">user-invocable</p>
+              <p class="mt-1 text-moss">{s.userInvocable ? 'yes' : 'no — auto-loaded by Claude Code'}</p>
+            </div>
+          </div>
+
+          <h3 class="mt-6 font-display text-lg text-forest">What it teaches</h3>
+          <ul class="mt-2 space-y-1.5 text-moss text-sm">
+            {s.teaches.map((t) => (<li>· {t}</li>))}
+          </ul>
+
+          <h3 class="mt-6 font-display text-lg text-forest">Linked tools / commands</h3>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            {s.tools.map((t) => (
+              <code class="rounded bg-parchment px-1.5 py-0.5 text-xs text-ink">{t}</code>
+            ))}
+          </div>
+
+          <p class="mt-4 text-sm text-moss">
+            Source: <a href={s.sourceUrl} target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">view on GitHub</a>
+          </p>
+        </section>
+      ))}
+
+      <MythicDivider />
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">How skills load</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          Each skill is a directory under <code class="rounded bg-parchment px-1.5 py-0.5">plugins/zana/&lt;core|loop&gt;/skills/&lt;name&gt;/</code>
+          containing a <code class="rounded bg-parchment px-1.5 py-0.5">SKILL.md</code> with frontmatter
+          (<code class="rounded bg-parchment px-1.5 py-0.5">name</code>,
+          <code class="rounded bg-parchment px-1.5 py-0.5">description</code>,
+          <code class="rounded bg-parchment px-1.5 py-0.5">when_to_use</code>,
+          <code class="rounded bg-parchment px-1.5 py-0.5">user-invocable</code>) and an optional
+          <code class="rounded bg-parchment px-1.5 py-0.5">GUIDE.md</code> with the full content.
+          Claude Code matches the <code class="rounded bg-parchment px-1.5 py-0.5">when_to_use</code>
+          rule against the active task; on a hit, the GUIDE is injected into the agent's context for that turn.
+        </p>
+        <p class="mt-3 text-moss leading-relaxed">
+          Skills are different from <a href="/docs/commands/" class="text-forest hover:text-berry font-semibold">slash commands</a>:
+          a slash command is a user-typed action that fires one or more MCP tools; a skill is a passive guide
+          that teaches an agent <em>how</em> to compose those tools. Most slash commands cite the skill that documents them.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Next</h2>
+        <ul class="mt-3 space-y-2 text-moss">
+          <li>· <a href="/docs/commands/" class="text-forest hover:text-berry">Commands</a> — the user-invocable surface (24 slash commands).</li>
+          <li>· <a href="/docs/concepts/" class="text-forest hover:text-berry">Concepts</a> — deliberation, autopilot, schedules, runtime adapter.</li>
+          <li>· <a href="/docs/recipes/" class="text-forest hover:text-berry">Recipes</a> — copy-paste examples for the MCP surface.</li>
+        </ul>
+      </section>
+    </article>
+  </section>
+</BaseLayout>

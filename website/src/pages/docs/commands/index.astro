@@ -22,7 +22,7 @@ const groups: Group[] = [
     title: 'Tickets',
     plugin: 'zana',
     commands: [
-      { name: '/zana:ticket', args: '<title> [--priority c|h|m|l] [--label foo,bar]', desc: 'Quick-create a ticket. Returns ticketId.' },
+      { name: '/zana:ticket', args: '<title> [--priority critical|high|medium|low] [--label foo,bar]', desc: 'Quick-create a ticket. Returns ticketId.' },
       { name: '/zana:ticket:list', args: '[status] [--label X]', desc: 'List tickets, optionally filtered. Read-only.' },
       { name: '/zana:ticket:complete', args: '<ticketId> <resultSummary…>', desc: 'Claim if needed and close with a result summary. Lands done.' },
     ],
@@ -44,6 +44,7 @@ const groups: Group[] = [
     plugin: 'zana',
     commands: [
       { name: '/zana:autopilot', args: '<goal>', desc: 'Start a goal-driven run — loop steps until evaluator says PASS or maxIterations hit.' },
+      { name: '/zana:autopilot:discover', args: '<fuzzy goal>', desc: 'Discovery walkthrough — clarifying questions, falsifiable criteria, scope boundaries — then hand the resolved plan to autopilot.' },
       { name: '/zana:autopilot:list', args: '[status]', desc: 'List goals, optionally filtered (running, completed, failed, exhausted, cancelled).' },
       { name: '/zana:autopilot:status', args: '<goalId>', desc: 'Render a goal’s state, iteration count, latest evaluator verdict.' },
       { name: '/zana:autopilot:cancel', args: '<goalId>', desc: 'Cancel a running goal. In-flight steps complete; no further iterations scheduled.' },
@@ -87,7 +88,7 @@ const totalCmds = groups.reduce((n, g) => n + g.commands.length, 0);
 
 <BaseLayout
   title="Docs · Commands"
-  description="Every Zana slash command, grouped by family. Two plugins ship 24 commands total."
+  description="Every Zana slash command, grouped by family. Two plugins ship 25 commands total."
 >
   <DocsSubnav />
 

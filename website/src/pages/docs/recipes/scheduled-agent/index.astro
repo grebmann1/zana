@@ -45,7 +45,7 @@ history:
       <section>
         <h2 class="font-display text-2xl text-forest">2. Reload + trigger</h2>
         <CodeBlock caption="claude code · MCP" lang="text">{`zana_schedule_reload({})
-// → { ok: true, schedules: [{ id: "qa-spawn", … }] }
+// → { started: 1, skipped: 0, total: 1 }
 
 zana_schedule_trigger({ scheduleId: "qa-spawn" })
 // → { ok: true, result: { status: "success", agentId, finalStatus: "pending" } }

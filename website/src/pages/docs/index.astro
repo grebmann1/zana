@@ -48,8 +48,8 @@ curl -fsSL https://raw.githubusercontent.com/grebmann1/zana/main/scripts/install
         <h2 class="font-display text-3xl text-forest">2. Install the slash-command plugins</h2>
         <p class="mt-2 text-moss">The script wires the MCP server but not the slash commands. Register the marketplace and install both plugins:</p>
         <CodeBlock caption="terminal" lang="bash">{`claude plugin marketplace add /absolute/path/to/zana
-claude plugin install zana@zana-marketplace        # orchestrator (23 skills) + daemon schedules
-claude plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling (4 skills)
+claude plugin install zana@zana-marketplace        # orchestrator (22 commands, 2 skills) + daemon schedules
+claude plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling (3 commands, 1 skill)
 
 # then restart Claude Code so the new commands register`}</CodeBlock>
         <p class="mt-3 text-moss">After restart, type <code class="rounded bg-parchment px-1.5 py-0.5">/zana</code> and you'll see the orchestrator, autopilot, council, ticket, schedule, and loop families.</p>
