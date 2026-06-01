@@ -21,6 +21,33 @@ will fail otherwise.
 
 ---
 
+## Path 0 — install from npm (fastest, no source needed)
+
+```bash
+npm install -g @zana-ai/mcp
+```
+
+This pulls in all six sibling packages
+(`@zana-ai/{core,work,extras,intelligence,swarm,server}`) and runs a
+`postinstall` that registers the MCP server in `~/.claude/settings.json`.
+
+Then bootstrap a workspace:
+
+```bash
+cd /path/to/your/project
+zana init wizard
+```
+
+The npm path does **not** ship the slash-command plugins (`/zana`,
+`/zana:autopilot`, etc.). To get those, see Path A or Path B below — they
+require the full repo because plugin marketplaces are loaded by absolute path
+in Claude Code.
+
+Jump to [Verification](#verification) once `zana status` returns a running
+daemon.
+
+---
+
 ## Path A — automated (recommended)
 
 One command from inside the cloned repo:

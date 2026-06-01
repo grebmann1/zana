@@ -33,7 +33,15 @@ import MythicDivider from '../../components/MythicDivider.astro';
 
       <section>
         <h2 class="font-display text-3xl text-forest">1. Install the daemon + CLI</h2>
-        <p class="mt-2 text-moss">One command from a clone. Also runs the guided workspace bootstrap.</p>
+        <p class="mt-2 text-moss">Two paths — pick whichever you prefer.</p>
+
+        <p class="mt-6 text-moss text-sm font-semibold uppercase tracking-widest text-gold">— from npm (fastest) —</p>
+        <CodeBlock caption="terminal" lang="bash">{`npm install -g @zana-ai/mcp
+# pulls in @zana-ai/{core,work,extras,intelligence,swarm,server} as deps
+# postinstall registers the MCP server in ~/.claude/settings.json`}</CodeBlock>
+        <p class="mt-3 text-moss text-sm">No clone, no build. The package's <code class="rounded bg-parchment px-1.5 py-0.5">postinstall</code> wires the MCP server automatically. After install, run <code class="rounded bg-parchment px-1.5 py-0.5">zana init wizard</code> in the workspace you want to bootstrap.</p>
+
+        <p class="mt-6 text-moss text-sm font-semibold uppercase tracking-widest text-gold">— from source (full repo + plugins) —</p>
         <CodeBlock caption="terminal" lang="bash">{`git clone https://github.com/grebmann1/zana.git
 cd zana
 bash scripts/install.sh

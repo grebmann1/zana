@@ -23,7 +23,7 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 
 ## Built-ins
 
-- 14 agent profiles in `packages/core/profiles/`: architect, backend-dev, frontend-dev, test-writer, code-reviewer, debugger, doc-generator, full-auto-coder, ux-designer, researcher, security-reviewer, orchestrator, swarm-master, swarm-orchestrator
+- 18 agent profiles in `packages/core/profiles/`: api-designer, architect, backend-dev, code-reviewer, debugger, doc-generator, frontend-dev, full-auto-coder, judge, orchestrator, performance-engineer, researcher, security-reviewer, slack-notifier, swarm-master, swarm-orchestrator, test-writer, ux-designer
 - 1 example module in `packages/core/modules/example/`
 - Two slash-command plugins in the `zana-marketplace` marketplace: `zana@zana-marketplace` (orchestration + daemon-driven schedules) and `zana-loop@zana-marketplace` (lightweight `/loop`-driven schedules — no daemon required)
 - Pluggable agent runtime via `ZANA_RUNTIME`: defaults to `claude-spawn`; experimental `vercel-ai` adapter available
@@ -73,10 +73,22 @@ globally.
 
 ## Getting started
 
-Quick path: `bash scripts/install.sh` from the repo root. Full step-by-step
-(humans + agents): see [INSTALL.md](./INSTALL.md), which covers prerequisites,
-manual install, marketplace + MCP registration, daemon boot, verification, and
-common failure modes.
+Three paths, fastest first:
+
+```bash
+# 0. From npm (no clone, no build) — daemon + CLI + MCP server only
+npm install -g @zana-ai/mcp
+
+# A. From source (full repo + slash-command plugins)
+git clone https://github.com/grebmann1/zana.git && cd zana
+bash scripts/install.sh
+
+# B. Manual per-step — see INSTALL.md
+```
+
+Full step-by-step (humans + agents): see [INSTALL.md](./INSTALL.md), which
+covers prerequisites, manual install, marketplace + MCP registration, daemon
+boot, verification, and common failure modes.
 
 Bare-minimum cheat sheet (development, from a clone):
 

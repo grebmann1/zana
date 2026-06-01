@@ -94,9 +94,12 @@ const features = [
         </a>
       </div>
       <div class="space-y-4">
-        <CodeBlock caption="1 · install (node 20+)" lang="bash">{`git clone https://github.com/grebmann1/zana.git
-cd zana && bash scripts/install.sh
+        <CodeBlock caption="1 · install (node 20+)" lang="bash">{`# fastest — from npm
+npm install -g @zana-ai/mcp
 
+# or full repo + slash-command plugins
+git clone https://github.com/grebmann1/zana.git
+cd zana && bash scripts/install.sh
 claude plugin marketplace add "$(pwd)"
 claude plugin install zana@zana-marketplace
 claude plugin install zana-loop@zana-marketplace`}</CodeBlock>
