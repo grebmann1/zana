@@ -60,10 +60,23 @@ export function getArtifact(id) {
   }
 }
 
+function sanitizeArtifactId(id) {
+  if (typeof id !== "string") return null;
+  if (!id || id.length > 128) return null;
+  if (!/^[a-zA-Z0-9\-_]+$/.test(id)) return null;
+  return id;
+}
+
 export function createArtifact(artifact) {
   ensureDir();
   const now = new Date().toISOString();
-  const id = artifact.id || crypto.randomUUID();
+  let id;
+  if (artifact.id) {
+    id = sanitizeArtifactId(artifact.id);
+    if (!id) throw new Error("invalid artifact id");
+  } else {
+    id = crypto.randomUUID();
+  }
 
   const record = {
     id,
@@ -83,7 +96,9 @@ export function createArtifact(artifact) {
 }
 
 export function updateArtifact(id, updates) {
-  const existing = getArtifact(id);
+  const sanitized = sanitizeArtifactId(id);
+  if (!sanitized) return null;
+  const existing = getArtifact(sanitized);
   if (!existing) return null;
 
   if (updates.title !== undefined) existing.title = updates.title;
@@ -92,7 +107,7 @@ export function updateArtifact(id, updates) {
   if (updates.linkedTickets !== undefined) existing.linkedTickets = updates.linkedTickets;
   existing.updatedAt = new Date().toISOString();
 
-  const filePath = path.join(getArtifactsDir(), `${id}.json`);
+  const filePath = path.join(getArtifactsDir(), `${sanitized}.json`);
   fs.writeFileSync(filePath, JSON.stringify(existing, null, 2) + "\n", "utf8");
   return existing;
 }

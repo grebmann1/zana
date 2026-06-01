@@ -940,6 +940,11 @@ export function start(daemon, port, options = {}) {
   });
 
   server.on("upgrade", (req, socket, head) => {
+    if (!authMiddleware.authenticate(req)) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
     terminalRelay.acceptWebSocket(req, socket, head);
   });
 
