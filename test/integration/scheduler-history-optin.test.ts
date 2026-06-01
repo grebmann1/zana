@@ -13,11 +13,11 @@ describe("scheduler — opt-in history", () => {
 
   beforeEach(async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-hist-"));
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
-    svc = await import("@zana/work/src/scheduling/service.ts");
-    store = await import("@zana/work/src/scheduling/store.ts");
-    const cfg = require("@zana/core").config;
+    svc = await import("@zana-ai/work/src/scheduling/service.ts");
+    store = await import("@zana-ai/work/src/scheduling/store.ts");
+    const cfg = require("@zana-ai/core").config;
     dir = cfg.SCHEDULER_DIR;
   });
 
@@ -65,7 +65,7 @@ describe("scheduler — opt-in history", () => {
   });
 
   it("validateSchedule rejects bad history config", async () => {
-    const schema = await import("@zana/work/src/scheduling/schema.ts");
+    const schema = await import("@zana-ai/work/src/scheduling/schema.ts");
     const issues = schema.validateSchedule({
       id: "x",
       name: "x",
@@ -79,7 +79,7 @@ describe("scheduler — opt-in history", () => {
   });
 
   it("validateSchedule warns on unknown top-level field", async () => {
-    const schema = await import("@zana/work/src/scheduling/schema.ts");
+    const schema = await import("@zana-ai/work/src/scheduling/schema.ts");
     const issues = schema.validateSchedule({
       id: "x",
       name: "x",

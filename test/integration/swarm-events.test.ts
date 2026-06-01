@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import * as events from "@zana/swarm/src/swarm/events.ts";
+import * as events from "@zana-ai/swarm/src/swarm/events.ts";
 
 beforeEach(() => {
   events.clear();

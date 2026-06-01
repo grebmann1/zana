@@ -1,8 +1,8 @@
 // FU-config — verifies the deliberation core module:
 //   - manifest is well-formed (id, configSchema, all 13 keys with defaults)
 //   - applySchemaDefaults seeds an empty config block with all 13 defaults
-//   - the @zana/work runtime-config bridge round-trips set/get/reset
-//   - the @zana/core probe-config bridge round-trips set/get/reset
+//   - the @zana-ai/work runtime-config bridge round-trips set/get/reset
+//   - the @zana-ai/core probe-config bridge round-trips set/get/reset
 //   - module init() publishes to BOTH bridges from ctx.config
 //   - module onConfigChanged() re-publishes after a config edit
 
@@ -12,21 +12,21 @@ import * as path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import * as moduleConfig from "@zana/core/src/modules/config.ts";
-import * as probeConfigDirect from "@zana/core/src/agents/probe-config.ts";
-import * as workspaceContext from "@zana/core/src/project/workspace-context.ts";
-import { resetRuntimeConfig, getRuntimeConfig } from "@zana/work/src/deliberation/runtime-config.ts";
+import * as moduleConfig from "@zana-ai/core/src/modules/config.ts";
+import * as probeConfigDirect from "@zana-ai/core/src/agents/probe-config.ts";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import { resetRuntimeConfig, getRuntimeConfig } from "@zana-ai/work/src/deliberation/runtime-config.ts";
 
-// The module's index.js does `require("@zana/core").agents.probeConfig` which
+// The module's index.js does `require("@zana-ai/core").agents.probeConfig` which
 // resolves through Node's CJS loader → packages/core/dist/src/index.js when
 // running under vitest (since dist is the package "main"). The TS source we
 // import directly (`probeConfigDirect`) is a *separate* module instance under
 // vite-ssr. To verify the bridge round-trip we have to read from the same
-// instance the module wrote to: `require("@zana/core").agents.probeConfig`.
+// instance the module wrote to: `require("@zana-ai/core").agents.probeConfig`.
 function getRuntimeProbeConfig() {
-  // Lazy require — keeps the test file importable even if @zana/core dist
+  // Lazy require — keeps the test file importable even if @zana-ai/core dist
   // isn't built yet (the dist build is a precondition of running tests).
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   return core.agents.probeConfig;
 }
 
@@ -150,7 +150,7 @@ describe("deliberation core module (FU-config)", () => {
   // ──────────────────────────────────────────────────────────────────────────
 
   it("setRuntimeConfig({defaultRounds: 5}) → getRuntimeConfig().defaultRounds === 5", () => {
-    const work = require("@zana/work");
+    const work = require("@zana-ai/work");
     work.deliberation.setRuntimeConfig({ defaultRounds: 5 });
     expect(work.deliberation.getRuntimeConfig().defaultRounds).toBe(5);
     // Untouched keys keep their existing value (merge-over-current semantic).
@@ -158,7 +158,7 @@ describe("deliberation core module (FU-config)", () => {
   });
 
   it("setRuntimeConfig accumulates partial calls (merge-over-current, not replace-from-defaults)", () => {
-    const work = require("@zana/work");
+    const work = require("@zana-ai/work");
     work.deliberation.setRuntimeConfig({ defaultRounds: 5 });
     work.deliberation.setRuntimeConfig({ checkpointTTLDays: 14 });
     const cfg = work.deliberation.getRuntimeConfig();
@@ -167,7 +167,7 @@ describe("deliberation core module (FU-config)", () => {
   });
 
   it("resetRuntimeConfig restores all 13 deliberation defaults", () => {
-    const work = require("@zana/work");
+    const work = require("@zana-ai/work");
     work.deliberation.setRuntimeConfig({
       defaultRounds: 99,
       defaultQuorum: "all",
@@ -227,7 +227,7 @@ describe("deliberation core module (FU-config)", () => {
       synthesisSimilarityThreshold: 0.6,
     }));
 
-    const work = require("@zana/work");
+    const work = require("@zana-ai/work");
     expect(work.deliberation.getRuntimeConfig().defaultRounds).toBe(4);
     expect(work.deliberation.getRuntimeConfig().defaultQuorum).toBe("all");
     expect(work.deliberation.getRuntimeConfig().defaultMode).toBe("tally");
@@ -255,7 +255,7 @@ describe("deliberation core module (FU-config)", () => {
     // The TS-imported one (workspaceContext) is what beforeEach init'd, and
     // the dist-resolved one is what the module's own require() reaches. We
     // poke the file-private fields to simulate "no workspace bootstrapped".
-    const wcDist: any = require("@zana/core").project.workspaceContext;
+    const wcDist: any = require("@zana-ai/core").project.workspaceContext;
     for (const wc of [workspaceContext as any, wcDist]) {
       try { if (typeof wc._resetForTesting === "function") wc._resetForTesting(); } catch {}
     }
@@ -300,7 +300,7 @@ describe("deliberation core module (FU-config)", () => {
       synthesisSimilarityThreshold: 0.45,
     });
 
-    const work = require("@zana/work");
+    const work = require("@zana-ai/work");
     expect(work.deliberation.getRuntimeConfig().defaultRounds).toBe(7);
     expect(getRuntimeProbeConfig().getProbeConfig().probeTimeoutMs).toBe(9999);
   });

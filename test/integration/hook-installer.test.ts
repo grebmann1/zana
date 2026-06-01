@@ -21,18 +21,18 @@ beforeEach(async () => {
   // These tests exercise the Claude path; force-on for that branch.
   process.env.ZANA_HOST_OVERRIDE = "claude";
   // Re-import so the installer's homeDir() picks up the new HOME.
-  delete require.cache[require.resolve("@zana/server/src/hooks/installer.ts")];
-  installer = await import("@zana/server/src/hooks/installer.ts");
-  // The CLAUDE_SETTINGS_BACKUP path in @zana/core/config is frozen at module
+  delete require.cache[require.resolve("@zana-ai/server/src/hooks/installer.ts")];
+  installer = await import("@zana-ai/server/src/hooks/installer.ts");
+  // The CLAUDE_SETTINGS_BACKUP path in @zana-ai/core/config is frozen at module
   // load time using the original os.homedir(), not process.env.HOME. Stub
   // backupIfNeeded() during the test so cross-machine backup writes don't
   // explode. The non-test code path is exercised in the "fresh install"
   // assertion above, where the path resolves correctly the first time.
   installer.__test_disableBackup?.();
   // Fallback for when the installer doesn't expose a hook: stub by intercepting
-  // _config() via the @zana/core facade. Simpler — just create the dst
+  // _config() via the @zana-ai/core facade. Simpler — just create the dst
   // directory and a benign backup file so copyFileSync's destination exists.
-  const cfg = require("@zana/core").config;
+  const cfg = require("@zana-ai/core").config;
   fs.mkdirSync(path.dirname(cfg.CLAUDE_SETTINGS_BACKUP), { recursive: true });
   if (!fs.existsSync(cfg.CLAUDE_SETTINGS_BACKUP)) {
     fs.writeFileSync(cfg.CLAUDE_SETTINGS_BACKUP, "{}");

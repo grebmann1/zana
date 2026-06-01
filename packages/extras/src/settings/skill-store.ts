@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { execSync } from "node:child_process";
-// Lazy access to @zana/core — avoids load-order issues when this module is
+// Lazy access to @zana-ai/core — avoids load-order issues when this module is
 // required during core initialization.
-function _core() { return require("@zana/core"); }
-import { SKILLS_DIR } from "@zana/core/dist/src/config";
+function _core() { return require("@zana-ai/core"); }
+import { SKILLS_DIR } from "@zana-ai/core/dist/src/config";
 const profileStoreMod: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
 const workspaceCtxMod: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 

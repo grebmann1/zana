@@ -5,7 +5,7 @@ import os from "node:os";
 
 const SCHEDULER_DIR = path.join(os.homedir(), ".zana", "scheduler");
 
-import * as schedulerStore from "@zana/work/src/scheduling/store.ts";
+import * as schedulerStore from "@zana-ai/work/src/scheduling/store.ts";
 
 const PREFIX = `test-sched-${Date.now()}`;
 

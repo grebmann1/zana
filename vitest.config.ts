@@ -13,10 +13,10 @@ export default defineConfig({
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json"],
   },
   ssr: {
-    // Inline @zana/core sources so Vite's plugin can transform their requires.
+    // Inline @zana-ai/core sources so Vite's plugin can transform their requires.
     // Without this, Node's CJS loader handles internal requires and can't find
     // the `.js`-suffixed paths used in source files.
-    noExternal: [/^@zana\//, "@zana/core"],
+    noExternal: [/^@zana\//, "@zana-ai/core"],
   },
   plugins: [
     {

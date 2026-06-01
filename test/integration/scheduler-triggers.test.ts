@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pickBackend, computeNextRunAt, cronBackend } from "@zana/work/src/scheduling/triggers/index.ts";
+import { pickBackend, computeNextRunAt, cronBackend } from "@zana-ai/work/src/scheduling/triggers/index.ts";
 
 describe("scheduler-triggers: pickBackend", () => {
   it("picks cron when cron field is present and valid", () => {

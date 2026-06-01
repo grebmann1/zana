@@ -11,9 +11,9 @@ describe("scheduler command action — shell injection guard", () => {
 
   beforeEach(async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-cmd-"));
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
-    svc = await import("@zana/work/src/scheduling/service.ts");
+    svc = await import("@zana-ai/work/src/scheduling/service.ts");
   });
 
   it("rejects legacy string `command` — shell injection guard", async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildClaudeArgs } from "@zana/core/src/agents/spawner.ts";
+import { buildClaudeArgs } from "@zana-ai/core/src/agents/spawner.ts";
 
 describe("agent-spawner", () => {
   describe("buildClaudeArgs", () => {

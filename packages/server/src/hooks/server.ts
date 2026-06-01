@@ -7,12 +7,12 @@
 
 import * as http from "node:http";
 import * as url from "node:url";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function _log() { return _core().util.logger.getLogger("hook-server"); }
 const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 function appendAudit(...args: any[]) { return _core().events.log.appendAudit(...args); }
-const ticketService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").tickets.service[p] });
-const schedulerService: any = new Proxy({}, { get: (_t, p) => require("@zana/work").scheduling.service[p] });
+const ticketService: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/work").tickets.service[p] });
+const schedulerService: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/work").scheduling.service[p] });
 const eventBusService: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
 
 function DEFAULT_PORT() { return _core().config.DEFAULT_HOOK_PORT; }

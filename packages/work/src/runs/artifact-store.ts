@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 
 function getArtifactsDir() {
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().artifactsDir;
   return path.join(core.config.ZANA_DIR, "artifacts");
@@ -167,7 +167,7 @@ export function storeContentAddressed(bytes) {
   // blobs by guessing hashes. Reads of existing blobs stay open
   // (readContentAddressed/hasContentAddressed/listContentAddressed are
   // unchanged) so prior global-scope state can still be inspected.
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (!ctx.isInitialized()) {
     const ErrCtor = ctx.WorkspaceNotInitializedError;

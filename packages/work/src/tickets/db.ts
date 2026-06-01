@@ -2,7 +2,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as ticketStoreFallback from "./store";
 import * as migration from "./migration";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
 
 let Database: any;

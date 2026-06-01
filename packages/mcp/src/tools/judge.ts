@@ -22,13 +22,13 @@
 // human-overridable. The judge is an orchestration-layer follow-up, not a
 // new path through the state machine.
 
-// Type-only import — we read the source TS directly because @zana/work
+// Type-only import — we read the source TS directly because @zana-ai/work
 // exposes `deliberation` via its dist CJS index without re-exporting the
 // type. No runtime cost: TS strips type-only imports.
 import type { Deliberation } from "../../../work/src/deliberation/types";
 
-function _work(): any { return require("@zana/work"); }
-function _core(): any { return require("@zana/core"); }
+function _work(): any { return require("@zana-ai/work"); }
+function _core(): any { return require("@zana-ai/core"); }
 function _delib(): any { return _work().deliberation; }
 
 export interface AdjudicateDeps {

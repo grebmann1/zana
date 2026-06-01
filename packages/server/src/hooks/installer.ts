@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isClaudeHost } from "@zana/core/dist/src/host/detect.js";
-function _config() { return require("@zana/core").config; }
+import { isClaudeHost } from "@zana-ai/core/dist/src/host/detect.js";
+function _config() { return require("@zana-ai/core").config; }
 
 export const HOOK_EVENTS = [
   "SessionStart",

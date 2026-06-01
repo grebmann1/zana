@@ -170,13 +170,13 @@ Manual fan-out is still right for parallel research where you'll merge findings 
 
 ### Profile lens metadata
 
-Voters can be picked by `lens` instead of `profileId`. The router (`resolveVoters` in `@zana/intelligence`) resolves a lens to concrete profile(s) at spawn time.
+Voters can be picked by `lens` instead of `profileId`. The router (`resolveVoters` in `@zana-ai/intelligence`) resolves a lens to concrete profile(s) at spawn time.
 
 ```
 voters: [{lens: "security"}, {lens: "performance"}]
 ```
 
-> **Note**: today `zana_deliberate` accepts string profileIds only. The `{lens: ...}` form is wired through `@zana/intelligence` but not yet plumbed into the MCP tool — see follow-up `FU-T11-c`. Until that lands, pass resolved profileIds (e.g. `"security-reviewer"`, `"performance-engineer"`).
+> **Note**: today `zana_deliberate` accepts string profileIds only. The `{lens: ...}` form is wired through `@zana-ai/intelligence` but not yet plumbed into the MCP tool — see follow-up `FU-T11-c`. Until that lands, pass resolved profileIds (e.g. `"security-reviewer"`, `"performance-engineer"`).
 
 Available lenses: `architecture`, `security`, `code-quality`, `testing`, `debugging`, `backend`, `frontend`, `research`, `docs`, `ux`, `performance`, `api-design`.
 

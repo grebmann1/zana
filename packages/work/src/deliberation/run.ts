@@ -49,8 +49,8 @@ import type {
   Voter,
 } from "./types";
 
-// Lazy require for @zana/core to dodge cyclic load order at module init.
-function _core(): any { return require("@zana/core"); }
+// Lazy require for @zana-ai/core to dodge cyclic load order at module init.
+function _core(): any { return require("@zana-ai/core"); }
 function _bus(): any { return _core().events.bus; }
 function _EVENTS(): any { return _core().events.EVENTS; }
 

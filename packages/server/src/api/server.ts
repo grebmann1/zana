@@ -2,7 +2,7 @@ import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as sseBroadcaster from "./sse-broadcaster";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 const connectionRegistry: any = new Proxy({}, { get: (_t, p) => _core().daemon.connectionRegistry[p] });
 import * as healthMonitor from "./health-monitor";
 const terminalRelay: any = new Proxy({}, { get: (_t, p) => _core().agents.terminalRelay[p] });
@@ -243,7 +243,7 @@ async function handleRequest(req, res) {
     // Hard load gate — same one applied at the orchestrator-command boundary.
     // We refuse a melted box outright rather than spawn an orchestrator that
     // burns turns retrying spawn_agent forever (issue #a2a8f209).
-    const { checkSystemResources } = require("@zana/core").agents.manager;
+    const { checkSystemResources } = require("@zana-ai/core").agents.manager;
     const hardError = checkSystemResources?.("hard");
     if (hardError) {
       json(res, { ok: false, error: `cannot start team: ${hardError}` });
@@ -264,7 +264,7 @@ async function handleRequest(req, res) {
 
   // --- Tickets ---
   if (method === "GET" && pathname === "/tickets/rules") {
-    const watcher = require("@zana/work").tickets.watcher;
+    const watcher = require("@zana-ai/work").tickets.watcher;
     json(res, {
       rules: watcher.getRules(),
       warnings: watcher.getRuleWarnings ? watcher.getRuleWarnings() : [],
@@ -272,7 +272,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "GET" && pathname === "/tickets") {
-    const ticketService = require("@zana/work").tickets.service;
+    const ticketService = require("@zana-ai/work").tickets.service;
     const status = url.searchParams.get("status");
     const label = url.searchParams.get("label");
     json(res, ticketService.listTickets({ status, label }));
@@ -289,7 +289,7 @@ async function handleRequest(req, res) {
   }
   const ticketMatch = pathname.match(/^\/tickets\/([^/]+)$/);
   if (ticketMatch) {
-    const ticketService = require("@zana/work").tickets.service;
+    const ticketService = require("@zana-ai/work").tickets.service;
     if (method === "GET") {
       const t = ticketService.getTicket(ticketMatch[1]);
       if (!t) { json(res, { error: "not found" }, 404); return; }
@@ -329,7 +329,7 @@ async function handleRequest(req, res) {
   }
   const ticketCommentMatch = pathname.match(/^\/tickets\/([^/]+)\/comment$/);
   if (method === "POST" && ticketCommentMatch) {
-    const ticketService = require("@zana/work").tickets.service;
+    const ticketService = require("@zana-ai/work").tickets.service;
     const body = await readBody(req);
     ticketService.addComment(ticketCommentMatch[1], body.agentId || "api", body.agentName || "API", body.content);
     json(res, { ok: true });
@@ -426,12 +426,12 @@ async function handleRequest(req, res) {
 
   // --- Settings ---
   if (method === "GET" && pathname === "/settings") {
-    const settingsStore = require("@zana/extras").settings.store;
+    const settingsStore = require("@zana-ai/extras").settings.store;
     json(res, settingsStore.getSettings());
     return;
   }
   if (method === "POST" && pathname === "/settings") {
-    const settingsStore = require("@zana/extras").settings.store;
+    const settingsStore = require("@zana-ai/extras").settings.store;
     const body = await readBody(req);
     settingsStore.updateSettings(body);
     json(res, settingsStore.getSettings());
@@ -695,12 +695,12 @@ async function handleRequest(req, res) {
 
   // --- Schedules ---
   if (method === "GET" && pathname === "/api/schedules") {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     json(res, schedulerService.listSchedules());
     return;
   }
   if (method === "POST" && pathname === "/api/schedules") {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     const body = await readBody(req);
     const schedule = schedulerService.createSchedule(body);
     json(res, schedule, 201);
@@ -708,7 +708,7 @@ async function handleRequest(req, res) {
   }
   const scheduleMatch = pathname.match(/^\/api\/schedules\/([^/]+)$/);
   if (scheduleMatch) {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     const id = scheduleMatch[1];
     if (method === "GET") {
       const s = schedulerService.getSchedule(id);
@@ -731,7 +731,7 @@ async function handleRequest(req, res) {
   }
   const scheduleEnableMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/enable$/);
   if (method === "POST" && scheduleEnableMatch) {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     const result = schedulerService.enableSchedule(scheduleEnableMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -739,7 +739,7 @@ async function handleRequest(req, res) {
   }
   const scheduleDisableMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/disable$/);
   if (method === "POST" && scheduleDisableMatch) {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     const result = schedulerService.disableSchedule(scheduleDisableMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -747,7 +747,7 @@ async function handleRequest(req, res) {
   }
   const scheduleTriggerMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/trigger$/);
   if (method === "POST" && scheduleTriggerMatch) {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     const result = await schedulerService.triggerSchedule(scheduleTriggerMatch[1]);
     if (result.error) { json(res, result, 404); return; }
     json(res, result);
@@ -755,19 +755,19 @@ async function handleRequest(req, res) {
   }
   const scheduleHistoryMatch = pathname.match(/^\/api\/schedules\/([^/]+)\/history$/);
   if (method === "GET" && scheduleHistoryMatch) {
-    const schedulerStore = require("@zana/work").scheduling.store;
+    const schedulerStore = require("@zana-ai/work").scheduling.store;
     json(res, schedulerStore.getRunHistory(scheduleHistoryMatch[1]));
     return;
   }
   if (method === "POST" && pathname === "/api/schedules/reload") {
-    const schedulerService = require("@zana/work").scheduling.service;
+    const schedulerService = require("@zana-ai/work").scheduling.service;
     json(res, schedulerService.loadFromDisk());
     return;
   }
 
   // --- Checkpoints ---
   if (method === "GET" && pathname === "/api/checkpoints") {
-    const checkpointStore = require("@zana/work").runs.checkpoint.store;
+    const checkpointStore = require("@zana-ai/work").runs.checkpoint.store;
     const filter = {};
     const teamId = url.searchParams.get("teamId");
     if (teamId) filter.teamId = teamId;
@@ -779,7 +779,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "POST" && pathname === "/api/checkpoints") {
-    const checkpointStore = require("@zana/work").runs.checkpoint.store;
+    const checkpointStore = require("@zana-ai/work").runs.checkpoint.store;
     const body = await readBody(req);
     const checkpoint = checkpointStore.save(body);
     json(res, checkpoint, 201);
@@ -787,7 +787,7 @@ async function handleRequest(req, res) {
   }
   const checkpointMatch = pathname.match(/^\/api\/checkpoints\/([^/]+)$/);
   if (checkpointMatch) {
-    const checkpointStore = require("@zana/work").runs.checkpoint.store;
+    const checkpointStore = require("@zana-ai/work").runs.checkpoint.store;
     const id = checkpointMatch[1];
     if (method === "GET") {
       const cp = checkpointStore.load(id);
@@ -798,7 +798,7 @@ async function handleRequest(req, res) {
   }
   const checkpointResumeMatch = pathname.match(/^\/api\/checkpoints\/([^/]+)\/resume$/);
   if (method === "POST" && checkpointResumeMatch) {
-    const checkpointResume = require("@zana/work").runs.checkpoint.resume;
+    const checkpointResume = require("@zana-ai/work").runs.checkpoint.resume;
     const result = await checkpointResume.resume(
       checkpointResumeMatch[1],
       daemon.agentManager,
@@ -811,7 +811,7 @@ async function handleRequest(req, res) {
 
   // --- Workflows ---
   if (method === "POST" && pathname === "/api/workflows/run") {
-    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
+    const workflowEngine = require("@zana-ai/work").scheduling.workflowEngine;
     const body = await readBody(req);
     if (!body.skill && !body.steps) { json(res, { error: "skill or steps required" }, 400); return; }
     const skill = body.skill || { id: body.id || "inline", name: body.name || "inline", steps: body.steps };
@@ -821,7 +821,7 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "GET" && pathname === "/api/workflows/runs") {
-    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
+    const workflowEngine = require("@zana-ai/work").scheduling.workflowEngine;
     const filter = {};
     const status = url.searchParams.get("status");
     if (status) filter.status = status;
@@ -830,7 +830,7 @@ async function handleRequest(req, res) {
   }
   const workflowRunMatch = pathname.match(/^\/api\/workflows\/runs\/([^/]+)$/);
   if (method === "GET" && workflowRunMatch) {
-    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
+    const workflowEngine = require("@zana-ai/work").scheduling.workflowEngine;
     const run = workflowEngine.loadRun(workflowRunMatch[1]);
     if (!run) { json(res, { error: "not found" }, 404); return; }
     json(res, run);
@@ -881,7 +881,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  const pluginLoader = require("@zana/extras").plugins.loader;
+  const pluginLoader = require("@zana-ai/extras").plugins.loader;
   if (pathname.startsWith("/x/") && pluginLoader.handlePluginRoute(pathname, req, res)) {
     return;
   }

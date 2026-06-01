@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { findClaude } from "@zana/core/src/agents/spawner.ts";
+import { findClaude } from "@zana-ai/core/src/agents/spawner.ts";
 
 describe("findClaude", () => {
   const originalBin = process.env.ZANA_WORKER_BIN;

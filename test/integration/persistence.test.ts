@@ -7,7 +7,7 @@ const PERSIST_DIR = path.join(os.homedir(), ".zana", "persistence");
 const INBOX_FILE = path.join(PERSIST_DIR, "inboxes.ndjson");
 const AGENTS_FILE = path.join(PERSIST_DIR, "agents.json");
 
-import * as persistence from "@zana/core/src/persistence.ts";
+import * as persistence from "@zana-ai/core/src/persistence.ts";
 
 // Use a unique prefix so tests don't collide with real data
 const testAgentId = `test-agent-${Date.now()}`;

@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 const TICKETS_DIR = path.join(os.homedir(), ".zana", "tickets");
 const SPRINTS_DIR = path.join(os.homedir(), ".zana", "sprints");
 
-import * as ticketService from "@zana/work/src/tickets/service.ts";
+import * as ticketService from "@zana-ai/work/src/tickets/service.ts";
 
 function cleanupTestFiles(prefix) {
   // Clean tickets (stored as directories with ticket.json inside)

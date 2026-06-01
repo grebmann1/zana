@@ -1,5 +1,5 @@
 {
-  "name": "@zana/extras",
+  "name": "@zana-ai/extras",
   "version": "0.1.0",
   "description": "User-facing customization — settings store, skill store, plugin loader.",
   "main": "dist/src/index.js",
@@ -9,8 +9,20 @@
   },
   "engines": { "node": ">=20.0.0" },
   "dependencies": {
-    "@zana/core": "*",
-    "@zana/work": "*"
+    "@zana-ai/core": "0.1.0"
   },
-  "files": ["dist/"]
+  "peerDependencies": {
+    "@zana-ai/work": "0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@zana-ai/work": { "optional": true }
+  },
+  "files": ["dist/"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/extras"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
 }

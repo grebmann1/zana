@@ -1,7 +1,7 @@
 // Quorum + graceful-degradation — T6
 //
 // Assembles a council of voters for a PROPOSED deliberation by smoke-probing
-// each candidate (via @zana/core probeAgent), applying quorum rules, and
+// each candidate (via @zana-ai/core probeAgent), applying quorum rules, and
 // transitioning the deliberation to REVIEWING (with the resolved Voter[]) or
 // ESCALATED (when quorum cannot be met or governance forbids it).
 //
@@ -27,9 +27,9 @@ import {
 } from "./run";
 import { getRuntimeConfig } from "./runtime-config";
 
-// Lazy-load @zana/core to dodge module init cycles (matches the pattern in
+// Lazy-load @zana-ai/core to dodge module init cycles (matches the pattern in
 // run.ts). We need probeAgent + the typed ProbeFailure surface from FU-T3a.
-function _core(): any { return require("@zana/core"); }
+function _core(): any { return require("@zana-ai/core"); }
 function _probeAgent(): any { return _core().agents.manager.probeAgent; }
 
 // Mirror the probe-failure shape from packages/core/src/events/deliberation-events.ts.
@@ -64,7 +64,7 @@ export interface VoterCandidate {
 }
 
 export interface AssembleDeps {
-  // Allow injecting a fake probeAgent for tests. Defaults to @zana/core's.
+  // Allow injecting a fake probeAgent for tests. Defaults to @zana-ai/core's.
   probeAgent?: (profile: any, probe?: any, deps?: any) => Promise<any>;
   spawnHeadlessAgent?: any;
   getAgent?: any;
@@ -504,7 +504,7 @@ async function assembleCore(
         // the pattern used by other deliberation events (post-persist).
         if (degradationEntry) {
           try {
-            const core = require("@zana/core");
+            const core = require("@zana-ai/core");
             const bus = core.events.bus;
             const EVENTS = core.events.EVENTS;
             bus.emit(EVENTS.DELIBERATION_DEGRADED, {

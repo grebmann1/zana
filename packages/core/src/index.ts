@@ -3,16 +3,16 @@ module.exports = {
   config: require("./config"),
 
   get swarm() {
-    return require("@zana/swarm");
+    return require("@zana-ai/swarm");
   },
   get settings() {
-    return require("@zana/extras").settings;
+    return require("@zana-ai/extras").settings;
   },
   get plugins() {
-    return require("@zana/extras").plugins;
+    return require("@zana-ai/extras").plugins;
   },
   get intelligence() {
-    const i = require("@zana/intelligence");
+    const i = require("@zana-ai/intelligence");
     return {
       taskRouter: i.taskRouter,
       goap: i.goapPlanner,
@@ -20,14 +20,14 @@ module.exports = {
       backgroundWorkers: i.backgroundWorkers,
     };
   },
-  get tickets() { return require("@zana/work").tickets; },
+  get tickets() { return require("@zana-ai/work").tickets; },
   get scheduling() {
-    const s = require("@zana/work").scheduling;
+    const s = require("@zana-ai/work").scheduling;
     return { service: s.service, store: s.store, workflow: s.workflowEngine };
   },
-  get teams() { return require("@zana/work").teams; },
+  get teams() { return require("@zana-ai/work").teams; },
   get runs() {
-    const r = require("@zana/work").runs;
+    const r = require("@zana-ai/work").runs;
     return {
       store: r.store,
       tracker: r.tracker,
@@ -45,9 +45,9 @@ module.exports = {
     workspaceContext: require("./project/workspace-context"),
   },
   // Re-exported at top level so callers can do
-  //   const { WorkspaceNotInitializedError } = require("@zana/core");
+  //   const { WorkspaceNotInitializedError } = require("@zana-ai/core");
   // without reaching into project.* internals. Same class identity as
-  // require("@zana/core").project.workspaceContext.WorkspaceNotInitializedError
+  // require("@zana-ai/core").project.workspaceContext.WorkspaceNotInitializedError
   // — both resolve to the singleton module.
   get WorkspaceNotInitializedError() {
     return require("./project/workspace-context").WorkspaceNotInitializedError;
@@ -77,15 +77,15 @@ module.exports = {
     stats: require("./events/stats-engine"),
     // Type-only module — required so the resolved path is part of the package
     // surface; downstream TS consumers import payload types from
-    // "@zana/core/src/events/deliberation-events".
+    // "@zana-ai/core/src/events/deliberation-events".
     deliberationEvents: require("./events/deliberation-events"),
   },
   get hooks() {
-    const h = require("@zana/server").hooks;
+    const h = require("@zana-ai/server").hooks;
     return { server: h.server, enforcer: h.enforcer, installer: h.installer };
   },
   get api() {
-    const a = require("@zana/server").api;
+    const a = require("@zana-ai/server").api;
     return { server: a.server, auth: a.authMiddleware, sse: a.sseBroadcaster, health: a.healthMonitor };
   },
   modules: {

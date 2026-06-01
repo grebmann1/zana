@@ -409,30 +409,30 @@ export async function collectReviews(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lazy default-deps wiring — keeps this module decoupled from @zana/core
+// Lazy default-deps wiring — keeps this module decoupled from @zana-ai/core
 // at import time so tests can exercise it without booting the daemon.
 // ─────────────────────────────────────────────────────────────────────────────
 function _defaultSpawn() {
   return (profile: any, options: any) => {
-    const { agents } = require("@zana/core");
+    const { agents } = require("@zana-ai/core");
     return agents.manager.spawnHeadlessAgent(profile, options);
   };
 }
 function _defaultGet() {
   return (agentId: string) => {
-    const { agents } = require("@zana/core");
+    const { agents } = require("@zana-ai/core");
     return agents.manager.getAgent(agentId);
   };
 }
 function _defaultKill() {
   return (agentId: string) => {
-    const { agents } = require("@zana/core");
+    const { agents } = require("@zana-ai/core");
     return agents.manager.killAgent(agentId);
   };
 }
 function _defaultStoreCAS() {
   return (bytes: string | Buffer) => {
-    const work = require("@zana/work");
+    const work = require("@zana-ai/work");
     return work.runs.artifacts.storeContentAddressed(bytes);
   };
 }

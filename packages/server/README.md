@@ -1,4 +1,4 @@
-# @zana/server — HTTP surfaces
+# @zana-ai/server — HTTP surfaces
 
 Zana exposes two HTTP servers from a single daemon process. They serve
 different callers, have different trust models, and should never be

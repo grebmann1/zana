@@ -13,7 +13,7 @@ import * as crypto from "node:crypto";
 // ─── Path resolution ─────────────────────────────────────────────────────────
 
 function getPlansDir() {
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().plansDir;
   return path.join(core.config.ZANA_DIR, "plans");

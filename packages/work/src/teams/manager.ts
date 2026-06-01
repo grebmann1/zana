@@ -1,5 +1,5 @@
 import * as teamStore from "./store";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function _agentManager(): any { return _core().agents.manager; }
 function _profileStore(): any { return _core().agents.profileStore; }
 function _bus(): any { return _core().events.bus; }
@@ -219,7 +219,7 @@ export function startTeam(teamId, options = {}) {
   } else {
     result = _agentManager().spawnInteractive(augmentedProfile, { cwd, cols: options.cols, rows: options.rows });
     setTimeout(() => {
-      const ptyHost = require("@zana/core").agents.ptyHost;
+      const ptyHost = require("@zana-ai/core").agents.ptyHost;
       ptyHost.writeTerminal(result.terminalId, kickoffMessage + "\n");
     }, 20000);
   }

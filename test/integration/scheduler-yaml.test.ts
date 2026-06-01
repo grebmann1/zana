@@ -4,7 +4,7 @@ import {
   parseYaml,
   everShorthandToMs,
   msToEvery,
-} from "@zana/work/src/scheduling/yaml-format.ts";
+} from "@zana-ai/work/src/scheduling/yaml-format.ts";
 
 describe("scheduler-yaml: everShorthandToMs", () => {
   it("converts simple units", () => {

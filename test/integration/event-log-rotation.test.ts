@@ -12,7 +12,7 @@ describe("events/log rotation", () => {
   let log: any;
 
   beforeEach(async () => {
-    log = await import("@zana/core/src/events/log.ts");
+    log = await import("@zana-ai/core/src/events/log.ts");
   });
 
   afterEach(() => {
@@ -64,10 +64,10 @@ describe("events/log rotation", () => {
   });
 
   it("append() rotates when ZANA_EVENT_LOG_MAX_BYTES is small", async () => {
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     const tmpWs = mkdtempSync(join(tmpdir(), "elog-ws-"));
     ws.init(tmpWs);
-    const coreFacade = await import("@zana/core");
+    const coreFacade = await import("@zana-ai/core");
     coreFacade.project.workspaceContext.init(tmpWs);
     process.env.ZANA_EVENT_LOG_MAX_BYTES = "256";
     log.init(tmpWs);

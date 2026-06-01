@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function _agentManager(): any { return _core().agents.manager; }
 function _profileStore(): any { return _core().agents.profileStore; }
 function _bus(): any { return _core().events.bus; }

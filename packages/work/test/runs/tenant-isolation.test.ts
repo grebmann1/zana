@@ -7,7 +7,7 @@
 // blocked. Other checkpoint kinds ("run", legacy autopilot/team flows)
 // are unaffected.
 //
-// The artifact-store and checkpoint store reach @zana/core via require(),
+// The artifact-store and checkpoint store reach @zana-ai/core via require(),
 // which resolves to the dist build under vitest. We initialize BOTH module
 // instances (the TS-imported one and the dist-resolved one) where it
 // matters, and we read the WorkspaceNotInitializedError class off the
@@ -19,10 +19,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import * as workspaceContextTs from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
-import * as artifactStore from "@zana/work/src/runs/artifact-store.ts";
-import * as checkpointStore from "@zana/work/src/runs/checkpoint/store.ts";
+import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
+import * as artifactStore from "@zana-ai/work/src/runs/artifact-store.ts";
+import * as checkpointStore from "@zana-ai/work/src/runs/checkpoint/store.ts";
 
 // Pull the class from the dist instance — that is the one the production
 // code constructs. The .ts-imported instance has its OWN class object; an
@@ -39,7 +39,7 @@ function makeTmp(prefix: string): string {
 // Reset both workspace-context module instances back to "uninitialized".
 // `_resetForTesting()` is the documented test-only escape hatch on the
 // singleton — required because the artifact-store / checkpoint store reach
-// @zana/core via require() (dist instance) while the test file imports the
+// @zana-ai/core via require() (dist instance) while the test file imports the
 // .ts source (separate instance). Both must be flipped together.
 function resetWorkspace() {
   for (const wc of [workspaceContextTs as any, wcDist]) {

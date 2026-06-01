@@ -8,7 +8,7 @@ export {};
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
-const { config: { SCRATCHPAD_DIR, SKILLS_DIR } } = require("@zana/core");
+const { config: { SCRATCHPAD_DIR, SKILLS_DIR } } = require("@zana-ai/core");
 
 // MCP stdio protocol uses stdout for framed JSON-RPC only.
 // Route normal logs to stderr to avoid corrupting the MCP stream.
@@ -23,10 +23,10 @@ console.log = (...args) => {
 
 // Lazy getters for cross-package modules — Node's require cache makes repeat calls cheap.
 // Do NOT memoize into module-scope vars; that defeats the cycle break.
-function _workflowEngine() { return require("@zana/work").scheduling.workflowEngine; }
-function _ticketServiceMcp() { return require("@zana/work").tickets.service; }
-function _skillStoreMcp() { return require("@zana/extras").settings.skillStore; }
-function _moduleConfigMcp() { return require("@zana/core").modules.config; }
+function _workflowEngine() { return require("@zana-ai/work").scheduling.workflowEngine; }
+function _ticketServiceMcp() { return require("@zana-ai/work").tickets.service; }
+function _skillStoreMcp() { return require("@zana-ai/extras").settings.skillStore; }
+function _moduleConfigMcp() { return require("@zana-ai/core").modules.config; }
 
 const MCP_MAX_BUFFER_BYTES = 10 * 1024 * 1024; // 10 MB stdin buffer cap
 
@@ -48,7 +48,7 @@ let bootstrapPromise = null;
 
 function getProjectInitModule() {
   try {
-    return require("@zana/core/dist/src/project/init.js");
+    return require("@zana-ai/core/dist/src/project/init.js");
   } catch {
     const appRoot = path.resolve(__dirname, "..", "..", "..", "..");
     return require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
@@ -73,7 +73,7 @@ async function ensureDaemonRunning() {
     }
 
     process.env.ZANA_SKIP_MCP_INSTALL = "1";
-    const { init: coreInit } = require("@zana/core");
+    const { init: coreInit } = require("@zana-ai/core");
     localDaemon = await coreInit({
       workspace,
       headless: true,
@@ -1224,7 +1224,7 @@ let moduleToolRegistry = null;
 function getModuleToolRegistry() {
   if (!moduleToolRegistry) {
     try {
-      moduleToolRegistry = require("@zana/core").modules.toolRegistry;
+      moduleToolRegistry = require("@zana-ai/core").modules.toolRegistry;
     } catch {
       try {
         moduleToolRegistry = require(path.resolve(__dirname, "../../../core/dist/src/modules/tool-registry.js"));
@@ -1522,25 +1522,25 @@ async function handleToolCall(name, args, callerAgentId) {
 
     // Goal-driven autopilot
     case "zana_autopilot_goal_driven": {
-      const ml = require("@zana/core").modules.loader;
+      const ml = require("@zana-ai/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
       if (!ap?.api) return { error: "autopilot module not available" };
       return await ap.api.setGoal(args);
     }
     case "zana_autopilot_goal_status": {
-      const ml = require("@zana/core").modules.loader;
+      const ml = require("@zana-ai/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
       if (!ap?.api) return { error: "autopilot module not available" };
       return ap.api.getGoal(args.goalId) || { error: "unknown goalId" };
     }
     case "zana_autopilot_goal_list": {
-      const ml = require("@zana/core").modules.loader;
+      const ml = require("@zana-ai/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
       if (!ap?.api) return { error: "autopilot module not available" };
       return ap.api.listGoals(args || {});
     }
     case "zana_autopilot_goal_cancel": {
-      const ml = require("@zana/core").modules.loader;
+      const ml = require("@zana-ai/core").modules.loader;
       const ap = ml.getModule?.("autopilot");
       if (!ap?.api) return { error: "autopilot module not available" };
       return ap.api.cancelGoal(args.goalId);

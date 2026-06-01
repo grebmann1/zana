@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
-import * as checkpointStore from "@zana/work/src/runs/checkpoint/store.ts";
-import * as run from "@zana/work/src/deliberation/run.ts";
-import * as rc from "@zana/work/src/deliberation/round-controller.ts";
-import * as runtimeConfig from "@zana/work/src/deliberation/runtime-config.ts";
-import type { Deliberation, Vote, Dissent } from "@zana/work/src/deliberation/types.ts";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
+import * as checkpointStore from "@zana-ai/work/src/runs/checkpoint/store.ts";
+import * as run from "@zana-ai/work/src/deliberation/run.ts";
+import * as rc from "@zana-ai/work/src/deliberation/round-controller.ts";
+import * as runtimeConfig from "@zana-ai/work/src/deliberation/runtime-config.ts";
+import type { Deliberation, Vote, Dissent } from "@zana-ai/work/src/deliberation/types.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers — push a deliberation into CONVERGING state with N voters and the

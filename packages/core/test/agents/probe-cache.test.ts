@@ -4,8 +4,8 @@ import {
   lookupProbeResult,
   clearProbeCache,
   getProbeCacheStats,
-} from "@zana/core/src/agents/probe-cache.ts";
-import type { ProbeResult } from "@zana/core/src/agents/manager.ts";
+} from "@zana-ai/core/src/agents/probe-cache.ts";
+import type { ProbeResult } from "@zana-ai/core/src/agents/manager.ts";
 
 function fakeResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
   return {

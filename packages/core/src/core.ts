@@ -14,21 +14,21 @@ import * as eventBusService from "./events/service";
 import * as workspaceContext from "./project/workspace-context";
 import * as moduleLoader from "./modules/loader";
 
-// Lazy thunks for cross-package modules. Sibling packages depend on @zana/core,
+// Lazy thunks for cross-package modules. Sibling packages depend on @zana-ai/core,
 // so eager top-level requires here would deadlock during cross-package init.
 // Node's require cache keeps repeat calls cheap.
-function _serverPkg(): any { return require("@zana/server"); }
-function _swarmPkg(): any { return require("@zana/swarm"); }
-function _intel(): any { return require("@zana/intelligence"); }
-function _extras(): any { return require("@zana/extras"); }
-function _teamStore(): any { return require("@zana/work").teams.store; }
-function _teamManager(): any { return require("@zana/work").teams.manager; }
-function _runTracker(): any { return require("@zana/work").runs.tracker; }
-function _ticketWatcher(): any { return require("@zana/work").tickets.watcher; }
-function _schedulingService(): any { return require("@zana/work").scheduling.service; }
+function _serverPkg(): any { return require("@zana-ai/server"); }
+function _swarmPkg(): any { return require("@zana-ai/swarm"); }
+function _intel(): any { return require("@zana-ai/intelligence"); }
+function _extras(): any { return require("@zana-ai/extras"); }
+function _teamStore(): any { return require("@zana-ai/work").teams.store; }
+function _teamManager(): any { return require("@zana-ai/work").teams.manager; }
+function _runTracker(): any { return require("@zana-ai/work").runs.tracker; }
+function _ticketWatcher(): any { return require("@zana-ai/work").tickets.watcher; }
+function _schedulingService(): any { return require("@zana-ai/work").scheduling.service; }
 
 export async function init({ workspace, headless = false, onHook, preferredPort, skipApiServer = false }) {
-  // Resolve cross-package modules lazily inside init(), so importing @zana/core
+  // Resolve cross-package modules lazily inside init(), so importing @zana-ai/core
   // (e.g. for `config` only) does not eagerly pull in 4 sibling packages.
   const serverPkg = _serverPkg();
   const startHookServer = serverPkg.hooks.server.startHookServer;

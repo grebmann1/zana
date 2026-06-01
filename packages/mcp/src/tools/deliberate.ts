@@ -30,8 +30,8 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // Lazy module loaders (matches the pattern used in mcp-server.ts).
 // ─────────────────────────────────────────────────────────────────────────────
-function _work(): any { return require("@zana/work"); }
-function _core(): any { return require("@zana/core"); }
+function _work(): any { return require("@zana-ai/work"); }
+function _core(): any { return require("@zana-ai/core"); }
 function _delib(): any { return _work().deliberation; }
 
 // Hardcoded fallback when runtime-config doesn't carry default voter ids.
@@ -58,11 +58,11 @@ class DeliberationCancelledError extends Error {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface DeliberateDeps extends CollectReviewsDeps {
-  // Profile resolution — defaults to @zana/core profileStore.
+  // Profile resolution — defaults to @zana-ai/core profileStore.
   getProfile?: (id: string) => any;
-  // Probe wiring — defaults to @zana/core agents.manager.
+  // Probe wiring — defaults to @zana-ai/core agents.manager.
   probeAgent?: (profile: any, probe?: any, deps?: any) => Promise<any>;
-  // Where to read context artifacts — defaults to @zana/work runs.artifacts.
+  // Where to read context artifacts — defaults to @zana-ai/work runs.artifacts.
   getArtifact?: (id: string) => any;
   // Bound the orchestration loop — guards against runaway state-machine bugs
   // even though decide()/applyDecision() are supposed to terminate.

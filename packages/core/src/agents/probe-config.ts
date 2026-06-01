@@ -1,5 +1,5 @@
-// Probe runtime config — lives in @zana/core (parallel to the deliberation
-// runtime-config in @zana/work) so probeAgent does NOT have to require @zana/work
+// Probe runtime config — lives in @zana-ai/core (parallel to the deliberation
+// runtime-config in @zana-ai/work) so probeAgent does NOT have to require @zana-ai/work
 // (which would close the dependency cycle). The deliberation core module writes
 // to BOTH bridges at init time.
 
@@ -21,7 +21,7 @@ const DEFAULTS: ProbeRuntimeConfig = {
 let active: ProbeRuntimeConfig = { ...DEFAULTS };
 
 // Merge over current `active` (NOT over DEFAULTS). Same semantic as setRuntimeConfig
-// in @zana/work. Use `resetProbeConfig()` for a clean slate.
+// in @zana-ai/work. Use `resetProbeConfig()` for a clean slate.
 export function setProbeConfig(partial: Partial<ProbeRuntimeConfig>): void {
   active = { ...active, ...(partial || {}) };
 }

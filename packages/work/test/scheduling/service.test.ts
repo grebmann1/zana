@@ -14,14 +14,14 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from "n
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 
 // Service module is loaded after workspace init so its require() of
-// @zana/core resolves the same instance the test seeded.
-import * as schedulerService from "@zana/work/src/scheduling/service.ts";
-import * as schedulerStore from "@zana/work/src/scheduling/store.ts";
-import { serializeYaml } from "@zana/work/src/scheduling/yaml-format.ts";
+// @zana-ai/core resolves the same instance the test seeded.
+import * as schedulerService from "@zana-ai/work/src/scheduling/service.ts";
+import * as schedulerStore from "@zana-ai/work/src/scheduling/store.ts";
+import { serializeYaml } from "@zana-ai/work/src/scheduling/yaml-format.ts";
 import { EventEmitter } from "node:events";
 
 function fakeProfile(id: string) {

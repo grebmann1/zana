@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import * as ticketStore from "./db";
-function _bus(): any { return require("@zana/core").events.bus; }
+function _bus(): any { return require("@zana-ai/core").events.bus; }
 
 const VALID_STATUSES = ["backlog", "in-progress", "review", "rework", "blocked", "done", "cancelled"];
 const VALID_PRIORITIES = ["critical", "high", "medium", "low"];

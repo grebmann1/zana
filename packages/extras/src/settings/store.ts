@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-// Lazy — @zana/core may still be loading when this module is first required.
+// Lazy — @zana-ai/core may still be loading when this module is first required.
 function SETTINGS_PATH(): string {
-  return require("@zana/core").config.SETTINGS_PATH;
+  return require("@zana-ai/core").config.SETTINGS_PATH;
 }
 
 function ensureDir() {

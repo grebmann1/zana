@@ -1,7 +1,7 @@
 {
-  "name": "@zana/core",
+  "name": "@zana-ai/core",
   "version": "0.1.0",
-  "description": "Zana engine — multi-agent orchestration, scheduling, persistence, and module system. Used by @zana/mcp.",
+  "description": "Zana engine — multi-agent orchestration, scheduling, persistence, and module system. Used by @zana-ai/mcp.",
   "main": "dist/src/index.js",
   "bin": {
     "zana-daemon": "./dist/bin/daemon.js"
@@ -16,12 +16,21 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "minimatch": "^10.0.0",
-    "@zana/swarm": "*",
-    "@zana/extras": "*",
-    "@zana/intelligence": "*",
-    "@zana/work": "*",
-    "@zana/server": "*"
+    "minimatch": "^10.0.0"
+  },
+  "peerDependencies": {
+    "@zana-ai/swarm": "0.1.0",
+    "@zana-ai/extras": "0.1.0",
+    "@zana-ai/intelligence": "0.1.0",
+    "@zana-ai/work": "0.1.0",
+    "@zana-ai/server": "0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@zana-ai/swarm": { "optional": true },
+    "@zana-ai/extras": { "optional": true },
+    "@zana-ai/intelligence": { "optional": true },
+    "@zana-ai/work": { "optional": true },
+    "@zana-ai/server": { "optional": true }
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0",

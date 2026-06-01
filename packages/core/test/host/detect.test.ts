@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isClaudeHost, getHostType } from "@zana/core/src/host/detect.ts";
+import { isClaudeHost, getHostType } from "@zana-ai/core/src/host/detect.ts";
 
 describe("host/detect", () => {
   const originalOverride = process.env.ZANA_HOST_OVERRIDE;

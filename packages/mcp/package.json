@@ -1,5 +1,5 @@
 {
-  "name": "@zana/mcp",
+  "name": "@zana-ai/mcp",
   "version": "0.1.0",
   "description": "Zana MCP server — exposes Zana orchestration as MCP tools for Claude Code and other AI tools. Install this to use /zana in any project.",
   "main": "dist/src/mcp-server.js",
@@ -17,11 +17,12 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana/core": "0.1.0",
-    "@zana/work": "*",
-    "@zana/extras": "*",
-    "@zana/intelligence": "*",
-    "@zana/swarm": "*"
+    "@zana-ai/core": "0.1.0",
+    "@zana-ai/work": "0.1.0",
+    "@zana-ai/extras": "0.1.0",
+    "@zana-ai/intelligence": "0.1.0",
+    "@zana-ai/swarm": "0.1.0",
+    "@zana-ai/server": "0.1.0"
   },
   "files": [
     "dist/",

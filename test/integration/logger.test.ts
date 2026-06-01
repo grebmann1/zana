@@ -12,7 +12,7 @@ describe("util/logger", () => {
   });
 
   it("emits to stderr in default config", async () => {
-    const { getLogger } = await import("@zana/core/src/util/logger.ts");
+    const { getLogger } = await import("@zana-ai/core/src/util/logger.ts");
     const log = getLogger("smoke");
     const written: string[] = [];
     const origWrite = process.stderr.write.bind(process.stderr);
@@ -30,7 +30,7 @@ describe("util/logger", () => {
 
   it("respects ZANA_LOG_LEVEL=warn (filters info/debug)", async () => {
     process.env.ZANA_LOG_LEVEL = "warn";
-    const { getLogger, _state } = await import("@zana/core/src/util/logger.ts");
+    const { getLogger, _state } = await import("@zana-ai/core/src/util/logger.ts");
     expect(_state().level).toBe("warn");
     const log = getLogger("flt");
     const written: string[] = [];
@@ -55,7 +55,7 @@ describe("util/logger", () => {
     const tmp = mkdtempSync(join(tmpdir(), "log-"));
     const target = join(tmp, "z.log");
     process.env.ZANA_LOG_FILE = target;
-    const { getLogger } = await import("@zana/core/src/util/logger.ts");
+    const { getLogger } = await import("@zana-ai/core/src/util/logger.ts");
     const log = getLogger("file");
     log.info("written to disk", { ok: true });
     // wait a tick for the write stream to flush

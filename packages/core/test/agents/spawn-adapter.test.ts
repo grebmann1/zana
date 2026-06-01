@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { Readable, Writable } from "node:stream";
-import { ClaudeSpawnAdapter } from "@zana/core/src/agents/runtimes/spawn-adapter.ts";
+import { ClaudeSpawnAdapter } from "@zana-ai/core/src/agents/runtimes/spawn-adapter.ts";
 
 /**
  * Build a stand-in for ChildProcess that we can drive from tests:
@@ -59,7 +59,7 @@ function buildFakeChild() {
 }
 
 let mockChild: any;
-vi.mock("@zana/core/src/agents/spawner.ts", () => ({
+vi.mock("@zana-ai/core/src/agents/spawner.ts", () => ({
   spawnHeadless: vi.fn(() => mockChild),
   findClaude: vi.fn(() => "/usr/bin/claude"),
 }));

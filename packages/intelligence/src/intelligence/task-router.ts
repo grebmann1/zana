@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
 const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
 const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });

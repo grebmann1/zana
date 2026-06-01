@@ -29,7 +29,7 @@ export function start(scheduleId: string, expr: string, fireFn: () => void): Cro
       try {
         fireFn();
       } catch (err: any) {
-        require("@zana/core").util.logger
+        require("@zana-ai/core").util.logger
           .getLogger("scheduler")
           .error(`cron fire failed for ${scheduleId}`, err);
       }

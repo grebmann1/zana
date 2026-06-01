@@ -20,20 +20,20 @@ function getPtyHost() {
   return _ptyHost;
 }
 import * as profileStore from "./profile-store";
-const skillStore: any = new Proxy({}, { get: (_t, p) => require("@zana/extras").settings.skillStore[p] });
-const swarmPkg = require("@zana/swarm");
+const skillStore: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/extras").settings.skillStore[p] });
+const swarmPkg = require("@zana-ai/swarm");
 const swarmRouter = swarmPkg.router;
 const swarmEvents = swarmPkg.events;
 const swarmSpawner = swarmPkg.spawner;
 
 // Lazy getters for cross-package modules — Node's require cache makes repeat calls cheap.
 // Do NOT memoize into module-scope vars; that defeats the cycle break.
-function _ticketService() { return require("@zana/work").tickets.service; }
-function _ticketStore() { return require("@zana/work").tickets.store; }
-function _schedulerService() { return require("@zana/work").scheduling.service; }
-function _checkpointStore() { return require("@zana/work").runs.checkpoint.store; }
-function _checkpointResume() { return require("@zana/work").runs.checkpoint.resume; }
-function _artifactStore() { return require("@zana/work").runs.artifacts; }
+function _ticketService() { return require("@zana-ai/work").tickets.service; }
+function _ticketStore() { return require("@zana-ai/work").tickets.store; }
+function _schedulerService() { return require("@zana-ai/work").scheduling.service; }
+function _checkpointStore() { return require("@zana-ai/work").runs.checkpoint.store; }
+function _checkpointResume() { return require("@zana-ai/work").runs.checkpoint.resume; }
+function _artifactStore() { return require("@zana-ai/work").runs.artifacts; }
 import * as persistence from "../persistence";
 import { bus, EVENTS } from "../events/bus";
 import type { ProbeFailure, ProbeFailureKind, AgentProbedPayload } from "../events/deliberation-events";
@@ -1174,15 +1174,15 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
 
     // --- Teams ---
     case "list_teams": {
-      return require("@zana/work").teams.store.listTeams();
+      return require("@zana-ai/work").teams.store.listTeams();
     }
     case "get_team": {
-      const team = require("@zana/work").teams.store.getTeam(params.teamId);
+      const team = require("@zana-ai/work").teams.store.getTeam(params.teamId);
       if (!team) return { error: `team not found: ${params.teamId}` };
       return team;
     }
     case "start_team": {
-      const teamMod = require("@zana/work").teams.manager;
+      const teamMod = require("@zana-ai/work").teams.manager;
       const cwd = params.cwd || (getWorkspaceFn ? getWorkspaceFn() : process.env.HOME);
       const hardError = checkSystemResources("hard");
       if (hardError) {
@@ -1191,15 +1191,15 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       return teamMod.startTeam(params.teamId, { prompt: params.prompt, cwd, headless: true });
     }
     case "stop_team": {
-      return require("@zana/work").teams.manager.stopTeam(params.teamId);
+      return require("@zana-ai/work").teams.manager.stopTeam(params.teamId);
     }
     case "team_status": {
-      const status = require("@zana/work").teams.manager.getTeamStatus(params.teamId);
+      const status = require("@zana-ai/work").teams.manager.getTeamStatus(params.teamId);
       if (!status) return { error: `team not running: ${params.teamId}` };
       return status;
     }
     case "list_running_teams": {
-      return require("@zana/work").teams.manager.listRunningTeams();
+      return require("@zana-ai/work").teams.manager.listRunningTeams();
     }
 
     // --- Artifacts ---

@@ -11,8 +11,8 @@ import {
   _isRunning,
   start as reaperStart,
   stop as reaperStop,
-} from "@zana/core/src/agents/zombie-reaper.ts";
-import * as moduleConfig from "@zana/core/src/modules/config.ts";
+} from "@zana-ai/core/src/agents/zombie-reaper.ts";
+import * as moduleConfig from "@zana-ai/core/src/modules/config.ts";
 
 beforeAll(() => {
   const tmp = mkdtempSync(path.join(tmpdir(), "zana-reaper-"));

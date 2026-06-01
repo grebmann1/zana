@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Smoke-test the new async-by-default zana_deliberate handler against the
-// live daemon's @zana/work + @zana/core. Doesn't actually spawn real Claude
+// live daemon's @zana-ai/work + @zana-ai/core. Doesn't actually spawn real Claude
 // — uses the deliberation handler with a fake spawn for speed.
 
 const path = require("node:path");

@@ -26,8 +26,8 @@ async function setGoal(payload) {
 async function runGoal(goalId) {
   const goal = goals.get(goalId);
   if (!goal) return;
-  const am = require("@zana/core").agents.manager;
-  const ps = require("@zana/core").agents.profileStore;
+  const am = require("@zana-ai/core").agents.manager;
+  const ps = require("@zana-ai/core").agents.profileStore;
   const evaluatorProfileId = configRef.evaluatorProfile || "code-reviewer";
   const maxIter = configRef.maxIterations ?? 5;
 

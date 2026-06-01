@@ -12,7 +12,7 @@
 // modelIds, profileIds, tally distributions, and deliberation cadence in those
 // records are sufficient to correlate activity between tenants. This file
 // covers the fix: events/store now lazy-resolves EVENTS_DIR per call via the
-// workspace-aware getter on the @zana/core config module.
+// workspace-aware getter on the @zana-ai/core config module.
 //
 // CRITICAL: at least one test below imports events/store BEFORE
 // workspaceContext.init() to prove the snapshot bug is actually gone.
@@ -22,15 +22,15 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import * as workspaceContextTs from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
+import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 
 // IMPORTANT: this top-level import happens at module load time, BEFORE any
 // beforeEach() runs. Under the old snapshot bug, it would have captured
 // the global EVENTS_DIR (~/.zana/events) into a const inside store.ts.
 // With the fix, EVENTS_DIR is re-resolved on every call, so this early
 // import does NOT freeze the path.
-import * as eventStore from "@zana/core/src/events/store.ts";
+import * as eventStore from "@zana-ai/core/src/events/store.ts";
 
 const wcDist: any = (core as any).project.workspaceContext;
 

@@ -3,9 +3,9 @@ import * as path from "node:path";
 
 // ─── Path resolution ─────────────────────────────────────────────────────────
 
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function _ctx() { return _core().project.workspaceContext; }
-import { ZANA_DIR } from "@zana/core/dist/src/config";
+import { ZANA_DIR } from "@zana-ai/core/dist/src/config";
 
 function getTicketsDir() {
   const ctx = _ctx();

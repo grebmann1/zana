@@ -8,15 +8,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
-// IMPORTANT: import @zana/work via the package entry, not @zana/work/src/...,
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
+// IMPORTANT: import @zana-ai/work via the package entry, not @zana-ai/work/src/...,
 // so we share the SAME module instance with deliberate.ts (which uses
-// `require("@zana/work")` at runtime). The src-deep paths resolve as a
+// `require("@zana-ai/work")` at runtime). The src-deep paths resolve as a
 // separate module under Vite's noExternal, which would cause the
 // deliberation checkpoints to land in a different in-memory dir than the one
 // the handler reads from.
-const work = require("@zana/work");
+const work = require("@zana-ai/work");
 const checkpointStore = work.runs.checkpoint.store;
 const artifactStore = work.runs.artifacts;
 const run = work.deliberation;

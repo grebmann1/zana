@@ -5,7 +5,7 @@ import { pickBackend, computeNextRunAt } from "./triggers";
 import { everShorthandToMs } from "./yaml-format";
 import { validateSchedule, ValidationIssue } from "./schema";
 
-function _log() { return require("@zana/core").util.logger.getLogger("scheduler"); }
+function _log() { return require("@zana-ai/core").util.logger.getLogger("scheduler"); }
 
 function logWarnings(scheduleId: string, issues: ValidationIssue[]) {
   for (const w of issues) {
@@ -82,7 +82,7 @@ function attachTerminationListener(bus: any, eventName: string) {
     if (!tracked) return;
     inflightAgents.delete(evt.agentId);
     try {
-      const agentManager = require("@zana/core").agents.manager;
+      const agentManager = require("@zana-ai/core").agents.manager;
       const agent = agentManager.getAgent(evt.agentId);
       const resultText: string =
         (agent?.result as string) ||
@@ -119,11 +119,11 @@ function ensureAgentTerminationListener() {
   if (busSubscribed) return;
   let bus: any, EVENTS: any;
   try {
-    const events = require("@zana/core").events;
+    const events = require("@zana-ai/core").events;
     bus = events?.bus;
     EVENTS = events?.EVENTS;
   } catch {
-    // @zana/core isn't loaded yet — retry on next executeAction call.
+    // @zana-ai/core isn't loaded yet — retry on next executeAction call.
     return;
   }
   if (!bus || !EVENTS?.AGENT_TERMINATED) return;
@@ -257,8 +257,8 @@ async function executeAction(action) {
   const type = action?.type;
 
   if (type === "prompt" || type === "spawn-agent") {
-    const agentManager = require("@zana/core").agents.manager;
-    const profileStore = require("@zana/core").agents.profileStore;
+    const agentManager = require("@zana-ai/core").agents.manager;
+    const profileStore = require("@zana-ai/core").agents.profileStore;
     const profile = profileStore.getProfile(action.profileId);
     if (!profile) {
       return { status: "error", error: `profile not found: ${action.profileId}` };
@@ -283,13 +283,13 @@ async function executeAction(action) {
     if (!action.skillId || typeof action.skillId !== "string") {
       return { status: "error", error: "workflow action requires skillId (string)" };
     }
-    const skillStore = require("@zana/extras").settings.skillStore;
+    const skillStore = require("@zana-ai/extras").settings.skillStore;
     const skill = skillStore.getSkill(action.skillId);
     if (!skill) return { status: "error", error: `workflow skill not found: ${action.skillId}` };
     if (skill.type !== "workflow") {
       return { status: "error", error: `skill is not a workflow (type=${skill.type}): ${action.skillId}` };
     }
-    const workflowEngine = require("@zana/work").scheduling.workflowEngine;
+    const workflowEngine = require("@zana-ai/work").scheduling.workflowEngine;
     const triggerContext = { trigger: "scheduler", ...(action.context || {}) };
     const run = await workflowEngine.executeWorkflow(skill, triggerContext);
     if (run?.error) {
@@ -351,10 +351,10 @@ async function executeAction(action) {
     }
     const orchestratorAction = action.toolName.slice("zana_".length);
     const args = action.toolArgs || {};
-    const agentManager = require("@zana/core").agents.manager;
+    const agentManager = require("@zana-ai/core").agents.manager;
     let workspace = action.cwd || process.env.HOME;
     try {
-      const wc = require("@zana/core").project.workspaceContext;
+      const wc = require("@zana-ai/core").project.workspaceContext;
       if (wc?.isInitialized?.()) workspace = wc.getWorkspaceRoot();
     } catch {}
     const result = await agentManager.handleOrchestratorCommand(
@@ -533,7 +533,7 @@ export function _getActiveTriggers() {
 
 /**
  * Test-only helper: attach the AGENT_TERMINATED listener to a bus passed in
- * by the test. Avoids the require("@zana/core") path which can mis-resolve
+ * by the test. Avoids the require("@zana-ai/core") path which can mis-resolve
  * under vitest's module loader. Idempotent.
  */
 export function _ensureBusListenerForTest(bus?: any, eventName: string = "agent:terminated") {

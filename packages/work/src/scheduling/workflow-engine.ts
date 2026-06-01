@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function _bus() { return _core().events.bus; }
 function _workspaceContext() { return _core().project.workspaceContext; }
 

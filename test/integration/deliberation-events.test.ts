@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bus, EVENTS } from "@zana/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
 import type {
   DeliberationProposedPayload,
   DeliberationVotePayload,
@@ -7,7 +7,7 @@ import type {
   DeliberationConvergedPayload,
   DeliberationEscalatedPayload,
   DeliberationOverridePayload,
-} from "@zana/core/src/events/deliberation-events.ts";
+} from "@zana-ai/core/src/events/deliberation-events.ts";
 
 const NEW_KEYS = [
   "DELIBERATION_PROPOSED",

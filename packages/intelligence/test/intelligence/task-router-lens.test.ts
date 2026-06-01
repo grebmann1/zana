@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import * as taskRouter from "@zana/intelligence/src/intelligence/task-router.ts";
-import * as profileStore from "@zana/core/src/agents/profile-store.ts";
+import * as taskRouter from "@zana-ai/intelligence/src/intelligence/task-router.ts";
+import * as profileStore from "@zana-ai/core/src/agents/profile-store.ts";
 
 /**
  * resolveVoters() — turns voter specs into concrete profileIds.

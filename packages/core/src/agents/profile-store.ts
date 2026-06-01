@@ -58,7 +58,7 @@ export function listProfiles() {
 
   // Plugin-contributed profiles
   try {
-    const pluginLoader = require("@zana/extras").plugins.loader;
+    const pluginLoader = require("@zana-ai/extras").plugins.loader;
     const pluginFiles = pluginLoader.getContributions("profiles");
     for (const filePath of pluginFiles) {
       if (!filePath.endsWith(".json") || !fs.existsSync(filePath)) continue;

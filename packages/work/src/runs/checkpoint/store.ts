@@ -16,7 +16,7 @@ export function init(projectDir) {
 function getDir() {
   if (checkpointsDir) return checkpointsDir;
 
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   const dir = ctx.isInitialized()
     ? ctx.getProjectPaths().checkpointsDir
@@ -147,7 +147,7 @@ export function save(checkpoint) {
   // silently share state. Other kinds ("run", and unknown legacy kinds)
   // are unaffected so existing autopilot/team checkpoint flows keep working.
   if (checkpoint.kind === "deliberation") {
-    const core = require("@zana/core");
+    const core = require("@zana-ai/core");
     const ctx = core.project.workspaceContext;
     if (!ctx.isInitialized()) {
       const ErrCtor = ctx.WorkspaceNotInitializedError;

@@ -12,7 +12,7 @@ import * as configMod from "../config";
 // modelIds, profileIds, tally distributions and deliberation cadence in those
 // records are sufficient to correlate activity between tenants.
 //
-// We instead lazy-resolve EVENTS_DIR on every call via the @zana/core config
+// We instead lazy-resolve EVENTS_DIR on every call via the @zana-ai/core config
 // module's workspace-aware getter (see packages/core/src/config.ts where
 // EVENTS_DIR is exposed as a `get EVENTS_DIR()` accessor on module.exports).
 // Reading `configMod.EVENTS_DIR` here triggers that getter every time, so

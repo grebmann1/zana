@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
-import { startHookServer, setSwarmModules } from "@zana/server/src/hooks/server.ts";
+import { startHookServer, setSwarmModules } from "@zana-ai/server/src/hooks/server.ts";
 
 let server;
 let port;

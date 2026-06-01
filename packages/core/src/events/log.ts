@@ -9,14 +9,14 @@ let sessionDir = null;
 function _ctx() {
   try {
     // Prefer the facade so test and runtime see the same singleton.
-    return require("@zana/core").project.workspaceContext;
+    return require("@zana-ai/core").project.workspaceContext;
   } catch {
     return require("../project/workspace-context");
   }
 }
 function _config() {
   try {
-    return require("@zana/core").config;
+    return require("@zana-ai/core").config;
   } catch {
     return require("../config");
   }

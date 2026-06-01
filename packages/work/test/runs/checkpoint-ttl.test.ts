@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 
 describe("checkpoint store: kind + expiresAt TTL", () => {
   let tmpRoot: string;
@@ -14,12 +14,12 @@ describe("checkpoint store: kind + expiresAt TTL", () => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-ckpt-ttl-"));
     // FU-T4c — kind=deliberation saves require an initialized workspace
     // context; init both module instances (TS-imported and dist-resolved)
-    // because store.ts reaches @zana/core via require() which resolves to
+    // because store.ts reaches @zana-ai/core via require() which resolves to
     // dist while this test file imports the .ts source directly.
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     // init(tmpRoot) resets module-level `checkpointsDir` between tests.
-    store = await import("@zana/work/src/runs/checkpoint/store.ts");
+    store = await import("@zana-ai/work/src/runs/checkpoint/store.ts");
     store.init(tmpRoot);
   });
 

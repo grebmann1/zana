@@ -135,7 +135,7 @@ export interface Deliberation {
 
 export interface DroppedVoterAudit {
   profileId: string;
-  // Mirrors ProbeFailureKind from @zana/core's deliberation-events.ts.
+  // Mirrors ProbeFailureKind from @zana-ai/core's deliberation-events.ts.
   // Kept as a string union here to avoid a hard import edge.
   reason:
     | "timeout"

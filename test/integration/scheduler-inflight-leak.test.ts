@@ -13,9 +13,9 @@ describe("scheduler inflightAgents TTL sweep", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "sched-inflight-leak-"));
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
-    svc = await import("@zana/work/src/scheduling/service.ts");
+    svc = await import("@zana-ai/work/src/scheduling/service.ts");
     // Drain anything that might have leaked over from prior suites in the
     // same vitest worker. Sweep with a very large now-cutoff effect by
     // first dropping any entries that are already older than our TTL.

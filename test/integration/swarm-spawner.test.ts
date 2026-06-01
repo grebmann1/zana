@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as spawner from "@zana/swarm/src/swarm/spawner.ts";
+import * as spawner from "@zana-ai/swarm/src/swarm/spawner.ts";
 
 describe("swarm/spawner", () => {
   describe("listSubDaemons", () => {

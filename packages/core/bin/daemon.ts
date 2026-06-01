@@ -94,7 +94,7 @@ if (pluginIdx !== -1) {
       console.error(`zana-daemon: plugin directory already exists: ${targetDir}`);
       process.exit(1);
     }
-    const { scaffold } = require("@zana/extras").plugins.scaffold;
+    const { scaffold } = require("@zana-ai/extras").plugins.scaffold;
     scaffold(name, targetDir);
     console.log(`Plugin scaffolded at ${targetDir}`);
   } else if (sub === "list") {
@@ -431,7 +431,7 @@ async function main() {
   // daemon crash mid-write (T5x-cross-proc). Best-effort — failure is logged
   // but does not block daemon startup.
   try {
-    const checkpointStore = require("@zana/work").runs.checkpoint.store;
+    const checkpointStore = require("@zana-ai/work").runs.checkpoint.store;
     const { removed } = checkpointStore.sweepExpired();
     if (removed.length > 0) {
       console.log(`\x1b[36m[zana-daemon]\x1b[0m swept ${removed.length} expired checkpoint(s)`);
@@ -447,7 +447,7 @@ async function main() {
     }
   } catch (err: any) {
     if (err?.code === "MODULE_NOT_FOUND") {
-      console.warn(`[zana-daemon] checkpoint sweep skipped: @zana/work not loaded`);
+      console.warn(`[zana-daemon] checkpoint sweep skipped: @zana-ai/work not loaded`);
     } else {
       console.warn(`[zana-daemon] checkpoint sweep failed: ${err?.message || err}`);
     }

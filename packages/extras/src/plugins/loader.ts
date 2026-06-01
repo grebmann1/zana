@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-// Lazy access to @zana/core — avoids load-order issues during core init.
-function _core() { return require("@zana/core"); }
+// Lazy access to @zana-ai/core — avoids load-order issues during core init.
+function _core() { return require("@zana-ai/core"); }
 function PLUGINS_DIR() { return _core().config.PLUGINS_DIR; }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
 function SETTINGS_PATH() { return _core().config.SETTINGS_PATH; }
@@ -106,7 +106,7 @@ function withTimeout(fn, ms) {
 
 function buildContext(pluginId, pluginDir) {
   const agentManager = _core().agents.manager;
-  const ticketService = require("@zana/work").tickets.service;
+  const ticketService = require("@zana-ai/work").tickets.service;
 
   return {
     pluginId,

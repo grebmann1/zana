@@ -4,7 +4,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-function _core() { return require("@zana/core"); }
+function _core() { return require("@zana-ai/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
 function _eventBus(): any { return _core().events.service; }
 function _agentManager(): any { return _core().agents.manager; }

@@ -1,4 +1,4 @@
-# @zana/work
+# @zana-ai/work
 
 Work-tracking domains: tickets, scheduling, teams, runs.
 

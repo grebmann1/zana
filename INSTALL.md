@@ -356,7 +356,7 @@ npm run build:runtime:core
 The wrapper at `~/.zana/bin/post-hook.sh` may have drifted. Force-reinstall:
 
 ```bash
-node -e 'require("@zana/server").hooks.installer.installHooks(47402)'
+node -e 'require("@zana-ai/server").hooks.installer.installHooks(47402)'
 ```
 
 ---

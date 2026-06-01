@@ -277,10 +277,10 @@ zana_oneshot_query({
 Programmatic equivalent (this is what `run-runtime.sh` R1 actually runs):
 
 ```js
-const core = require("@zana/core");
+const core = require("@zana-ai/core");
 core.project.workspaceContext.init(REPO);
 const profile = core.agents.profileStore.getProfile("researcher");
-const { spawnOneShot } = require("@zana/core/dist/src/agents/spawner");
+const { spawnOneShot } = require("@zana-ai/core/dist/src/agents/spawner");
 
 const r = await spawnOneShot(profile, "Reply with the single word: PONG", {
   cwd: REPO,

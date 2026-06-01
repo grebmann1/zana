@@ -12,7 +12,7 @@ describe("Phase 1: Guardrails", () => {
   let builtins;
 
   beforeEach(async () => {
-    builtins = (await import("@zana/core/src/guardrails/builtins.ts")).default;
+    builtins = (await import("@zana-ai/core/src/guardrails/builtins.ts")).default;
   });
 
   describe("builtins.jsonParse", () => {
@@ -118,7 +118,7 @@ describe("Phase 1: Guardrails", () => {
     let guardrails;
 
     beforeEach(async () => {
-      guardrails = await import("@zana/core/src/guardrails/index.ts");
+      guardrails = await import("@zana-ai/core/src/guardrails/index.ts");
     });
 
     it("resolves config objects to guardrail instances", () => {
@@ -160,7 +160,7 @@ describe("Phase 2: A2A Messaging", () => {
   let router;
 
   beforeEach(async () => {
-    router = await import("@zana/swarm/src/swarm/router.ts");
+    router = await import("@zana-ai/swarm/src/swarm/router.ts");
   });
 
   describe("typed message routing", () => {
@@ -311,7 +311,7 @@ describe("Phase 3: Checkpoints", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "checkpoint-test-"));
-    store = await import("@zana/work/src/runs/checkpoint/store.ts");
+    store = await import("@zana-ai/work/src/runs/checkpoint/store.ts");
     store.init(tmpDir);
   });
 
@@ -440,7 +440,7 @@ describe("Phase 3: Checkpoints", () => {
     let resumeMod;
 
     beforeEach(async () => {
-      resumeMod = await import("@zana/work/src/runs/checkpoint/resume.ts");
+      resumeMod = await import("@zana-ai/work/src/runs/checkpoint/resume.ts");
     });
 
     it("builds context from completed agents", () => {
@@ -572,10 +572,10 @@ describe("Integration: guardrail → channel → checkpoint flow", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "integration-test-"));
-    router = await import("@zana/swarm/src/swarm/router.ts");
-    store = await import("@zana/work/src/runs/checkpoint/store.ts");
-    guardrails = await import("@zana/core/src/guardrails/index.ts");
-    resumeMod = await import("@zana/work/src/runs/checkpoint/resume.ts");
+    router = await import("@zana-ai/swarm/src/swarm/router.ts");
+    store = await import("@zana-ai/work/src/runs/checkpoint/store.ts");
+    guardrails = await import("@zana-ai/core/src/guardrails/index.ts");
+    resumeMod = await import("@zana-ai/work/src/runs/checkpoint/resume.ts");
     store.init(tmpDir);
   });
 

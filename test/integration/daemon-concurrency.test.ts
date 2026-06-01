@@ -8,7 +8,7 @@ import * as os from "node:os";
 // do exercise the registry against live and dead PIDs so the guard's contract
 // can't silently regress.
 
-import * as registry from "@zana/core/src/daemon/registry.ts";
+import * as registry from "@zana-ai/core/src/daemon/registry.ts";
 
 const DAEMONS_DIR = path.join(os.homedir(), ".zana", "daemons");
 const TEST_PREFIX = `test-concurrency-${Date.now()}`;

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-function TEAMS_DIR() { return require("@zana/core").config.TEAMS_DIR; }
+function TEAMS_DIR() { return require("@zana-ai/core").config.TEAMS_DIR; }
 
 function ensureDir() {
   fs.mkdirSync(TEAMS_DIR(), { recursive: true });
@@ -178,7 +178,7 @@ const TEAM_TEMPLATES = [
 export function getTemplates() {
   const templates = [...TEAM_TEMPLATES];
   try {
-    const pluginLoader = require("@zana/extras").plugins.loader;
+    const pluginLoader = require("@zana-ai/extras").plugins.loader;
     const pluginFiles = pluginLoader.getContributions("teamTemplates");
     for (const filePath of pluginFiles) {
       if (!filePath.endsWith(".json") || !fs.existsSync(filePath)) continue;

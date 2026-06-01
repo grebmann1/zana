@@ -128,7 +128,7 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
   // This replaces the old fs.watch approach: the SQLite-backed ticket store
   // doesn't write JSON files, so fs.watch never fired. Bus events fire on
   // every state change regardless of the underlying store.
-  const { bus } = require("@zana/core").events;
+  const { bus } = require("@zana-ai/core").events;
   for (const eventType of TICKET_EVENTS) {
     const listener = (msg) => {
       if (msg && msg.ticketId) scheduleCheck(eventType, msg);
@@ -149,7 +149,7 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
       // Fallback: agent:terminated may not include output for some exit paths;
       // pull the result text directly from the agent record.
       try {
-        const agentManager = require("@zana/core").agents.manager;
+        const agentManager = require("@zana-ai/core").agents.manager;
         const agent = agentManager.getAgent(msg.agentId);
         result = agent?.result || "";
       } catch {}
@@ -502,7 +502,7 @@ function executeAutomation(rule, eventType, payload, ticket) {
 function executeWorkflowAction(rule, ticket) {
   activeAutomations++;
   log(`Running workflow skill ${rule.action.skillId} for ticket ${ticket.id}`);
-  const skillStore = require("@zana/extras").settings.skillStore;
+  const skillStore = require("@zana-ai/extras").settings.skillStore;
   const workflowEngine = require("../scheduling/workflow-engine");
   const skill = skillStore.getSkill(rule.action.skillId);
   if (!skill || skill.type !== "workflow") {
@@ -621,7 +621,7 @@ function markBlocked(ticket) {
       "Automation",
       `⚠️ BLOCKED: This ticket has failed review ${ticket.reworkCount} times. Automatic rework cycles exhausted. Human intervention required.\n\nPlease review the comment history, identify the root issue, and either:\n- Provide guidance and move back to "in-progress" manually\n- Reassign to a different agent profile\n- Break into smaller tickets`
     );
-    const { bus } = require("@zana/core").events;
+    const { bus } = require("@zana-ai/core").events;
     bus.emit("ticket:blocked", { ticketId: ticket.id, reason: "max_rework_cycles", reworkCount: ticket.reworkCount });
     log(`Ticket ${ticket.id} marked as blocked — human intervention required`);
   } catch (err) {

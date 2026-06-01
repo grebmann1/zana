@@ -12,14 +12,14 @@ describe("scheduler workflow action", () => {
 
   beforeEach(async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-wf-"));
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
-    // The workflow engine reaches workspace-context via @zana/core's facade.
+    // The workflow engine reaches workspace-context via @zana-ai/core's facade.
     // Make sure it's the same singleton by reading via the same path.
-    const coreFacade = await import("@zana/core");
+    const coreFacade = await import("@zana-ai/core");
     coreFacade.project.workspaceContext.init(tmpDir);
-    svc = await import("@zana/work/src/scheduling/service.ts");
-    skillStore = await import("@zana/extras/src/settings/skill-store.ts");
+    svc = await import("@zana-ai/work/src/scheduling/service.ts");
+    skillStore = await import("@zana-ai/extras/src/settings/skill-store.ts");
   });
 
   it("runs a workflow skill via the engine and returns success", async () => {

@@ -26,8 +26,8 @@ import {
   checkSystemResources,
   _resetSpawnOverloadState,
   _testSpawnOverloadProbe,
-} from "@zana/core/src/agents/manager.ts";
-import * as moduleConfig from "@zana/core/src/modules/config.ts";
+} from "@zana-ai/core/src/agents/manager.ts";
+import * as moduleConfig from "@zana-ai/core/src/modules/config.ts";
 
 beforeAll(() => {
   // Point module-config at a tmp file so it doesn't try to read a

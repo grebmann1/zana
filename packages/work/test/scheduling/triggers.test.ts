@@ -1,12 +1,12 @@
 // Trigger backend tests — interval + cron, including pickBackend/computeNextRunAt.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import * as cronBackend from "@zana/work/src/scheduling/triggers/cron.ts";
-import * as intervalBackend from "@zana/work/src/scheduling/triggers/interval.ts";
+import * as cronBackend from "@zana-ai/work/src/scheduling/triggers/cron.ts";
+import * as intervalBackend from "@zana-ai/work/src/scheduling/triggers/interval.ts";
 import {
   pickBackend,
   computeNextRunAt,
-} from "@zana/work/src/scheduling/triggers/index.ts";
+} from "@zana-ai/work/src/scheduling/triggers/index.ts";
 
 describe("interval backend", () => {
   beforeEach(() => { vi.useFakeTimers(); });

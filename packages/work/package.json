@@ -1,5 +1,5 @@
 {
-  "name": "@zana/work",
+  "name": "@zana-ai/work",
   "version": "0.1.0",
   "description": "Work-tracking domains: tickets, scheduling, teams, runs.",
   "main": "dist/src/index.js",
@@ -9,10 +9,22 @@
   },
   "engines": { "node": ">=20.0.0" },
   "dependencies": {
-    "@zana/core": "*",
-    "@zana/extras": "*",
+    "@zana-ai/core": "0.1.0",
     "node-cron": "^3.0.3",
     "yaml": "^2.5.0"
   },
-  "files": ["dist/"]
+  "peerDependencies": {
+    "@zana-ai/extras": "0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@zana-ai/extras": { "optional": true }
+  },
+  "files": ["dist/"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/work"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
 }

@@ -175,7 +175,7 @@ Enable master mode when registering the MCP server, e.g. via the `env` block of 
 ```bash
 claude mcp add zana \
   --env ZANA_MASTER_MODE=true \
-  -- npx -y @zana/mcp
+  -- npx -y @zana-ai/mcp
 ```
 
 Use this for advanced multi-daemon setups where a single Zana process should be able to spawn and coordinate child Zana processes (each with its own orchestrator and worker pool). For ordinary single-daemon orchestration, leave master mode off — the in-process agent tools are sufficient.
@@ -206,7 +206,7 @@ Rotation is size-based and rolls files via rename: when an active file passes th
 `installer.isHooksInstalled()` returns `false` when the on-disk wrapper at `~/.zana/bin/post-hook.sh` differs from the bundled `wrapper.sh`. The daemon auto-reinstalls on the next boot when it detects drift — useful after upgrades. To force a manual restore:
 
 ```bash
-node -e 'require("@zana/server").hooks.installer.installHooks(47400)'
+node -e 'require("@zana-ai/server").hooks.installer.installHooks(47400)'
 ```
 
 Symptom of stale wrapper: hook events from real Claude Code sessions never land in `<workspace>/.zana/sessions/<sid>/events.ndjson` (the file stays 0 bytes). Compare hashes:

@@ -16,11 +16,11 @@ describe("scheduler result-summary capture", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "sched-summary-"));
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
-    svc = await import("@zana/work/src/scheduling/service.ts");
-    store = await import("@zana/work/src/scheduling/store.ts");
-    bus = (await import("@zana/core/src/events/bus.ts")).bus;
+    svc = await import("@zana-ai/work/src/scheduling/service.ts");
+    store = await import("@zana-ai/work/src/scheduling/store.ts");
+    bus = (await import("@zana-ai/core/src/events/bus.ts")).bus;
   });
 
   it("updates history entry with summary + stats when agent:terminated fires", async () => {

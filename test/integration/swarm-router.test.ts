@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 // Reset module state between tests
 let router;
 beforeEach(async () => {
-  const mod = await import("@zana/swarm/src/swarm/router.ts");
+  const mod = await import("@zana-ai/swarm/src/swarm/router.ts");
   // Re-import doesn't reset module state — we test accumulative behavior
   router = mod;
 });

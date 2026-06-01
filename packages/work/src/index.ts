@@ -27,10 +27,10 @@ module.exports = {
     },
   },
   deliberation: require("./deliberation"),
-  // Re-exported from @zana/core so callers downstream of @zana/work can
+  // Re-exported from @zana-ai/core so callers downstream of @zana-ai/work can
   // `instanceof`-check the tenant-isolation gate without taking a direct
-  // dependency on @zana/core.
+  // dependency on @zana-ai/core.
   get WorkspaceNotInitializedError() {
-    return require("@zana/core").project.workspaceContext.WorkspaceNotInitializedError;
+    return require("@zana-ai/core").project.workspaceContext.WorkspaceNotInitializedError;
   },
 };

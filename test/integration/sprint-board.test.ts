@@ -9,9 +9,9 @@ describe("createSprint + getSprintBoard", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "sprint-board-"));
-    const ws = await import("@zana/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
-    svc = await import("@zana/work/src/tickets/service.ts");
+    svc = await import("@zana-ai/work/src/tickets/service.ts");
   });
 
   afterEach(() => {

@@ -11,8 +11,8 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana/core/src/project/workspace-context.ts";
-import * as core from "@zana/core";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 
 // T5x-cross-proc — atomic write + advisory lock + stale orphan sweep.
 //
@@ -32,7 +32,7 @@ describe("checkpoint store: atomic write + advisory lock (T5x-cross-proc)", () =
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-ckpt-atomic-"));
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
-    store = await import("@zana/work/src/runs/checkpoint/store.ts");
+    store = await import("@zana-ai/work/src/runs/checkpoint/store.ts");
     store.init(tmpRoot);
     checkpointsDir = join(tmpRoot, "checkpoints");
   });

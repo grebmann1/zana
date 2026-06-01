@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as profileStore from "@zana/core/src/agents/profile-store.ts";
+import * as profileStore from "@zana-ai/core/src/agents/profile-store.ts";
 
 /**
  * Profile lens metadata + getProfilesByLens query.

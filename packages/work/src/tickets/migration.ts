@@ -2,14 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 function getTicketsDir() {
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
   return path.join(core.config.ZANA_DIR, "tickets");
 }
 
 function getSprintsDir() {
-  const core = require("@zana/core");
+  const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
   return path.join(core.config.ZANA_DIR, "sprints");

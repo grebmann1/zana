@@ -1,5 +1,5 @@
 {
-  "name": "@zana/swarm",
+  "name": "@zana-ai/swarm",
   "version": "0.1.0",
   "description": "Multi-daemon swarm coordination — router, events, spawner.",
   "main": "dist/src/index.js",
@@ -9,7 +9,14 @@
   },
   "engines": { "node": ">=20.0.0" },
   "dependencies": {
-    "@zana/core": "*"
+    "@zana-ai/core": "0.1.0"
   },
-  "files": ["dist/"]
+  "files": ["dist/"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/swarm"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
 }

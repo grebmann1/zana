@@ -5,7 +5,7 @@ import os from "node:os";
 
 describe("ticket-watcher loadRules fallback", () => {
   it("falls back to defaults when config has no automation array", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     // Pass a path that doesn't exist — forces the catch branch
     watcher.loadRules("/nonexistent/path/automation.json");
     const rules = watcher.getRules();
@@ -15,7 +15,7 @@ describe("ticket-watcher loadRules fallback", () => {
   });
 
   it("default rules use renamed profile IDs (no built-in- prefix)", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher.loadRules("/nonexistent/path");
     const rules = watcher.getRules();
     const stale = rules.filter((r: any) => /^built-in-/.test(r.action.spawnProfile));
@@ -41,8 +41,8 @@ describe("ticket-watcher in-process bus delivery", () => {
     const ticketsDir = path.join(tmpDir, "tickets");
     fs.mkdirSync(ticketsDir, { recursive: true });
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
-    const core: any = await import("@zana/core");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     // Inject a fake ticket reader so we don't depend on the real store
@@ -120,7 +120,7 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
   });
 
   it("parseVerdict extracts kind + reason from various line shapes", async () => {
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     const pv = watcher.parseVerdict;
 
     expect(pv("Looks good.\nVERDICT: PASS")).toEqual({ kind: "PASS", reason: null });
@@ -138,8 +138,8 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
     const ticketsDir = path.join(tmpDir, "tickets");
     fs.mkdirSync(ticketsDir, { recursive: true });
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
-    const core: any = await import("@zana/core");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     const fakeTicket = {
@@ -231,8 +231,8 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
     const ticketsDir = path.join(tmpDir, "tickets");
     fs.mkdirSync(ticketsDir, { recursive: true });
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
-    const core: any = await import("@zana/core");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     const fakeTicket = {
@@ -313,7 +313,7 @@ describe("ticket-watcher VERDICT parsing + state transitions", () => {
 
 describe("ticket-watcher rule schema (event-aware triggers)", () => {
   it("normalizeTrigger rewrites legacy { status, label, reviewPhase } to event shape", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     const out = watcher.normalizeTrigger({ status: "review", reviewPhase: "qa", label: "urgent" });
     expect(out.event).toBe("ticket:statusChanged");
     expect(out.to).toBe("review");
@@ -322,7 +322,7 @@ describe("ticket-watcher rule schema (event-aware triggers)", () => {
   });
 
   it("normalizeTrigger preserves explicit event shape", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     const out = watcher.normalizeTrigger({ event: "ticket:created", to: "*", labels: ["a", "b"] });
     expect(out.event).toBe("ticket:created");
     expect(out.to).toBe("*");
@@ -330,7 +330,7 @@ describe("ticket-watcher rule schema (event-aware triggers)", () => {
   });
 
   it("matchesRule honors from/to wildcards, arrays, and labels", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     const ticket = { status: "done", reviewPhase: null, labels: ["customer-facing", "p1"] };
     const payload = { ticketId: "t1", oldStatus: "in-progress", newStatus: "done", updatedBy: "u" };
 
@@ -372,7 +372,7 @@ describe("ticket-watcher rule schema (event-aware triggers)", () => {
   });
 
   it("matchesRule treats legacy bare-status rules as ticket:statusChanged", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     const ticket = { status: "review", reviewPhase: "qa", labels: [] };
     const payload = { ticketId: "t1", oldStatus: "in-progress", newStatus: "review", updatedBy: "u" };
 
@@ -391,7 +391,7 @@ describe("ticket-watcher rule schema (event-aware triggers)", () => {
 
 describe("ticket-watcher template-context helper", () => {
   it("buildTemplateContext resolves updatedBy across event-specific keys", async () => {
-    const tc = await import("@zana/work/src/tickets/template-context.ts");
+    const tc = await import("@zana-ai/work/src/tickets/template-context.ts");
     const ticket = { id: "t1", status: "review", title: "x" };
 
     // statusChanged → updatedBy
@@ -411,7 +411,7 @@ describe("ticket-watcher template-context helper", () => {
   });
 
   it("renderTemplate substitutes vars; missing keys render as empty string", async () => {
-    const tc = await import("@zana/work/src/tickets/template-context.ts");
+    const tc = await import("@zana-ai/work/src/tickets/template-context.ts");
     const ctx = tc.buildTemplateContext("ticket:statusChanged",
       { oldStatus: "in-progress", newStatus: "done", updatedBy: "alice" },
       { id: "T-1", title: "Hello" },
@@ -455,9 +455,9 @@ describe("ticket-watcher non-status events fire rules", () => {
       }],
     }), "utf8");
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
-    const core: any = await import("@zana/core");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     const fakeTicket = {
@@ -511,9 +511,9 @@ describe("ticket-watcher non-status events fire rules", () => {
       }],
     }), "utf8");
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
-    const core: any = await import("@zana/core");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     const fakeTicket = {
@@ -566,9 +566,9 @@ describe("ticket-watcher non-status events fire rules", () => {
       }],
     }), "utf8");
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
-    const core: any = await import("@zana/core");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     const fakeTicket = {
@@ -606,7 +606,7 @@ describe("ticket-watcher non-status events fire rules", () => {
 
 describe("ticket-watcher disabled flag", () => {
   it("matchesRule returns false for disabled rules even when trigger matches", async () => {
-    const watcher = await import("@zana/work/src/tickets/watcher.ts");
+    const watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     const ticket = { status: "review", reviewPhase: "qa", labels: [] };
     const payload = { ticketId: "t1", oldStatus: "in-progress", newStatus: "review", updatedBy: "u" };
     const rule = {
@@ -656,7 +656,7 @@ describe("ticket-watcher rule validation", () => {
     const { ticketsDir, automationPath } = setup([
       { name: "typo", trigger: { event: "ticket:statusChange" }, action: { spawnProfile: "p" } },
     ]);
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,
@@ -675,7 +675,7 @@ describe("ticket-watcher rule validation", () => {
     const { ticketsDir, automationPath } = setup([
       { name: "no-profile", trigger: { event: "ticket:created" }, action: {} },
     ]);
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,
@@ -694,7 +694,7 @@ describe("ticket-watcher rule validation", () => {
         action: { spawnProfile: "p" },
       },
     ]);
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,
@@ -710,7 +710,7 @@ describe("ticket-watcher rule validation", () => {
     const { ticketsDir, automationPath } = setup([
       { name: "legacy", trigger: { status: "review", label: "p1" }, action: { spawnProfile: "p" } },
     ]);
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,
@@ -754,7 +754,7 @@ describe("ticket-watcher hot-reload", () => {
       { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
     ]);
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,
@@ -784,7 +784,7 @@ describe("ticket-watcher hot-reload", () => {
       { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
     ]);
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,
@@ -807,9 +807,9 @@ describe("ticket-watcher hot-reload", () => {
       { name: "noop", trigger: { event: "ticket:created" }, action: { spawnProfile: "noop" }, promptTemplate: "{{id}}" },
     ]);
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
-    const core: any = await import("@zana/core");
+    const core: any = await import("@zana-ai/core");
     const bus = core.events.bus;
 
     const fakeTicket = {
@@ -870,7 +870,7 @@ describe("ticket-watcher hot-reload", () => {
       { name: "r1", trigger: { event: "ticket:created" }, action: { spawnProfile: "p1" }, promptTemplate: "{{id}}" },
     ]);
 
-    watcher = await import("@zana/work/src/tickets/watcher.ts");
+    watcher = await import("@zana-ai/work/src/tickets/watcher.ts");
     watcher._resetDedup();
     watcher.init({
       ticketsDirectory: ticketsDir,

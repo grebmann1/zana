@@ -1,4 +1,4 @@
-function _bus(): any { return require("@zana/core").events.bus; }
+function _bus(): any { return require("@zana-ai/core").events.bus; }
 
 const clients = new Set();
 let eventCounter = 0;

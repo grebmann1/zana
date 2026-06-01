@@ -4,7 +4,7 @@ import {
   validateSchedule,
   resolveHistoryConfig,
   HISTORY_RETAIN_MAX,
-} from "@zana/work/src/scheduling/schema.ts";
+} from "@zana-ai/work/src/scheduling/schema.ts";
 
 const valid = () => ({
   id: "test",

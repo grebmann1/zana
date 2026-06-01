@@ -4,7 +4,7 @@ import { serializeYaml, parseYaml } from "./yaml-format";
 import { resolveHistoryConfig } from "./schema";
 
 function getSchedulerDir(): string {
-  return require("@zana/core").config.SCHEDULER_DIR;
+  return require("@zana-ai/core").config.SCHEDULER_DIR;
 }
 
 export function ensureDir() {

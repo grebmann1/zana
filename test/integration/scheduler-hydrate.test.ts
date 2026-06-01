@@ -3,9 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import * as schedulerService from "@zana/work/src/scheduling/service.ts";
-import * as schedulerStore from "@zana/work/src/scheduling/store.ts";
-import { serializeYaml } from "@zana/work/src/scheduling/yaml-format.ts";
+import * as schedulerService from "@zana-ai/work/src/scheduling/service.ts";
+import * as schedulerStore from "@zana-ai/work/src/scheduling/store.ts";
+import { serializeYaml } from "@zana-ai/work/src/scheduling/yaml-format.ts";
 
 // Same dir resolution that store.ts will use when workspace-context is not
 // initialized: ~/.zana/scheduler.

@@ -3,9 +3,9 @@
 
 import * as http from "node:http";
 import * as crypto from "node:crypto";
-// Lazy access — @zana/core may still be loading when this module is first required.
+// Lazy access — @zana-ai/core may still be loading when this module is first required.
 function persistence() {
-  return require("@zana/core").persistence;
+  return require("@zana-ai/core").persistence;
 }
 
 // agentId → { daemonId, daemonPort, agentName, profileName, profileIcon }

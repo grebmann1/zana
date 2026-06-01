@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-function RUNS_DIR() { return require("@zana/core").config.RUNS_DIR; }
+function RUNS_DIR() { return require("@zana-ai/core").config.RUNS_DIR; }
 
 function ensureDir() {
   fs.mkdirSync(RUNS_DIR(), { recursive: true });

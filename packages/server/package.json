@@ -1,5 +1,5 @@
 {
-  "name": "@zana/server",
+  "name": "@zana-ai/server",
   "version": "0.1.0",
   "description": "Zana HTTP/IPC surface — hook server and REST API.",
   "main": "dist/src/index.js",
@@ -9,8 +9,20 @@
   },
   "engines": { "node": ">=20.0.0" },
   "dependencies": {
-    "@zana/core": "*",
-    "@zana/work": "*"
+    "@zana-ai/core": "0.1.0"
   },
-  "files": ["dist/"]
+  "peerDependencies": {
+    "@zana-ai/work": "0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@zana-ai/work": { "optional": true }
+  },
+  "files": ["dist/"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
 }
