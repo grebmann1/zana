@@ -21,9 +21,60 @@ export function read() {
   }
 }
 
+export class SettingsWriteError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+    this.name = "SettingsWriteError";
+  }
+}
+
 export function write(settings) {
-  ensureDir();
-  fs.writeFileSync(SETTINGS_PATH(), JSON.stringify(settings, null, 2), "utf8");
+  try {
+    ensureDir();
+    const final = SETTINGS_PATH();
+    const tmp = `${final}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(settings, null, 2), "utf8");
+    fs.renameSync(tmp, final);
+  } catch (err) {
+    if (err.code === "ENOSPC") throw new SettingsWriteError("disk_full", err.message);
+    if (err.code === "EACCES" || err.code === "EPERM" || err.code === "EROFS") {
+      throw new SettingsWriteError("permission_denied", err.message);
+    }
+    throw new SettingsWriteError("internal", err.message);
+  }
+}
+
+export function isPlainObject(v) {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+export function deepMerge(base, patch) {
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch;
+  const out = { ...base };
+  for (const k of Object.keys(patch)) {
+    const bv = base[k];
+    const pv = patch[k];
+    out[k] = isPlainObject(bv) && isPlainObject(pv) ? deepMerge(bv, pv) : pv;
+  }
+  return out;
+}
+
+// Returns null on success, otherwise an error string. Validates only the
+// top-level keys the codebase actually reads; unknown keys are allowed.
+export function validate(input) {
+  if (!isPlainObject(input)) return "settings must be an object";
+  if ("llm" in input) {
+    const llm = input.llm;
+    if (!isPlainObject(llm)) return "llm must be an object";
+    if ("providers" in llm && !isPlainObject(llm.providers)) return "llm.providers must be an object";
+    if ("defaultProvider" in llm && llm.defaultProvider !== null && typeof llm.defaultProvider !== "string") {
+      return "llm.defaultProvider must be a string or null";
+    }
+  }
+  if ("plugins" in input && !isPlainObject(input.plugins)) return "plugins must be an object";
+  return null;
 }
 
 export function getLlmProviders() {

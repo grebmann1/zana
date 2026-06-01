@@ -34,6 +34,21 @@ function getDaemon() {
   return daemonInstance;
 }
 
+let settingsQueue: Promise<any> = Promise.resolve();
+function settingsWriteQueue<T>(fn: () => T): Promise<T | { __error: string; __detail: string }> {
+  const SettingsWriteError = require("@zana-ai/extras").settings.store.SettingsWriteError;
+  const next = settingsQueue.then(() => {
+    try {
+      return fn();
+    } catch (err) {
+      const code = err instanceof SettingsWriteError ? err.code : "internal";
+      return { __error: code, __detail: err && err.message ? err.message : String(err) };
+    }
+  });
+  settingsQueue = next.catch(() => {});
+  return next;
+}
+
 async function handleRequest(req, res) {
   if (!authMiddleware.authenticate(req)) {
     json(res, { error: "unauthorized" }, 401);
@@ -427,14 +442,33 @@ async function handleRequest(req, res) {
   // --- Settings ---
   if (method === "GET" && pathname === "/settings") {
     const settingsStore = require("@zana-ai/extras").settings.store;
-    json(res, settingsStore.getSettings());
+    json(res, settingsStore.read());
     return;
   }
   if (method === "POST" && pathname === "/settings") {
     const settingsStore = require("@zana-ai/extras").settings.store;
     const body = await readBody(req);
-    settingsStore.updateSettings(body);
-    json(res, settingsStore.getSettings());
+    const validationErr = settingsStore.validate(body);
+    if (validationErr) {
+      json(res, { error: "validation_failed", detail: validationErr }, 400);
+      return;
+    }
+    // Serialize POSTs through one queue so concurrent in-process requests can't
+    // race the read-modify-write. Atomic rename in store.write() prevents torn
+    // reads. Cross-daemon read-modify-write CAN still lose updates if two
+    // daemons on the same host POST simultaneously; accepted because /settings
+    // is a low-frequency admin surface.
+    const merged = await settingsWriteQueue(() => {
+      const next = settingsStore.deepMerge(settingsStore.read(), body);
+      settingsStore.write(next);
+      return next;
+    });
+    if (merged && merged.__error) {
+      const status = merged.__error === "validation_failed" ? 400 : 500;
+      json(res, { error: merged.__error, detail: merged.__detail }, status);
+      return;
+    }
+    json(res, merged);
     return;
   }
 
