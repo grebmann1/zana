@@ -49,6 +49,10 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   const skillStore = extras.settings.skillStore;
   const teamStore = _teamStore();
   const teamManager = _teamManager();
+  if (typeof teamStore.seedDefaults === "function") {
+    try { teamStore.seedDefaults(); }
+    catch (err: any) { console.warn("[core] team seed failed:", err?.message || err); }
+  }
   const runTracker = _runTracker();
   const ticketWatcher = _ticketWatcher();
 

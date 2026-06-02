@@ -148,30 +148,56 @@ const TEAM_TEMPLATES = [
     rules: { maxConcurrentWorkers: 5, autoRestart: false, requireApproval: false },
   },
   {
-    name: "Research Team",
-    icon: "🔬",
-    description: "Deep code analysis and security auditing",
-    orchestratorProfileId: "orchestrator",
-    slots: [
-      { profileId: "read-only-explorer", quantity: 3 },
-      { profileId: "security-auditor", quantity: 2 },
-      { profileId: "doc-generator", quantity: 1 },
-    ],
-    initialPrompt: "You lead a research team. Send explorers to analyze different parts of the codebase, have auditors check for security issues, and produce a consolidated report via the doc generator.",
-    rules: { maxConcurrentWorkers: 6, autoRestart: false, requireApproval: true },
-  },
-  {
-    name: "Code Review Pipeline",
+    name: "Code Review Squad",
     icon: "🔍",
-    description: "Multi-reviewer pipeline for thorough PR review",
+    description: "PR review pipeline: two reviewers cross-check, security reviewer audits, test-writer flags missing coverage",
     orchestratorProfileId: "orchestrator",
     slots: [
       { profileId: "code-reviewer", quantity: 2 },
-      { profileId: "security-auditor", quantity: 1 },
+      { profileId: "security-reviewer", quantity: 1 },
       { profileId: "test-writer", quantity: 1 },
     ],
-    initialPrompt: "You run a code review pipeline. Send reviewers to examine code quality, have the security auditor check for vulnerabilities, and the test writer suggest missing test cases. Synthesize findings into a unified review.",
+    initialPrompt: "You run a PR review. Workflow:\n1. Spawn both Code Reviewers in parallel on the same diff — collect their independent findings.\n2. Spawn the Security Reviewer with the diff — auth, injection, secrets, supply chain, deserialization.\n3. Spawn the Test Writer — identify behaviors the diff changes that lack test coverage.\n4. Synthesize all findings into a single review with severity-ranked issues. Do not write fixes; surface the gaps.",
     rules: { maxConcurrentWorkers: 4, autoRestart: false, requireApproval: false },
+  },
+  {
+    name: "Research & Docs Squad",
+    icon: "🔬",
+    description: "Read-only investigation: researchers explore, architect frames the problem, doc-generator writes it up",
+    orchestratorProfileId: "orchestrator",
+    slots: [
+      { profileId: "researcher", quantity: 2 },
+      { profileId: "architect", quantity: 1 },
+      { profileId: "doc-generator", quantity: 1 },
+    ],
+    initialPrompt: "You lead a research investigation. Workflow:\n1. Split the question across both Researchers — give each a distinct sub-area to explore. Wait for both.\n2. Spawn the Architect with both research outputs — ask for a framing of the problem space, options compared, and a recommendation with tradeoffs.\n3. Spawn the Doc Generator with all prior outputs — produce a single consolidated writeup.\nThis squad does NOT write production code. Outputs are RFCs, design docs, or analysis artifacts.",
+    rules: { maxConcurrentWorkers: 4, autoRestart: false, requireApproval: false },
+  },
+  {
+    name: "Debug Squad",
+    icon: "🐛",
+    description: "Repro-first bug hunt: debuggers reproduce and bisect, test-writer locks the regression, code-reviewer signs off the fix",
+    orchestratorProfileId: "orchestrator",
+    slots: [
+      { profileId: "debugger", quantity: 2 },
+      { profileId: "test-writer", quantity: 1 },
+      { profileId: "code-reviewer", quantity: 1 },
+    ],
+    initialPrompt: "You lead a bug investigation. Workflow:\n1. Spawn both Debuggers — one builds the minimal reproduction, the other bisects to root cause. Both run in parallel.\n2. Spawn the Test Writer with the reproduction — write a failing test that pins the bug before any fix lands.\n3. Wait for the Debuggers to land the fix; then spawn the Code Reviewer on the diff.\n4. Confirm the regression test now passes and report root cause + fix in the final summary.",
+    rules: { maxConcurrentWorkers: 4, autoRestart: false, requireApproval: false },
+  },
+  {
+    name: "Performance Squad",
+    icon: "⚡",
+    description: "Profile-and-improve loop: performance engineer measures, researcher digs into hotspots, backend dev applies the fix",
+    orchestratorProfileId: "orchestrator",
+    slots: [
+      { profileId: "performance-engineer", quantity: 1 },
+      { profileId: "researcher", quantity: 1 },
+      { profileId: "backend-dev", quantity: 1 },
+    ],
+    initialPrompt: "You lead a performance investigation. Workflow:\n1. Spawn the Performance Engineer FIRST to set up benchmarks and capture baseline numbers (latency, throughput, memory). Wait for its result.\n2. Spawn the Researcher with the baseline — identify the top 1-3 hotspots and explain *why* they're slow (algorithmic, IO-bound, allocation pressure, lock contention).\n3. Spawn the Backend Dev with the hotspot analysis — apply targeted fixes, no scope creep.\n4. Re-run the benchmarks via Performance Engineer; report before/after numbers and which fix moved which metric.",
+    rules: { maxConcurrentWorkers: 3, autoRestart: false, requireApproval: false },
   },
 ];
 
@@ -193,5 +219,54 @@ export function getTemplates() {
     // plugin-loader not yet initialized
   }
   return templates;
+}
+
+function templateId(t) {
+  return String(t.name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+// One-time seed of built-in TEAM_TEMPLATES into ~/.zana/teams/. Tracks which
+// template ids have been seeded in a `.seeded` marker so that a user who
+// deletes a default team does not see it auto-recreate on the next boot. New
+// templates added in future versions are still seeded (their id isn't in the
+// marker yet); previously-seeded ids that were deleted stay deleted.
+export function seedDefaults() {
+  ensureDir();
+  const markerPath = path.join(TEAMS_DIR(), ".seeded");
+  let seeded;
+  try {
+    seeded = new Set(JSON.parse(fs.readFileSync(markerPath, "utf8")));
+  } catch {
+    seeded = new Set();
+  }
+
+  let changed = false;
+  for (const tpl of TEAM_TEMPLATES) {
+    const id = templateId(tpl);
+    if (!id) continue;
+    if (seeded.has(id)) continue;
+    const filePath = path.join(TEAMS_DIR(), `${id}.json`);
+    if (!fs.existsSync(filePath)) {
+      try {
+        saveTeam({ ...tpl, id });
+      } catch (err) {
+        console.warn(`[team-store] seed ${id} failed:`, err.message);
+        continue;
+      }
+    }
+    seeded.add(id);
+    changed = true;
+  }
+
+  if (changed) {
+    try {
+      fs.writeFileSync(markerPath, JSON.stringify([...seeded], null, 2), "utf8");
+    } catch (err) {
+      console.warn(`[team-store] write seed marker failed:`, err.message);
+    }
+  }
 }
 
