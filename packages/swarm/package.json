@@ -1,7 +1,7 @@
 {
   "name": "@zana-ai/swarm",
-  "version": "0.1.1",
-  "description": "Multi-daemon swarm coordination \u2014 router, events, spawner.",
+  "version": "0.1.2",
+  "description": "Multi-daemon swarm coordination — router, events, spawner.",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -11,7 +11,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/core": "0.1.1"
+    "@zana-ai/core": "0.1.2"
   },
   "files": [
     "dist/"

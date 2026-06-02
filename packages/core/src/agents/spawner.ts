@@ -21,7 +21,7 @@ export function findClaude() {
   return "claude";
 }
 
-const VALID_PERMISSION_MODES = ["default", "plan", "auto", "trust", "bypassPermissions"];
+const VALID_PERMISSION_MODES = ["default", "plan", "auto", "acceptEdits", "bypassPermissions", "dontAsk"];
 const VALID_EFFORT_LEVELS = ["low", "medium", "high", "max"];
 
 const ENV_PASSTHROUGH_PREFIXES = ["PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_", "NODE_", "NPM_", "VOLTA_", "NVM_", "ZANA_", "CLAUDE_", "XDG_"];
