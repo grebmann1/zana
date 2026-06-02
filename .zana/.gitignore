@@ -1,9 +1,0 @@
-# Transient runtime data — not committed
-audit/
-sessions/
-runs/
-events/
-tmp/
-
-# Everything else is committed by default:
-# tickets/, sprints/, artifacts/, plans/, scheduler/, config.json
