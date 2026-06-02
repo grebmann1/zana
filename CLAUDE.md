@@ -37,13 +37,13 @@ Tests live in `packages/<pkg>/test/`. Build artifacts in `packages/<pkg>/dist/`.
 ## Build & test
 
 ```bash
-npm run -w @zana/<pkg> build         # build one package
+npm run -w @zana-ai/<pkg> build      # build one package
 cd packages/<pkg> && npx vitest run  # test one package
 npm run build && npm test             # full sweep before committing
 ```
 
 After editing TS in `packages/<pkg>/src/`, rebuild that package — production
-code paths in other packages reach it via `require("@zana/<pkg>")` which
+code paths in other packages reach it via `require("@zana-ai/<pkg>")` which
 resolves to `dist/`.
 
 ## Workspace context — tenant isolation invariant

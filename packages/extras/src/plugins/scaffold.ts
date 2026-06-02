@@ -25,11 +25,11 @@ export function scaffold(name, targetDir) {
     version: "0.1.0",
     main: "index.js",
     dependencies: {
-      "@zana/sdk": "^0.1.0",
+      "@zana-ai/sdk": "^0.1.0",
     },
   };
 
-  const indexJs = `const { definePlugin } = require("@zana/sdk/plugin");
+  const indexJs = `const { definePlugin } = require("@zana-ai/sdk/plugin");
 
 module.exports = definePlugin({
   id: "${name}",
