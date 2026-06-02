@@ -61,8 +61,11 @@ export function onTeamsChange(cb) {
   };
 }
 
-function buildTeamLeadDisallowedTools(team, baseProfile) {
+export function buildTeamLeadDisallowedTools(team, baseProfile) {
   const disallowed = new Set(baseProfile.disallowedTools || []);
+  // Listing the same tool in --allowed-tools and --disallowed-tools makes the
+  // claude CLI reject the spawn. Honor whatever the profile already permits.
+  const profileAllowed = new Set(baseProfile.allowedTools || []);
 
   // swarm-master delegates via zana_swarm_spawn (MCP), not Write/Edit/Bash
   // Don't restrict it — its prompt already forbids direct coding
@@ -70,17 +73,12 @@ function buildTeamLeadDisallowedTools(team, baseProfile) {
     return [...disallowed];
   }
 
-  if (team.rules?.orchestratorAllowedTools) {
-    const defaults = ["Write", "Edit", "Bash"];
-    for (const tool of defaults) {
-      if (!team.rules.orchestratorAllowedTools.includes(tool)) {
-        disallowed.add(tool);
-      }
-    }
-  } else {
-    disallowed.add("Write");
-    disallowed.add("Edit");
-    disallowed.add("Bash");
+  const restrictBase = ["Write", "Edit", "Bash"];
+  const allowedForLead = team.rules?.orchestratorAllowedTools;
+  for (const tool of restrictBase) {
+    if (profileAllowed.has(tool)) continue;
+    if (allowedForLead && allowedForLead.includes(tool)) continue;
+    disallowed.add(tool);
   }
 
   return [...disallowed];
