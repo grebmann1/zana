@@ -197,7 +197,10 @@ export function spawnHeadless(profile, options = {}) {
   const claudePath = findClaude();
 
   const headlessProfile = { ...profile };
-  if (!options.multiTurn && !headlessProfile.permissionMode) {
+  // Spawned workers are non-interactive children — there's no human at the
+  // other end to answer permission prompts, so without bypass they hang.
+  // Profile can opt in to a stricter mode by setting permissionMode explicitly.
+  if (!headlessProfile.permissionMode) {
     headlessProfile.permissionMode = "bypassPermissions";
   }
 
@@ -250,8 +253,12 @@ export function spawnHeadless(profile, options = {}) {
 
 export function spawnOneShot(profile, prompt, options = {}) {
   const claudePath = findClaude();
+  const oneShotProfile = { ...profile };
+  if (!oneShotProfile.permissionMode) {
+    oneShotProfile.permissionMode = "bypassPermissions";
+  }
   const args = [
-    ...buildClaudeArgs(profile, options),
+    ...buildClaudeArgs(oneShotProfile, options),
     "-p",
     prompt,
   ];
