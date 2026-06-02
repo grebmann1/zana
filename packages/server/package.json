@@ -1,23 +1,29 @@
 {
   "name": "@zana-ai/server",
-  "version": "0.1.0",
-  "description": "Zana HTTP/IPC surface — hook server and REST API.",
+  "version": "0.1.1",
+  "description": "Zana HTTP/IPC surface \u2014 hook server and REST API.",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run"
   },
-  "engines": { "node": ">=20.0.0" },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
-    "@zana-ai/core": "0.1.0"
+    "@zana-ai/core": "0.1.1"
   },
   "peerDependencies": {
-    "@zana-ai/work": "0.1.0"
+    "@zana-ai/work": "0.1.1"
   },
   "peerDependenciesMeta": {
-    "@zana-ai/work": { "optional": true }
+    "@zana-ai/work": {
+      "optional": true
+    }
   },
-  "files": ["dist/"],
+  "files": [
+    "dist/"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

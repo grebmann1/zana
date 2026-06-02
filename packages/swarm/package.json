@@ -1,17 +1,21 @@
 {
   "name": "@zana-ai/swarm",
-  "version": "0.1.0",
-  "description": "Multi-daemon swarm coordination — router, events, spawner.",
+  "version": "0.1.1",
+  "description": "Multi-daemon swarm coordination \u2014 router, events, spawner.",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run"
   },
-  "engines": { "node": ">=20.0.0" },
-  "dependencies": {
-    "@zana-ai/core": "0.1.0"
+  "engines": {
+    "node": ">=20.0.0"
   },
-  "files": ["dist/"],
+  "dependencies": {
+    "@zana-ai/core": "0.1.1"
+  },
+  "files": [
+    "dist/"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

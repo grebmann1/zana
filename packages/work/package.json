@@ -1,25 +1,31 @@
 {
   "name": "@zana-ai/work",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Work-tracking domains: tickets, scheduling, teams, runs.",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run"
   },
-  "engines": { "node": ">=20.0.0" },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
-    "@zana-ai/core": "0.1.0",
+    "@zana-ai/core": "0.1.1",
     "node-cron": "^3.0.3",
     "yaml": "^2.5.0"
   },
   "peerDependencies": {
-    "@zana-ai/extras": "0.1.0"
+    "@zana-ai/extras": "0.1.1"
   },
   "peerDependenciesMeta": {
-    "@zana-ai/extras": { "optional": true }
+    "@zana-ai/extras": {
+      "optional": true
+    }
   },
-  "files": ["dist/"],
+  "files": [
+    "dist/"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

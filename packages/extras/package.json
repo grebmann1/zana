@@ -1,23 +1,29 @@
 {
   "name": "@zana-ai/extras",
-  "version": "0.1.0",
-  "description": "User-facing customization — settings store, skill store, plugin loader.",
+  "version": "0.1.1",
+  "description": "User-facing customization \u2014 settings store, skill store, plugin loader.",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run"
   },
-  "engines": { "node": ">=20.0.0" },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
-    "@zana-ai/core": "0.1.0"
+    "@zana-ai/core": "0.1.1"
   },
   "peerDependencies": {
-    "@zana-ai/work": "0.1.0"
+    "@zana-ai/work": "0.1.1"
   },
   "peerDependenciesMeta": {
-    "@zana-ai/work": { "optional": true }
+    "@zana-ai/work": {
+      "optional": true
+    }
   },
-  "files": ["dist/"],
+  "files": [
+    "dist/"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

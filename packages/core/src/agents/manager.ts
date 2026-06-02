@@ -57,7 +57,6 @@ export function checkSystemResources(severity: "soft" | "hard" = "soft") {
   const cfg = moduleConfig.get()?.system;
   const cpuSoft = cfg?.cpuLoadThreshold ?? 0.8;
   const cpuHard = cfg?.cpuLoadHardCap ?? 2.0;
-  const minFreePct = cfg?.minFreeMemoryPct ?? 10;
   const factor = severity === "hard" ? cpuHard : cpuSoft;
 
   const load1m = os.loadavg()[0];
@@ -65,11 +64,6 @@ export function checkSystemResources(severity: "soft" | "hard" = "soft") {
   const maxLoad = cpuCount * factor;
   if (load1m > maxLoad) {
     return `CPU load too high: ${load1m.toFixed(2)} exceeds ${severity} threshold ${maxLoad.toFixed(2)} (${cpuCount} cores x ${(factor * 100).toFixed(0)}%)`;
-  }
-
-  const freePct = (os.freemem() / os.totalmem()) * 100;
-  if (freePct < minFreePct) {
-    return `memory too low: ${freePct.toFixed(1)}% free, minimum is ${minFreePct}%`;
   }
 
   return null;

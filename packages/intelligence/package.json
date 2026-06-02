@@ -1,17 +1,21 @@
 {
   "name": "@zana-ai/intelligence",
-  "version": "0.1.0",
-  "description": "Intelligence layer — task router, GOAP planner, vector memory, background workers.",
+  "version": "0.1.1",
+  "description": "Intelligence layer \u2014 task router, GOAP planner, vector memory, background workers.",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run"
   },
-  "engines": { "node": ">=20.0.0" },
-  "dependencies": {
-    "@zana-ai/core": "0.1.0"
+  "engines": {
+    "node": ">=20.0.0"
   },
-  "files": ["dist/"],
+  "dependencies": {
+    "@zana-ai/core": "0.1.1"
+  },
+  "files": [
+    "dist/"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

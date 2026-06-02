@@ -4,21 +4,15 @@ import * as path from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-// Mock os.loadavg(), freemem(), totalmem() so tests can simulate any
-// load without thrashing the real box and without false-positive
-// memory failures on a real machine that happens to be near full.
-// Module-level vi.mock is hoisted; assign __mock* before each test that
-// needs non-default values.
+// Mock os.loadavg() so tests can simulate any load without thrashing the
+// real box. Module-level vi.mock is hoisted; assign __mockLoad before each
+// test that needs a non-default value.
 let __mockLoad = 0.1;
-let __mockFree = 8 * 1024 * 1024 * 1024; // 8 GiB
-let __mockTotal = 16 * 1024 * 1024 * 1024; // 16 GiB (50% free, well above 10%)
 vi.mock("node:os", async () => {
   const actual = await vi.importActual<typeof os>("node:os");
   return {
     ...actual,
     loadavg: () => [__mockLoad, __mockLoad, __mockLoad],
-    freemem: () => __mockFree,
-    totalmem: () => __mockTotal,
   };
 });
 
@@ -40,13 +34,13 @@ function setLoad(value: number) {
   __mockLoad = value;
 }
 
-function restoreLoad() {
+function restoreDefaults() {
   __mockLoad = 0.1;
 }
 
 describe("checkSystemResources", () => {
   afterEach(() => {
-    restoreLoad();
+    restoreDefaults();
   });
 
   it("returns null when load is well below soft threshold", () => {
