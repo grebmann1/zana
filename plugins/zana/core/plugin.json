@@ -1,7 +1,7 @@
 {
   "id": "zana",
   "name": "zana",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Zana — multi-agent orchestrator for Claude Code. Spawn teams of agents, coordinate work through tickets and sprints, run goal-driven autopilot loops. Use /zana to orchestrate.",
   "author": {
     "name": "Guillaume Rebmann",

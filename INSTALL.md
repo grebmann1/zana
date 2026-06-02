@@ -39,12 +39,41 @@ zana init wizard
 ```
 
 The npm path does **not** ship the slash-command plugins (`/zana`,
-`/zana:autopilot`, etc.). To get those, see Path A or Path B below — they
-require the full repo because plugin marketplaces are loaded by absolute path
-in Claude Code.
+`/zana:autopilot`, etc.). To get those, run the one-liner below — no
+clone required.
 
 Jump to [Verification](#verification) once `zana status` returns a running
 daemon.
+
+---
+
+## Path 0.5 — add slash commands from the GitHub marketplace
+
+After Path 0 (or any other), pull the slash-command plugins straight from
+GitHub. No local clone needed:
+
+```
+/plugin marketplace add grebmann1/zana
+/plugin install zana@zana-marketplace
+/plugin install zana-loop@zana-marketplace
+```
+
+(Run these as slash commands inside a Claude Code session, or as
+`claude plugin ...` from the shell.) Then restart Claude Code so the new
+commands register.
+
+To stay current automatically, add `"autoUpdate": true` to the marketplace
+entry in `~/.claude/settings.json` so each session-start refresh picks up new
+plugin versions:
+
+```json
+"extraKnownMarketplaces": {
+  "zana-marketplace": {
+    "source": { "source": "git", "url": "https://github.com/grebmann1/zana.git" },
+    "autoUpdate": true
+  }
+}
+```
 
 ---
 
