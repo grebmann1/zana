@@ -33,3 +33,7 @@ List tickets on the Zana work board. Read-only.
 - Read-only. Do not call any other tool.
 - The daemon returns tickets pre-sorted by `updatedAt` desc; render in that order.
 - Do not paraphrase titles; truncate with `…` instead.
+
+## Monitoring
+
+For ongoing visibility, prefer the Claude Code status-line footer over re-running this command. When `~/.claude/settings.json` has `statusLine` wired to `packages/core/dist/bin/statusline.js`, the footer surfaces live counts as `tickets: N doing · N review · N blocked · N todo` — refreshed on every prompt and every `refreshInterval` seconds. Use `/zana:ticket:list` for the full board (titles, ids, labels); use the footer for "is anything in flight?" at-a-glance.

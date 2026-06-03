@@ -16,7 +16,7 @@ In a Claude Code session:
 
 ```
 /plugin marketplace add grebmann1/zana
-/plugin install zana@zana-marketplace        # orchestrator (27 commands, 2 skills)
+/plugin install zana@zana-marketplace        # orchestrator (28 commands, 2 skills)
 /plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling (3 cmds, 1 skill)
 ```
 
@@ -80,7 +80,7 @@ The default surface. After installing the plugin, in any workspace:
 /zana:loop:start                   # daemon-free /loop scheduling
 ```
 
-30 slash commands across two plugins. See
+31 slash commands across two plugins. See
 [plugins/zana/core/commands/](plugins/zana/core/commands/) and
 [plugins/zana/loop/commands/](plugins/zana/loop/commands/).
 

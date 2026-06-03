@@ -4,13 +4,15 @@
 //   - stdin JSON (Claude Code passes .workspace.current_dir)
 //   - ~/.zana/daemons/*.json (running daemon registry)
 //   - $WORKSPACE/.zana/scheduler/*.yml (active schedules)
-//   - daemon HTTP endpoints (/swarm/agents, /tickets) for the workspace's daemon
+//   - $WORKSPACE/.zana/tickets.db (better-sqlite3, read-only) — counts by status
+//   - daemon HTTP endpoint (/swarm/agents) for the workspace's daemon, if up
 //
 // Output:
-//   ⚡ zana off | 2 schedule(s)
-//   ⚡ zana on (pid 1234) | 2 sched ⏱ next 6m | 1 agent | 0 tickets (+1 other daemon)
+//   ⚡ zana off | 2 schedule(s) | tickets: 1 doing · 16 todo
+//   ⚡ zana on (pid 1234) | 2 sched ⏱ next 6m | 1 agent | tickets: 1 doing · 16 todo (+1 other daemon)
 //
-// Always exits 0; never blocks Claude Code's prompt.
+// Tickets surface from the DB whether or not the daemon is running. Always
+// exits 0; never blocks Claude Code's prompt.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -95,6 +97,43 @@ function readSchedules(workspace: string): ScheduleInfo {
   return { count, nextRunIso };
 }
 
+type TicketCounts = { inProgress: number; review: number; backlog: number; blocked: number };
+
+function readTicketCounts(workspace: string): TicketCounts | null {
+  const dbPath = path.join(workspace, ".zana", "tickets.db");
+  if (!fs.existsSync(dbPath)) return null;
+  let Database: any;
+  try { Database = require("better-sqlite3"); } catch { return null; }
+  let db: any;
+  try {
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    const rows = db.prepare("SELECT status, COUNT(*) AS n FROM tickets GROUP BY status").all() as Array<{ status: string; n: number }>;
+    const counts: TicketCounts = { inProgress: 0, review: 0, backlog: 0, blocked: 0 };
+    for (const r of rows) {
+      if (r.status === "in-progress") counts.inProgress = r.n;
+      else if (r.status === "review") counts.review = r.n;
+      else if (r.status === "backlog") counts.backlog = r.n;
+      else if (r.status === "blocked") counts.blocked = r.n;
+    }
+    return counts;
+  } catch {
+    return null;
+  } finally {
+    try { db?.close(); } catch {}
+  }
+}
+
+function ticketLabel(t: TicketCounts | null): string | null {
+  if (!t) return null;
+  const parts: string[] = [];
+  if (t.inProgress > 0) parts.push(`${t.inProgress} doing`);
+  if (t.review > 0) parts.push(`${t.review} review`);
+  if (t.blocked > 0) parts.push(`${t.blocked} blocked`);
+  if (t.backlog > 0) parts.push(`${t.backlog} todo`);
+  if (parts.length === 0) return null;
+  return `tickets: ${parts.join(" · ")}`;
+}
+
 function relativeLabel(iso: string | null): string | null {
   if (!iso) return null;
   const t = Date.parse(iso);
@@ -132,20 +171,20 @@ async function main() {
 
   const { count: schedCount, nextRunIso } = readSchedules(workspace);
   const nextLabel = relativeLabel(nextRunIso);
+  const ticketCounts = readTicketCounts(workspace);
+  const ticketStr = ticketLabel(ticketCounts);
 
   if (!ws) {
-    process.stdout.write(`⚡ zana off | ${schedCount} schedule(s)\n`);
+    const parts: string[] = ["⚡ zana off"];
+    if (schedCount > 0) parts.push(`${schedCount} schedule${schedCount !== 1 ? "s" : ""}`);
+    if (ticketStr) parts.push(ticketStr);
+    process.stdout.write(`${parts.join(" | ")}\n`);
     return;
   }
 
   let agents: number | null = null;
-  let tickets: number | null = null;
-  const [a, t] = await Promise.all([
-    httpGet(ws.port, "/swarm/agents"),
-    httpGet(ws.port, "/tickets?status=in_progress"),
-  ]);
+  const a = await httpGet(ws.port, "/swarm/agents");
   if (Array.isArray(a)) agents = a.length;
-  if (Array.isArray(t)) tickets = t.length;
 
   const parts: string[] = [`⚡ zana on (pid ${ws.pid})`];
   if (schedCount > 0) {
@@ -154,7 +193,7 @@ async function main() {
     parts.push(s);
   }
   if (agents !== null) parts.push(`${agents} agent${agents !== 1 ? "s" : ""}`);
-  if (tickets !== null) parts.push(`${tickets} ticket${tickets !== 1 ? "s" : ""}`);
+  if (ticketStr) parts.push(ticketStr);
   let out = parts.join(" | ");
   if (otherCount > 0) out += ` (+${otherCount} other daemon${otherCount !== 1 ? "s" : ""})`;
   process.stdout.write(`${out}\n`);

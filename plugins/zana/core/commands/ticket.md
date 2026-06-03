@@ -45,6 +45,7 @@ If `$ARGUMENTS` is empty, ask the user "What's the ticket title?" and stop. Do n
 6. **Remind** the user about sibling commands:
    - `/zana:ticket:list` to view the board
    - `/zana:ticket:complete <ticketId> <summary>` to close it
+   - The Claude Code status-line footer (if `~/.claude/settings.json` has `statusLine` pointing at `packages/core/dist/bin/statusline.js`) surfaces live counts as `tickets: N doing · N review · N blocked · N todo`. Watch the footer instead of re-running `/zana:ticket:list` every few seconds — the footer refreshes on every prompt + every `refreshInterval` seconds.
 
 ## Rules
 

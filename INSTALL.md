@@ -27,7 +27,7 @@ will fail otherwise.
 npm install -g @zana-ai/mcp
 ```
 
-This pulls in all six sibling packages
+This pulls in the six sibling packages it depends on
 (`@zana-ai/{core,work,extras,intelligence,swarm,server}`) and runs a
 `postinstall` that registers the MCP server in `~/.claude/settings.json`.
 
@@ -39,8 +39,8 @@ zana init wizard
 ```
 
 The npm path does **not** ship the slash-command plugins (`/zana`,
-`/zana:autopilot`, etc.). To get those, run the one-liner below — no
-clone required.
+`/zana:autopilot`, etc.). To get those, run the marketplace install
+commands below — no clone required.
 
 Jump to [Verification](#verification) once `zana status` returns a running
 daemon.
@@ -184,11 +184,11 @@ Verify:
 
 ```bash
 claude plugin details zana@zana-marketplace
-# Commands: 27 (zana, status, memory, trust, version, update,
+# Commands: 28 (zana, status, memory, trust, version, update,
 #               team {.,save,delete,list,status,stop},
 #               ticket {.,list,complete},
 #               autopilot {.,discover,list,status,cancel},
-#               council {.,list,status,override},
+#               council {.,arch,list,status,override},
 #               schedule {list,reload,trigger}).
 # Skills: 2 (collaboration, orchestration).
 
@@ -240,13 +240,13 @@ Note the positional argument convention: workspace path comes BEFORE flags.
 
 The daemon listens on two ports:
 
-- **Hook port** (default 47402) — Claude Code hooks POST events here.
-- **API port** = hook port + 1 (default 47403) — bearer-token authenticated REST surface.
+- **Hook port** (default 47400) — Claude Code hooks POST events here.
+- **API port** = hook port + 1 (default 47401) — bearer-token authenticated REST surface.
 
 The registry record at `~/.zana/daemons/<id>.json` lists both:
 
 ```json
-{ "id": "...", "port": 47402, "apiPort": 47403, "pid": ..., "workspace": "...", ... }
+{ "id": "...", "port": 47400, "apiPort": 47401, "pid": ..., "workspace": "...", ... }
 ```
 
 The auth token lives in `~/.zana/auth.json` and is used as `Authorization: Bearer <token>` on the API port.
@@ -340,7 +340,7 @@ claude mcp list | grep zana
 
 # 4. Plugin registered
 claude plugin details zana@zana-marketplace | head -5
-# expected: zana / Multi-agent orchestrator / Skills (23)
+# expected: zana / Multi-agent orchestrator / Skills (2)
 
 # 5. Statusline emits new branding
 echo '{"workspace":{"current_dir":"/absolute/path/to/your/workspace"}}' \
@@ -384,7 +384,7 @@ claude plugin install zana-loop@zana-marketplace
 # then restart Claude Code
 ```
 
-### Port 47402 already in use
+### Port 47400 already in use
 
 Another daemon is bound. Stop it:
 
@@ -419,7 +419,7 @@ npm run build:runtime:core
 The wrapper at `~/.zana/bin/post-hook.sh` may have drifted. Force-reinstall:
 
 ```bash
-node -e 'require("@zana-ai/server").hooks.installer.installHooks(47402)'
+node -e 'require("@zana-ai/server").hooks.installer.installHooks(47400)'
 ```
 
 ---

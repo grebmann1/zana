@@ -375,6 +375,29 @@ Use a sprint when the work is bounded and you want a single completion signal ac
 
 Always close sprints with `zana_sprint_end` once the tickets are done — open sprints accumulate noise and confuse autopilot loops that filter on sprint state.
 
+## Monitoring tickets and sprints — use the status-line footer
+
+Ticket and sprint state changes asynchronously: workers transition tickets `backlog → in-progress → review → done`, the watcher escalates failed reviews into `rework` or `blocked`, and autopilot writes new tickets while you sleep. Polling that by hand (`/zana:ticket:list` every few seconds, or `zana_sprint_board` on a loop) is wasted bandwidth and burns context for noise.
+
+Wire the Claude Code **status-line footer** instead. It reads `.zana/tickets.db` directly and surfaces live counts as `tickets: N doing · N review · N blocked · N todo` plus daemon/schedule state. Configure once in `~/.claude/settings.json`:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "node \"<path-to-zana>/packages/core/dist/bin/statusline.js\"",
+  "padding": 1,
+  "refreshInterval": 30
+}
+```
+
+The footer refreshes on every prompt and every `refreshInterval` seconds (set this to 30 or lower for active orchestration). Once it's wired:
+
+- **Glance, don't query.** The footer answers "is anything still in flight?" without calling a tool. Re-run `/zana:ticket:list` only when you need *which* tickets, not *how many*.
+- **`blocked > 0` is the alarm.** A non-zero `blocked` count means a ticket exhausted its rework cycles and needs human triage — open the board, read the audit trail, decide.
+- **`review` lingering is a signal.** If `review` stays non-zero across multiple footer refreshes, the watcher's reviewer is stuck or the review prompt needs sharpening. Inspect the ticket's comment history before respawning.
+
+Ask for a fresh status only when the footer disagrees with what you expect, or when you need ticket titles/ids the footer can't show.
+
 ## Common mistakes
 
 - **Spawning a daemon orchestrator from inside Claude Code.** Calling `zana_start_team` or `zana_spawn_agent` inside a Claude Code session creates a *second* orchestrator that duplicates your role and burns extra tokens. Use `/zana:team` (native path) or hand-roll `Agent` + `SendMessage`. Reserve the daemon-spawning tools for headless callers.

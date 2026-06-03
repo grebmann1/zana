@@ -39,3 +39,7 @@ Close a ticket with a written result summary. Claims first if the ticket isn't a
 - Claiming is best-effort here — `ticket_complete` does not actually require ownership, so the claim step is for audit-trail completeness only. Do not block the close if the ticket is already in flight.
 - Do NOT paraphrase the user's `resultSummary`; pass it through verbatim.
 - Do NOT call any tool other than the two listed in `allowed-tools`.
+
+## Monitoring
+
+After closing, the Claude Code status-line footer (if wired to `packages/core/dist/bin/statusline.js`) updates the live `tickets: N doing · N review · N blocked · N todo` counts within `refreshInterval` seconds — no need to re-run `/zana:ticket:list` to confirm the close registered.

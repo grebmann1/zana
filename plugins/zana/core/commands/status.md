@@ -58,3 +58,7 @@ Hints:
 - Do NOT block the dashboard on a single slow tool — make all five calls in one parallel batch.
 - If a tool errors, render that section as `error: <one-line message>` and continue with the rest. The dashboard is best-effort.
 - Truncate long titles / questions to ~60 chars so the table stays one-row-per-record.
+
+## Monitoring
+
+`/zana:status` is the **deep snapshot** — full lists with ids and titles. For at-a-glance ongoing monitoring (ticket counts only), use the Claude Code status-line footer wired to `packages/core/dist/bin/statusline.js`. The footer surfaces `tickets: N doing · N review · N blocked · N todo` continuously (per-prompt + every `refreshInterval` seconds), so re-running `/zana:status` every few seconds is wasted work. Run this command when you need the *details* the footer can't show (which agents, which sprints, which goals).
