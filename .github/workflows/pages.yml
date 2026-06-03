@@ -1,14 +1,19 @@
-# Build website/ and deploy to GitHub Enterprise Pages on
-# git.soma.salesforce.com. The same astro.config.mjs is shared with the
-# Heroku deploy — the DEPLOY_TARGET env var below switches the
-# `site` + `base` to the GHE Pages URL pattern
-# (https://pages.git.soma.salesforce.com/chatbots/zana/).
+# Build website/ and publish the static output to the `gh-pages` branch
+# on git.soma.salesforce.com. This GHE Pages instance is configured for
+# branch-deploy only (the "GitHub Actions" Source option is not available),
+# so the workflow force-pushes the built artifact to a dedicated branch
+# that Pages serves from. Repo-side configuration:
 #
-# Pages must be enabled for this repo: Settings → Pages → Source =
-# "GitHub Actions". The two `permissions` blocks below grant the
-# token Pages-write + OIDC scope, which is what actions/deploy-pages
-# requires.
-name: Deploy website to GHE Pages
+#   Settings → Pages → Source = "Deploy from a branch"
+#   Branch = gh-pages, folder = / (root)
+#
+# After that, every push to main that touches website/ rebuilds and
+# republishes the site at:
+#   https://git.soma.salesforce.com/pages/chatbots/zana/
+#
+# Heroku (https://zana.dev) is unaffected — it deploys via the
+# `heroku` git remote and a different Dockerfile pipeline.
+name: Publish website to gh-pages
 
 on:
   push:
@@ -19,20 +24,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: pages-publish
   cancel-in-progress: false
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: website
     steps:
       - uses: actions/checkout@v4
 
@@ -42,25 +42,32 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
 
-      - run: npm ci
+      - name: Install
+        working-directory: website
+        run: npm ci
 
       - name: Build (GHE Pages target)
+        working-directory: website
         env:
           DEPLOY_TARGET: ghe-pages
         run: npm run build
 
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: website/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      # Force-push website/dist to a clean orphan `gh-pages` branch.
+      # Using a fresh worktree keeps history out of the published branch.
+      - name: Publish to gh-pages
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          cd website/dist
+          touch .nojekyll  # disable Jekyll, otherwise _astro/ is hidden
+          git init -q -b gh-pages
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git add -A
+          git -c commit.gpgsign=false commit -q -m "publish: website ${GITHUB_SHA::7}"
+          git push -q --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git" \
+            HEAD:gh-pages
