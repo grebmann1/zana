@@ -1428,8 +1428,27 @@ async function handleToolCall(name, args, callerAgentId) {
     // Ticket tools
     case "zana_ticket_create":
       return await callCore("ticket_create", { title: args.title, description: args.description, priority: args.priority, labels: args.labels, blockedBy: args.blockedBy, sprintId: args.sprintId, createdBy: process.env.ZANA_TERMINAL_ID || "agent" });
-    case "zana_ticket_list":
-      return await callCore("ticket_list", { status: args.status, sprintId: args.sprintId, assigneeId: args.assigneeId, label: args.label });
+    case "zana_ticket_list": {
+      const tickets = await callCore("ticket_list", { status: args.status, sprintId: args.sprintId, assigneeId: args.assigneeId, label: args.label });
+      if (!Array.isArray(tickets)) return tickets;
+      return tickets.map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        assigneeId: t.assigneeId,
+        assigneeName: t.assigneeName,
+        sprintId: t.sprintId,
+        labels: t.labels,
+        type: t.type,
+        reviewPhase: t.reviewPhase,
+        reworkCount: t.reworkCount,
+        blockedBy: t.blockedBy,
+        commentCount: Array.isArray(t.comments) ? t.comments.length : 0,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      }));
+    }
     case "zana_ticket_get":
       return await callCore("ticket_get", { ticketId: args.ticketId });
     case "zana_ticket_claim":
@@ -1458,16 +1477,49 @@ async function handleToolCall(name, args, callerAgentId) {
       return await callCore("sprint_end", { sprintId: args.sprintId });
 
     // Team tools
-    case "zana_list_teams":
-      return await callCore("list_teams");
+    case "zana_list_teams": {
+      const teams = await callCore("list_teams");
+      if (!Array.isArray(teams)) return teams;
+      // Drop unspawnable teams (no slots) — `/zana:team` can't start them, so
+      // they have no purpose in the list. Catches both auto-saved editor
+      // drafts and abandoned test artifacts.
+      const usable = teams.filter((t) => Array.isArray(t.slots) && t.slots.length > 0);
+      return usable.map((t) => ({
+        id: t.id,
+        name: t.name,
+        icon: t.icon,
+        description: t.description,
+        orchestratorProfileId: t.orchestratorProfileId,
+        slots: t.slots || [],
+        slotCount: Array.isArray(t.slots) ? t.slots.reduce((n, s) => n + (s.quantity || 0), 0) : 0,
+        autoStart: t.autoStart,
+        updatedAt: t.updatedAt,
+      }));
+    }
     case "zana_get_team":
       return await callCore("get_team", { teamId: args.teamId });
     case "zana_start_team":
       return await callCore("start_team", { teamId: args.teamId, prompt: args.prompt, cwd: args.cwd });
     case "zana_stop_team":
       return await callCore("stop_team", { teamId: args.teamId });
-    case "zana_team_status":
-      return await callCore("team_status", { teamId: args.teamId });
+    case "zana_team_status": {
+      const status: any = await callCore("team_status", { teamId: args.teamId });
+      if (!status) return status;
+      const projectAgent = (a: any) => a && {
+        id: a.id, profileId: a.profileId, profileName: a.profileName, profileIcon: a.profileIcon,
+        state: a.state, model: a.model, pid: a.pid, mode: a.mode,
+        lastAction: a.lastAction, lastActivity: a.lastActivity, tokenCount: a.tokenCount,
+        spawnedAt: a.spawnedAt, parentAgentId: a.parentAgentId, terminalId: a.terminalId,
+        result: a.result,
+      };
+      return {
+        teamId: status.teamId, teamName: status.teamName, teamIcon: status.teamIcon,
+        orchestratorAgentId: status.orchestratorAgentId, checkpointId: status.checkpointId,
+        status: status.status, startedAt: status.startedAt, stoppedAt: status.stoppedAt,
+        orchestrator: projectAgent(status.orchestrator),
+        workers: Array.isArray(status.workers) ? status.workers.map(projectAgent) : [],
+      };
+    }
     case "zana_list_running_teams":
       return await callCore("list_running_teams");
     case "zana_save_team":

@@ -30,7 +30,7 @@ If `$ARGUMENTS` is empty, ask the user "What should the council deliberate on?" 
 
 3. **Announce intent** in one line, e.g. `Convening native council: architect + security-reviewer + researcher → synthesizer.`
 
-4. **Build the spawn plan** — one synthesizer + N voters, all spawned in ONE tool-use block:
+4. **Build the voter spawn plan** — N voter agents, spawned in ONE tool-use block:
 
    - **Voter agents** (`run_in_background: true`):
      - `name`: profile id (e.g. `architect`, `security-reviewer`, `researcher`).
@@ -43,38 +43,46 @@ If `$ARGUMENTS` is empty, ask the user "What should the council deliberate on?" 
           - `Emit a single stance: APPROVE or CHANGES.`
           - `Provide a rationale of 3–8 sentences specific to your specialty.`
           - `If you have dissenting concerns, state them explicitly — they will NOT be collapsed by synthesis.`
-       5. Handoff: `When you finish, call SendMessage({ to: "synthesizer", summary: "<APPROVE|CHANGES> stance from <voterName>", message: "<your full rationale>" }) and stop.`
+       5. Output contract: `Your final assistant message IS your stance delivery. Begin it with "Stance: APPROVE" or "Stance: CHANGES" on its own line, followed by your rationale. Do NOT call SendMessage — the host harness captures your final message and routes it to the synthesizer.`
 
-   - **Synthesizer agent** (`run_in_background: true`):
-     - `name`: `synthesizer`.
-     - `subagent_type`: `general-purpose`.
-     - `prompt`:
-       1. `You are the synthesizer for a council deliberation on: "{{question}}".`
-       2. `Wait for SendMessage from all {{N}} voters: {{voter names}}. Each will deliver an APPROVE or CHANGES stance with a rationale.`
-       3. `Once all stances are in, build a synthesis report:`
-          - `[CONSENSUS] — points where all voters agree`
-          - `[MAJORITY] — points where most voters agree`
-          - `[DISSENT] — points raised by a minority, quoted VERBATIM (never paraphrase, never collapse)`
-       4. `Compute the verdict from the stance tally:`
-          - `All APPROVE → VERDICT: APPROVE`
-          - `Majority APPROVE with dissent → VERDICT: APPROVE WITH CONDITIONS`
-          - `Majority CHANGES → VERDICT: REJECT`
-          - `Tie or no majority → VERDICT: ESCALATED (human required)`
-       5. `Return a single message containing the synthesis report + verdict + verbatim per-voter rationales. Do not SendMessage; the host conversation reads your final return value directly.`
-
-5. **Spawn — one tool-use block.** Issue all N voter `Agent` calls + the synthesizer `Agent` call together. Do NOT issue a kickoff `SendMessage` — voters don't depend on the synthesizer's start, and they don't message each other.
+5. **Spawn voters — one tool-use block.** Issue all N voter `Agent` calls together with `run_in_background: true`. Do not spawn the synthesizer yet.
 
 6. **Render the launch summary** — one block:
    ```
    Council convened (native, in-session).
      Question: <trimmed>
      Voters:   architect, security-reviewer, researcher
-     Synthesizer: synthesizer (waiting for 3 stances)
-
-   The synthesizer will return a verdict once all voters have weighed in. Native councils don't have a daemon-side audit checkpoint — for replayable, content-addressed deliberation use mcp__zana__zana_deliberate directly.
+     Waiting for 3 voter stances before synthesis…
    ```
 
-7. **Stop.** Do not poll. The synthesizer's return message lands in the host conversation when complete.
+7. **Wait for all voters to complete.** The harness delivers a task-notification per voter; each notification's `result` field contains the voter's final message (stance + rationale). Do NOT poll. Do NOT spawn the synthesizer until all N voters have reported.
+
+8. **Spawn the synthesizer — one tool-use block, foreground (`run_in_background: false`).**
+   - `name`: `synthesizer`.
+   - `subagent_type`: `general-purpose`.
+   - `prompt`: concatenate
+     1. `You are the synthesizer for a council deliberation on: "{{question}}".`
+     2. `The {{N}} voters have already reported. Their stances and rationales are pasted verbatim below — do NOT spawn anything, do NOT poll an inbox, synthesize from the text below and return your final report.`
+     3. Build a section per voter, in order, formatted as:
+        ```
+        ==========================================================================
+        VOTER <i>: <voterName> — Stance: <APPROVE|CHANGES>
+        ==========================================================================
+        <verbatim final message from the voter>
+        ```
+        (Parse the voter's stance from the first `Stance: ...` line of their final message; if absent, infer from the rationale and flag it in the synthesis.)
+     4. `Build a synthesis report:`
+        - `[CONSENSUS] — points where all voters agree`
+        - `[MAJORITY] — points where most voters agree`
+        - `[DISSENT] — points raised by a minority, quoted VERBATIM (never paraphrase, never collapse)`
+     5. `Compute the verdict from the stance tally:`
+        - `All APPROVE → VERDICT: APPROVE`
+        - `Majority APPROVE with dissent → VERDICT: APPROVE WITH CONDITIONS`
+        - `Majority CHANGES → VERDICT: REJECT`
+        - `Tie or no majority → VERDICT: ESCALATED (human required)`
+     6. `Return a single message containing the synthesis report + verdict + verbatim per-voter rationales as your final output.`
+
+9. **Stop.** The synthesizer's return value is the verdict. Native councils don't have a daemon-side audit checkpoint — for replayable, content-addressed deliberation use `mcp__zana__zana_deliberate` directly.
 
 ## When to prefer the daemon path
 
@@ -89,8 +97,9 @@ The native path is right for "I want three perspectives and a verdict, fast." Th
 
 ## Rules
 
-- ALWAYS spawn voters AND the synthesizer in ONE tool-use block. Sequential calls block parallel review.
-- ALWAYS use `run_in_background: true` so the host conversation can keep going.
+- ALWAYS spawn voters in ONE tool-use block with `run_in_background: true` — parallel review is the point.
+- ALWAYS wait for all voter notifications before spawning the synthesizer.
+- The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — voters do NOT call `SendMessage` (it isn't reliably reachable from nested `general-purpose` subagents in this harness; final-message capture is the contract).
 - The synthesizer MUST preserve dissent verbatim. Its prompt enforces this; do not silently weaken it.
 - Do NOT call `mcp__zana__zana_deliberate` from this command — that's the daemon path.
 - Do NOT pick a verdict at the host level — the synthesizer is the only voice that emits the verdict.

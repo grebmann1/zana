@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-function TEAMS_DIR() { return require("@zana-ai/core").config.TEAMS_DIR; }
+import { config } from "@zana-ai/core";
+function TEAMS_DIR() { return config.TEAMS_DIR; }
 
 function ensureDir() {
   fs.mkdirSync(TEAMS_DIR(), { recursive: true });

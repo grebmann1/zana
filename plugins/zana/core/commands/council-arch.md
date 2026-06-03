@@ -40,7 +40,7 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
 
 4. **Announce intent** in one line, e.g. `Convening arch council (3): security-reviewer + performance-engineer + researcher → synthesizer.`
 
-5. **Build the spawn plan** — one synthesizer + N voters, all spawned in ONE tool-use block:
+5. **Build the voter spawn plan** — N voter agents, spawned in ONE tool-use block:
 
    - **Voter agents** (`run_in_background: true`):
      - `name`: profile id.
@@ -53,36 +53,46 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
           - `Emit a single stance: APPROVE or CHANGES.`
           - `Provide a rationale of 3–8 sentences specific to your architectural specialty (security posture, performance/scalability, API ergonomics, generalist cross-cutting concerns, or design coherence depending on your role).`
           - `If you have dissenting concerns, state them explicitly — they will NOT be collapsed by synthesis.`
-       5. Handoff: `When you finish, call SendMessage({ to: "synthesizer", summary: "<APPROVE|CHANGES> stance from <voterName>", message: "<your full rationale>" }) and stop.`
+       5. Output contract: `Your final assistant message IS your stance delivery. Begin it with "Stance: APPROVE" or "Stance: CHANGES" on its own line, followed by your rationale. Do NOT call SendMessage — the host harness captures your final message and routes it to the synthesizer.`
 
-   - **Synthesizer agent** (`run_in_background: true`):
-     - `name`: `synthesizer`.
-     - `subagent_type`: `general-purpose`.
-     - `prompt`:
-       1. `You are the synthesizer for an architecture-review council deliberation on: "{{question}}".`
-       2. `Wait for SendMessage from all {{N}} voters: {{voter names}}. Each will deliver an APPROVE or CHANGES stance with a rationale.`
-       3. `Once all stances are in, build a synthesis report:`
-          - `[CONSENSUS] — points where all voters agree`
-          - `[MAJORITY] — points where most voters agree`
-          - `[DISSENT] — points raised by a minority, quoted VERBATIM (never paraphrase, never collapse)`
-       4. `Compute the verdict from the stance tally:`
-          - `All APPROVE → VERDICT: APPROVE`
-          - `Majority APPROVE with dissent → VERDICT: APPROVE WITH CONDITIONS`
-          - `Majority CHANGES → VERDICT: REJECT`
-          - `Tie or no majority → VERDICT: ESCALATED (human required)`
-       5. `Return a single message with the synthesis report + verdict + verbatim per-voter rationales. Do not SendMessage; the host conversation reads your final return value directly.`
-
-6. **Spawn — one tool-use block.** Issue all N voter `Agent` calls + the synthesizer `Agent` call together. No kickoff `SendMessage` is needed.
+6. **Spawn voters — one tool-use block.** Issue all N voter `Agent` calls together with `run_in_background: true`. Do not spawn the synthesizer yet.
 
 7. **Render the launch summary**:
    ```
    Architecture council convened (native, in-session).
      Question: <trimmed>
      Voters:   <comma-separated voter ids>
-     Synthesizer: synthesizer (waiting for <N> stances)
+     Waiting for <N> voter stances before synthesis…
    ```
 
-8. **Stop.** Do not poll. The synthesizer returns the verdict when all stances are in.
+8. **Wait for all voters to complete.** The harness will deliver a task-notification per voter as it finishes; each notification's `result` field contains the voter's final message (stance + rationale). Do NOT poll — the notifications arrive automatically. Do NOT spawn the synthesizer until all N voters have reported.
+
+9. **Spawn the synthesizer — one tool-use block, foreground (`run_in_background: false`).**
+   - `name`: `synthesizer`.
+   - `subagent_type`: `general-purpose`.
+   - `prompt`: concatenate
+     1. `You are the synthesizer for an architecture-review council deliberation on: "{{question}}".`
+     2. `The {{N}} voters have already reported. Their stances and rationales are pasted verbatim below — do NOT spawn anything, do NOT poll an inbox, synthesize from the text below and return your final report.`
+     3. Build a section per voter, in order, formatted as:
+        ```
+        ==========================================================================
+        VOTER <i>: <voterName> — Stance: <APPROVE|CHANGES>
+        ==========================================================================
+        <verbatim final message from the voter>
+        ```
+        (Parse the voter's stance from the first `Stance: ...` line of their final message; if absent, infer from the rationale and flag it in the synthesis.)
+     4. `Build a synthesis report:`
+        - `[CONSENSUS] — points where all voters agree`
+        - `[MAJORITY] — points where most voters agree`
+        - `[DISSENT] — points raised by a minority, quoted VERBATIM (never paraphrase, never collapse)`
+     5. `Compute the verdict from the stance tally:`
+        - `All APPROVE → VERDICT: APPROVE`
+        - `Majority APPROVE with dissent → VERDICT: APPROVE WITH CONDITIONS`
+        - `Majority CHANGES → VERDICT: REJECT`
+        - `Tie or no majority → VERDICT: ESCALATED (human required)`
+     6. `Return a single message with the synthesis report + verdict + verbatim per-voter rationales as your final output.`
+
+10. **Stop.** The synthesizer's return value is the verdict.
 
 ## When to prefer the daemon path
 
@@ -96,8 +106,9 @@ The native path is right for "I want a fast architectural sanity check from thre
 
 ## Rules
 
-- ALWAYS spawn all voters AND the synthesizer in ONE tool-use block.
-- ALWAYS use `run_in_background: true`.
+- ALWAYS spawn all voters in ONE tool-use block with `run_in_background: true`.
+- ALWAYS wait for all voter notifications before spawning the synthesizer.
+- The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — voters do NOT call `SendMessage` (it isn't reliably reachable from nested `general-purpose` subagents in this harness; final-message capture is the contract).
 - The synthesizer MUST preserve dissent verbatim.
 - The researcher seat at quantity≥3 is the **generalist seat** — voters above index 2 are specialist additions; do not drop the researcher to fit a smaller council.
 - Do NOT call `mcp__zana__zana_deliberate` from this command — that's the daemon path.

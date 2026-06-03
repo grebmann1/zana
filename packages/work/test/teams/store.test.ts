@@ -9,10 +9,20 @@ import * as path from "node:path";
 import * as os from "node:os";
 
 // ── redirect TEAMS_DIR to an isolated temp directory ─────────────────────
-const TEAMS_DIR = path.join(
-  os.tmpdir(),
-  `zana-test-teams-store-${Date.now()}-${process.pid}`
-);
+// vi.hoisted runs before the vi.mock factory (which is itself hoisted above
+// imports), so the temp path is available when the mock initializes. Use
+// require() instead of imports inside hoisted because imports aren't bound
+// yet at hoist time.
+const { TEAMS_DIR } = vi.hoisted(() => {
+  const nodePath = require("node:path");
+  const nodeOs = require("node:os");
+  return {
+    TEAMS_DIR: nodePath.join(
+      nodeOs.tmpdir(),
+      `zana-test-teams-store-${Date.now()}-${process.pid}`
+    ),
+  };
+});
 
 vi.mock("@zana-ai/core", () => ({
   config: { TEAMS_DIR },

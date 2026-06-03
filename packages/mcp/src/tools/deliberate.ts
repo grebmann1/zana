@@ -944,19 +944,27 @@ export function deliberationListHandler(args: { state?: string } = {}): any[] {
   if (typeof args?.state === "string" && args.state !== "") filter.state = args.state;
   const all = _delib().listDeliberations(filter);
   // Return summaries — the full record can be fetched by id via _status.
-  return all.map((d: any) => ({
-    id: d.id,
-    state: d.state,
-    question: d.question,
-    currentRound: d.currentRound,
-    rounds: d.rounds,
-    voters: d.voters?.length ?? 0,
-    verdict: d.verdict,
-    escalationReason: d.escalationReason,
-    createdAt: d.createdAt,
-    updatedAt: d.updatedAt,
-    settledAt: d.settledAt,
-  }));
+  // Truncate question to a snippet; full text lives in the per-id detail view
+  // (a list of 30 deliberations × 2000-char questions overruns chat output).
+  const Q_MAX = 140;
+  return all.map((d: any) => {
+    const q = typeof d.question === "string" ? d.question : "";
+    const collapsed = q.replace(/\s+/g, " ").trim();
+    const question = collapsed.length > Q_MAX ? collapsed.slice(0, Q_MAX - 1) + "…" : collapsed;
+    return {
+      id: d.id,
+      state: d.state,
+      question,
+      currentRound: d.currentRound,
+      rounds: d.rounds,
+      voters: d.voters?.length ?? 0,
+      verdict: d.verdict,
+      escalationReason: d.escalationReason,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      settledAt: d.settledAt,
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
