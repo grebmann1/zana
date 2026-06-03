@@ -7,7 +7,7 @@ allowed-tools: mcp__zana__zana_autopilot_goal_status
 
 # /zana:autopilot:status
 
-Load a goal by id and render its current state.
+Load a goal by id and render its current state. **Daemon path only** — this queries `mcp__zana__zana_autopilot_goal_status`, which only knows about goals started via `mcp__zana__zana_autopilot_goal_driven`. Native autopilot runs (started via `/zana:autopilot` inside this Claude Code session) live entirely in the host conversation and have no daemon-side `goalId` to poll — read the conversation's iteration messages instead.
 
 The user's argument in `$ARGUMENTS` is the goal id.
 

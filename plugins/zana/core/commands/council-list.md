@@ -7,7 +7,7 @@ allowed-tools: mcp__zana__zana_deliberation_list
 
 # /zana:council:list
 
-List deliberation summaries.
+List deliberation summaries. **Daemon path only** — native councils convened via `/zana:council` inside this Claude Code session don't appear here.
 
 The user's argument in `$ARGUMENTS` is an optional state filter. Valid values: `PROPOSED`, `REVIEWING`, `SYNTHESIZING`, `CONVERGING`, `SETTLED`, `ESCALATED`, `EXHAUSTED`. Empty = list all.
 

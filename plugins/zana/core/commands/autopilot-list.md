@@ -7,7 +7,7 @@ allowed-tools: mcp__zana__zana_autopilot_goal_list
 
 # /zana:autopilot:list
 
-List autopilot goal summaries.
+List autopilot goal summaries. **Daemon path only** — native autopilot runs started via `/zana:autopilot` don't appear here; they live in the host conversation.
 
 The user's argument in `$ARGUMENTS` is an optional status filter. Valid values: `running`, `completed`, `failed`, `exhausted`, `cancelled`. Empty = list all.
 

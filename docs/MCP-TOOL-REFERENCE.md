@@ -583,6 +583,23 @@ _No input parameters._
 
 ---
 
+## zana_delete_team
+
+**Description:** Delete a team template by ID. Built-in templates re-seed on daemon restart unless their seed-marker tracks them as deleted.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| teamId | string | yes | Team ID to delete |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:603`
+
+---
+
 ## zana_deliberate
 
 **Description:** Start a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. Each voter is an independent agent with its own profile/model. Dissent is preserved verbatim across EVERY round. Default behavior: returns IMMEDIATELY with the proposed deliberation record (state=PROPOSED, _outcome='running'). Real-Claude voters can take 5-10 min each; the orchestration loop runs detached on the daemon. Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. Pass `wait: true` to block until completion (legacy / scripted use). When complete, the deliberation record carries: `_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' | 'judged'. `_judge` — present only on 'judged'; { verdict, humanId } describing how the auto-judge resolved an escalation. `_judgeError` — present only when the configured strategy was judge/hybrid but adjudication failed; deliberation stays ESCALATED for manual override. `_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). `_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).
@@ -1433,6 +1450,23 @@ _No input parameters._
 
 **Source:**
 - MCP wrapper: `packages/mcp/src/mcp-server.ts:266`
+
+---
+
+## zana_save_team
+
+**Description:** Create or update a team template. Provide an id to update, omit for new. Fields: name, icon, description, orchestratorProfileId, slots ([{profileId, quantity}]), initialPrompt, rules, autoStart, dynamicSpawning, maxTotalWorkers.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| team | object | yes | Team template object. Include 'id' to update existing, omit for new. — fields: id, name, icon, description, orchestratorProfileId, slots, initialPrompt, rules, autoStart, dynamicSpawning, maxTotalWorkers |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:558`
 
 ---
 

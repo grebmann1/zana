@@ -2,9 +2,21 @@
 
 Coordination primitives between Zana agents. Use these when an agent needs to talk to other agents, share context, or hand off work without the orchestrator brokering every message.
 
-## Inboxes — direct messages between agents
+## Two paths: native (Claude Code) vs daemon
 
-Each agent has an inbox identified by its agent ID (or a stable name).
+Inside a Claude Code session, the native primitive is `SendMessage({ to, summary, message })` — a built-in tool delivered to a named subagent's inbox in this conversation. Spawn agents with `Agent({ name, ..., run_in_background: true })` and they can `SendMessage` each other freely. For anything bigger than a paragraph, just inline the context into the next agent's `prompt` — Claude Code subagents share the host conversation's filesystem, so artifacts are usually unnecessary.
+
+The Zana MCP collaboration tools below (`zana_send_message`, `zana_check_inbox`, `zana_publish_channel`, `zana_artifact_*`, `zana_memory_*`, `zana_event_*`, `zana_checkpoint_*`) target **daemon-spawned agents** that don't have access to Claude Code's native tools. Use them when:
+
+- The agent was spawned via `mcp__zana__zana_spawn_agent` or `mcp__zana__zana_start_team` (headless / CI / scheduled / cron).
+- The collaboration must outlive the Claude Code session (persistent inboxes, multi-day artifacts).
+- Many agents across many daemons need to share a topic (`zana_publish_channel`).
+
+Inside a Claude Code chat the simple rule is: **prefer `SendMessage` for messaging and inline prompts for context**. Reach for the daemon-side tools only when the agents themselves can't see Claude Code's native primitives.
+
+## Inboxes — direct messages between agents (daemon path)
+
+Each daemon-spawned agent has an inbox identified by its agent ID (or a stable name). Native Claude Code subagents use `SendMessage` instead — these tools are for the daemon side.
 
 - `zana_send_message` — drop a typed message into another agent's inbox.
 - `zana_check_inbox` — list pending messages addressed to the current agent.
@@ -27,9 +39,9 @@ Patterns:
 - **Hand-off**: A finishes a phase, sends a single summary to B with the artifacts B needs (`type: "handoff"`, `payload.kind: "handoff"`, attach `ticketId`). B drains its inbox at the start of its run and proceeds.
 - **Request/reply**: A sends `type: "question"` with `requiresAck: true` and a stable correlation ID in `payload.content`. B replies via `zana_send_ack({ messageId, status, response })`.
 
-## Channels — pub/sub coordination
+## Channels — pub/sub coordination (daemon path)
 
-Channels are named topics any agent can publish to or subscribe to.
+Channels are named topics any daemon agent can publish to or subscribe to. Native subagents inside a Claude Code chat don't need channels — they `SendMessage` each other directly.
 
 - `zana_publish_channel` — emit a typed message on a topic.
 - `zana_subscribe_channel` — register the current agent as a subscriber.
@@ -58,9 +70,9 @@ For workflows where an agent must know its message landed:
 
 Treat acks as advisory, not transactional. The system does not retry failed sends — your agent does.
 
-## Shared memory and artifacts
+## Shared memory and artifacts (daemon path)
 
-Inboxes and channels are for short messages. For anything bigger than a paragraph, use artifacts.
+Inboxes and channels are for short messages. For anything bigger than a paragraph, daemon agents use artifacts. Native Claude Code subagents typically just inline file paths into the next agent's prompt — they share the host conversation's filesystem and don't need a separate blob store.
 
 - `zana_artifact_create` — store a versioned blob (architecture-doc, requirement-spec, design-doc, etc.). Returns an `artifactId`.
 - `zana_artifact_list` — discover existing artifacts.
@@ -83,9 +95,9 @@ Pattern: an architect agent produces a design as an artifact, sends only the art
 
 For ephemeral key/value storage that doesn't deserve a full artifact, use `zana_memory_store(key, value)` and `zana_memory_search(query)`. Memory is project-scoped and indexed for fuzzy lookup.
 
-## Checkpoints — resumable workflows
+## Checkpoints — resumable workflows (daemon path)
 
-Long-running coordination (multi-step pipelines, autopilot loops) should checkpoint progress so a daemon restart doesn't lose state.
+Long-running daemon coordination (multi-step pipelines, autopilot loops) should checkpoint progress so a daemon restart doesn't lose state. Native Claude Code teams have no equivalent — if the host conversation ends, the run ends; for resumable workflows use the daemon path.
 
 - `zana_checkpoint_save` — persist a snapshot of a team run, including the agents that still need to spawn.
 - `zana_checkpoint_list` — enumerate checkpoints, optionally filtered by `teamId` or `status`.
@@ -108,9 +120,9 @@ zana_checkpoint_resume({ checkpointId: "ckpt_abc" })
 
 Save a checkpoint after each phase that completes successfully (research done, plan written, code written, tests green). On restart, list checkpoints for the workflow and resume the latest stopped one.
 
-## Event coordination
+## Event coordination (daemon path)
 
-Beyond directed messages, agents can emit and query a shared event log.
+Beyond directed messages, daemon agents can emit and query a shared event log. Native Claude Code subagents don't need this — `SendMessage` already creates a per-agent message log readable in the host conversation.
 
 - `zana_event_emit(type, payload, tags)` — record a structured event.
 - `zana_event_query(filter)` — query recent events by type, tag, or time.

@@ -1,8 +1,17 @@
 # Zana — Claude Code Configuration
 
-Zana is a multi-agent orchestrator for Claude Code: a long-lived daemon exposing
-an MCP server so a single conversation can spawn, supervise, and synthesize the
-work of many specialized worker agents.
+Zana is a multi-agent orchestrator for Claude Code, with two paths:
+
+- **Native** (default in chat) — a thin layer of slash commands and skills that
+  drive Claude Code's first-class `Agent` + `SendMessage` primitives. Spawn,
+  coordinate, and synthesize many specialized subagents from a single
+  conversation, with no daemon involved.
+- **Daemon** (headless / CI / cron) — a long-lived process exposing an MCP
+  server (`mcp__zana__zana_*`) for scheduled tasks, autopilot loops, and
+  multi-daemon swarms that must outlive any chat.
+
+Templates, profiles, tickets, sprints, artifacts, and deliberation work the
+same on both paths.
 
 ## Rules
 
@@ -106,28 +115,38 @@ Rules:
 - After spawning: STOP, tell the user what's running, wait for results
 - NEVER poll status — agents message back when done
 
-## When to swarm
+## When to spawn a team
 
 - **YES**: 3+ files, new features, cross-module refactors, API changes, security/perf reviews
 - **NO**: single file edits, 1-2 line fixes, doc tweaks, config changes, questions
 
+(`packages/swarm/` and the `zana_swarm_*` MCP tools are a separate, advanced primitive — multi-daemon coordination across workspaces. Headless/CI only; not needed inside a Claude Code chat.)
+
 ## MCP tool surface (Zana)
 
 Discover with `ToolSearch("zana <keyword>")`. All Zana tools are namespaced
-`mcp__zana__zana_*`.
+`mcp__zana__zana_*`. The **Path** column tells you when a tool is the right
+primitive: **native** = use it inside a Claude Code session in addition to
+`Agent`/`SendMessage`; **daemon** = headless / CI / cron only — don't use from
+chat; **both** = path-agnostic, works the same either way. Cells that read
+"daemon — use `/zana:foo` natively" mean the slash command rewrites the work
+into native `Agent`+`SendMessage` calls (no daemon round-trip).
 
-| Domain | Representative tools |
-|---|---|
-| **Agents** | `zana_spawn_agent`, `zana_list_agents`, `zana_kill_agent`, `zana_agent_status` |
-| **Teams** | `zana_start_team`, `zana_get_team`, `zana_team_status`, `zana_stop_team` |
-| **Tickets** | `zana_ticket_create`, `zana_ticket_claim`, `zana_ticket_complete`, `zana_ticket_list` |
-| **Sprints** | `zana_sprint_create`, `zana_sprint_start`, `zana_sprint_board` |
-| **Deliberation** | `zana_deliberate`, `zana_deliberate_cancel`, `zana_deliberation_status` |
-| **Autopilot** | `zana_autopilot_goal_driven`, `zana_autopilot_goal_status`, `zana_autopilot_goal_cancel` |
-| **Schedules** | `zana_schedule_list`, `zana_schedule_trigger`, `zana_schedule_reload` |
-| **Memory** | `zana_memory_store`, `zana_memory_search` |
-| **Events** | `zana_event_emit`, `zana_event_query`, `zana_publish_channel`, `zana_subscribe_channel` |
-| **Artifacts** | `zana_artifact_create`, `zana_artifact_read`, `zana_artifact_list` |
+| Domain | Representative tools | Path |
+|---|---|---|
+| **Agents (lifecycle)** | `zana_spawn_agent`, `zana_list_agents`, `zana_kill_agent`, `zana_agent_status` | daemon — use `Agent({ run_in_background: true })` natively |
+| **Teams (templates)** | `zana_list_teams`, `zana_get_team`, `zana_save_team`, `zana_delete_team` | both |
+| **Teams (lifecycle)** | `zana_start_team`, `zana_team_status`, `zana_stop_team` | daemon — use `/zana:team` natively |
+| **Tickets** | `zana_ticket_create`, `zana_ticket_claim`, `zana_ticket_complete`, `zana_ticket_list` | both — work-tracking |
+| **Sprints** | `zana_sprint_create`, `zana_sprint_start`, `zana_sprint_board` | both — work-tracking |
+| **Deliberation** | `zana_deliberate`, `zana_deliberate_cancel`, `zana_deliberation_status` | daemon — use `/zana:council` natively |
+| **Autopilot** | `zana_autopilot_goal_driven`, `zana_autopilot_goal_status`, `zana_autopilot_goal_cancel` | daemon — use `/zana:autopilot` natively |
+| **Schedules** | `zana_schedule_list`, `zana_schedule_trigger`, `zana_schedule_reload` | daemon (persistent); see also `/loop` skill for daemon-free recurrences |
+| **Memory** | `zana_memory_store`, `zana_memory_search` | both — fuzzy K/V store |
+| **Events** | `zana_event_emit`, `zana_event_query`, `zana_publish_channel`, `zana_subscribe_channel` | daemon — `SendMessage` covers native chatter |
+| **Artifacts** | `zana_artifact_create`, `zana_artifact_read`, `zana_artifact_list` | both — content-addressed shared blobs |
+| **Profiles** | `zana_list_profiles`, `zana_get_profile`, `zana_save_profile`, `zana_delete_profile` | both — role library |
+| **Swarm** | `zana_swarm_*` | daemon — gated by `ZANA_MASTER_MODE=true`, headless multi-daemon only |
 
 Slash commands are shipped through two plugins under `plugins/zana/{core,loop}`
 and installed as `zana@zana-marketplace` and `zana-loop@zana-marketplace`.

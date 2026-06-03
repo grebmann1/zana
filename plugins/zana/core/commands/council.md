@@ -1,15 +1,15 @@
 ---
 name: zana:council
-description: Run a multi-voice deliberation — parallel review by specialist profiles, synthesis, up-to-N convergence rounds, settle or escalate to human. Each voter is an independent Claude with its own profile/lens. Dissent is preserved verbatim.
+description: Convene a multi-voice council in this Claude Code session — N specialist voters spawn in parallel, each emits an APPROVE/CHANGES stance with rationale, a synthesizer collects them and emits a verdict. Dissent is preserved verbatim.
 argument-hint: <task | question>
-allowed-tools: Bash Read mcp__zana__zana_deliberate mcp__zana__zana_deliberation_status mcp__zana__zana_deliberation_list mcp__zana__zana_deliberation_override
+allowed-tools: Agent SendMessage mcp__zana__zana_get_profile
 ---
 
 # /zana:council
 
-You are running a deliberation. A council of independent specialist agents
-will review the question in parallel, synthesize their reviews, and converge
-through up to N rounds. Dissent is preserved verbatim — never collapsed.
+Run a council deliberation **inside this Claude Code session** as a native fan-out: N voter subagents review the question in parallel, each `SendMessage`s its stance + rationale to a synthesizer subagent, the synthesizer aggregates and emits the verdict.
+
+For headless / CI / scheduled deliberations with content-addressed audit and the full state machine (`PROPOSED → REVIEWING → SYNTHESIZING → CONVERGING → SETTLED|ESCALATED|EXHAUSTED`), the daemon path remains available via `mcp__zana__zana_deliberate` (do NOT call it from this command).
 
 The user's question (or task) is in `$ARGUMENTS`.
 
@@ -17,102 +17,84 @@ The user's question (or task) is in `$ARGUMENTS`.
 
 When the user only supplies a question, run with:
 
-- **voters**: `["architect", "security-reviewer", "researcher"]` (3 voters → majority quorum = 2)
-- **rounds**: `2`
-- **mode**: `"synthesis"`
-- **riskTag**: `"medium"`
-- **quorum**: `"majority"` (the tool default)
+- **voters**: `architect`, `security-reviewer`, `researcher` (3 voters → simple majority verdict at the synthesizer)
+- **rounds**: 1 (single round of review + synthesis; this is a native simplification of the daemon path's CONVERGING loop — for multi-round convergence with replayable audit trail, use `mcp__zana__zana_deliberate` directly)
 
-If `$ARGUMENTS` is empty, ask the user "What should the council deliberate on?" and stop. Do not invoke the tool with an empty question.
+If `$ARGUMENTS` is empty, ask the user "What should the council deliberate on?" and stop.
 
 ## Workflow
 
-1. **Trim** the user's question. Treat all of `$ARGUMENTS` as the prompt.
+1. **Trim** `$ARGUMENTS`. The full string is the council's question.
 
-2. **Tell the user what you're about to do** in one short line, e.g.
-   `Convening council: architect + security-reviewer + researcher (2 rounds, medium risk).`
+2. **Pre-flight** — for each voter profile, call `mcp__zana__zana_get_profile` with `{ "profileId": "<id>" }` to fetch its `systemPrompt` and `displayName`. Batch the three calls in a single tool-use block — they are independent.
 
-3. **Call the tool** — `mcp__zana__zana_deliberate` with:
+3. **Announce intent** in one line, e.g. `Convening native council: architect + security-reviewer + researcher → synthesizer.`
+
+4. **Build the spawn plan** — one synthesizer + N voters, all spawned in ONE tool-use block:
+
+   - **Voter agents** (`run_in_background: true`):
+     - `name`: profile id (e.g. `architect`, `security-reviewer`, `researcher`).
+     - `subagent_type`: `general-purpose` (or `Plan` for `architect`).
+     - `prompt`: concatenate
+       1. Role banner: `You are the {{displayName}} on a council deliberating: "{{question}}". Your name in this session is "{{voterName}}".`
+       2. The voter's profile `systemPrompt`.
+       3. The question verbatim, prefixed `Question:`.
+       4. Stance instructions:
+          - `Emit a single stance: APPROVE or CHANGES.`
+          - `Provide a rationale of 3–8 sentences specific to your specialty.`
+          - `If you have dissenting concerns, state them explicitly — they will NOT be collapsed by synthesis.`
+       5. Handoff: `When you finish, call SendMessage({ to: "synthesizer", summary: "<APPROVE|CHANGES> stance from <voterName>", message: "<your full rationale>" }) and stop.`
+
+   - **Synthesizer agent** (`run_in_background: true`):
+     - `name`: `synthesizer`.
+     - `subagent_type`: `general-purpose`.
+     - `prompt`:
+       1. `You are the synthesizer for a council deliberation on: "{{question}}".`
+       2. `Wait for SendMessage from all {{N}} voters: {{voter names}}. Each will deliver an APPROVE or CHANGES stance with a rationale.`
+       3. `Once all stances are in, build a synthesis report:`
+          - `[CONSENSUS] — points where all voters agree`
+          - `[MAJORITY] — points where most voters agree`
+          - `[DISSENT] — points raised by a minority, quoted VERBATIM (never paraphrase, never collapse)`
+       4. `Compute the verdict from the stance tally:`
+          - `All APPROVE → VERDICT: APPROVE`
+          - `Majority APPROVE with dissent → VERDICT: APPROVE WITH CONDITIONS`
+          - `Majority CHANGES → VERDICT: REJECT`
+          - `Tie or no majority → VERDICT: ESCALATED (human required)`
+       5. `Return a single message containing the synthesis report + verdict + verbatim per-voter rationales. Do not SendMessage; the host conversation reads your final return value directly.`
+
+5. **Spawn — one tool-use block.** Issue all N voter `Agent` calls + the synthesizer `Agent` call together. Do NOT issue a kickoff `SendMessage` — voters don't depend on the synthesizer's start, and they don't message each other.
+
+6. **Render the launch summary** — one block:
    ```
-   {
-     "question": "<trimmed $ARGUMENTS>",
-     "voters": ["architect", "security-reviewer", "researcher"],
-     "rounds": 2,
-     "mode": "synthesis",
-     "riskTag": "medium"
-   }
+   Council convened (native, in-session).
+     Question: <trimmed>
+     Voters:   architect, security-reviewer, researcher
+     Synthesizer: synthesizer (waiting for 3 stances)
+
+   The synthesizer will return a verdict once all voters have weighed in. Native councils don't have a daemon-side audit checkpoint — for replayable, content-addressed deliberation use mcp__zana__zana_deliberate directly.
    ```
-   The call blocks until the deliberation is SETTLED or ESCALATED. Do not poll — the handler runs the full state machine internally.
 
-4. **Render the verdict inline**, in the format below. If the result includes a `synthesisHash`, you may load the synthesis report bytes via `Read` on `~/.zana/artifacts/blobs/<aa>/<rest>.bin` (where `<aa>` is the first two chars of the hash and `<rest>` is the remaining chars + `.bin`). If the bytes aren't available, summarize from the `dissent` and `votes` arrays the tool returned.
+7. **Stop.** Do not poll. The synthesizer's return message lands in the host conversation when complete.
 
-5. **Audit pointer** — always end with the absolute path to the deliberation checkpoint, e.g. `~/.zana/checkpoints/<deliberationId>.json`, so the user can replay the run.
+## When to prefer the daemon path
 
-## Output format
+Use `mcp__zana__zana_deliberate` (the slash command does NOT call this — invoke the MCP tool directly) when you need:
 
-Render as a single block, using the example below as a template. The phase
-trace is optional but helpful — derive it from the deliberation record's
-`currentRound`, `voters`, and `dissent` arrays.
+- Multi-round convergence (default 2 rounds in the daemon path).
+- Content-addressed audit trail (`rationaleHash`, `synthesisHash`, replayable from event log).
+- Human-override flow tied to the verdict (`pending_human` routing on dissent / cap hit / `riskTag: "high"`).
+- Quorum strictness beyond simple majority (`unanimous`, `<N>`).
 
-```
-> /zana:council should we drop Node 18 in v3?
-
-Phase 1: REVIEWING (3 voters)        ✓
-Phase 2: SYNTHESIZING                 ✓
-Phase 3: CONVERGING (round 1)         ✓ — 2 APPROVE, 1 CHANGES
-Phase 4: CONVERGING (round 2)         ✓ — 3 APPROVE
-Phase 5: SETTLED → pending_human (dissent recorded in round 1)
-
-VERDICT: APPROVE WITH CONDITIONS  (final tally 3A / 0C, dissent preserved)
-
-Synthesis:
-- [CRITICAL] CVE backport burden underestimated — flagged by security-reviewer
-- [MAJOR]    Drop Node 18 in v3.0; ship v2.x LTS branch through 2026-09 — consensus
-- [MINOR]    Update CI matrix to test against 20.x and 22.x — consensus
-
-Dissent (security-reviewer, round 1):
-> "CVE backport burden was minimized in the round-1 synthesis. v2.x LTS without active maintenance creates a vendor-trust risk we should explicitly call out."
-
-Audit: ~/.zana/checkpoints/<deliberationId>.json
-```
-
-### Required fields in the rendered output
-
-- **Final tally** — count of `APPROVE` vs `CHANGES` votes from the final round
-- **Verdict** — one of `APPROVE` / `APPROVE WITH CONDITIONS` / `REJECT` / `ESCALATED`
-  - Map from the deliberation record: `verdict === "approve"` → `APPROVE`; `dissent.length > 0 && verdict === "approve"` → `APPROVE WITH CONDITIONS`; `verdict === "reject"` → `REJECT`; `_outcome` starts with `"escalated"` → `ESCALATED`
-- **Synthesis** — bullet list from the synthesis report
-- **Dissent** — verbatim quote of every dissent record (never collapse, never paraphrase)
-- **Per-voter votes** — profile id, bit (`APPROVE` / `CHANGES`), and the rationale hash so the user can content-address it
-- **Audit pointer** — absolute path to the checkpoint file
-
-## Escalation handling
-
-If the tool returns with `_outcome` of `escalated`, `escalated_at_assembly`, or `escalated_during_reassembly`:
-
-1. Render `VERDICT: ESCALATED` and the reason from `_assemblyEscalation` / `_reassemblyEscalation` / `escalationReason`.
-2. Tell the user how to act:
-   - Review the run: `/zana:council:status <deliberationId>`
-   - Override the verdict: `/zana:council:override <deliberationId> <approve|reject|rework> "<reason>"`
-3. Stop. Do not auto-recover.
-
-## Subcommands
-
-The council family also exposes:
-
-- `/zana:council:status <deliberationId>` — load a deliberation by id and render its full record
-- `/zana:council:list [state]` — list all deliberations, optionally filtered by state
-- `/zana:council:override <deliberationId> <approve|reject|rework> <reason>` — record a human override
-
-These are separate slash commands (own files in this directory). This file (`/zana:council`) only handles the primary "convene the council" flow.
+The native path is right for "I want three perspectives and a verdict, fast." The daemon path is right for "this decision needs governance."
 
 ## Rules
 
-- Do NOT silently collapse dissent. Quote it verbatim.
-- Do NOT pick a side at the round cap. Surface the escalation and stop.
-- Do NOT mutate any ticket / artifact based on the verdict — the verdict is a *proposal*, not an action.
-- Use the friendly defaults unless the user explicitly overrides voters / rounds / risk in their prompt.
+- ALWAYS spawn voters AND the synthesizer in ONE tool-use block. Sequential calls block parallel review.
+- ALWAYS use `run_in_background: true` so the host conversation can keep going.
+- The synthesizer MUST preserve dissent verbatim. Its prompt enforces this; do not silently weaken it.
+- Do NOT call `mcp__zana__zana_deliberate` from this command — that's the daemon path.
+- Do NOT pick a verdict at the host level — the synthesizer is the only voice that emits the verdict.
 
-## Now run the council on:
+## Now convene the council on:
 
 $ARGUMENTS

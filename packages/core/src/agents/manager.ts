@@ -1195,6 +1195,14 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
     case "list_running_teams": {
       return require("@zana-ai/work").teams.manager.listRunningTeams();
     }
+    case "save_team": {
+      const saved = require("@zana-ai/work").teams.store.saveTeam(params.team);
+      return { ok: true, id: saved.id, name: saved.name };
+    }
+    case "delete_team": {
+      const ok = require("@zana-ai/work").teams.store.deleteTeam(params.teamId);
+      return { ok };
+    }
 
     // --- Artifacts ---
     case "artifact_create": {

@@ -47,29 +47,28 @@ describe("/zana:council slash command", () => {
     expect(typeof frontmatter["argument-hint"]).toBe("string");
     expect(typeof frontmatter["allowed-tools"]).toBe("string");
 
-    // Must list exactly the four deliberation MCP tools.
+    // Native council fans-out Agents and fetches profiles — no daemon tools in
+    // allowed-tools (the body explicitly forbids calling mcp__zana__zana_deliberate
+    // from this command; that's the daemon path).
     const tools = frontmatter["allowed-tools"].split(/\s+/).filter(Boolean);
-    const delibTools = tools.filter((t: string) => /^mcp__zana__zana_deliberat/.test(t));
-    expect(delibTools.sort()).toEqual([
-      "mcp__zana__zana_deliberate",
-      "mcp__zana__zana_deliberation_list",
-      "mcp__zana__zana_deliberation_override",
-      "mcp__zana__zana_deliberation_status",
-    ]);
+    expect(tools).toContain("Agent");
+    expect(tools).toContain("SendMessage");
+    expect(tools).toContain("mcp__zana__zana_get_profile");
 
-    // Every listed deliberation tool must be registered in mcp-server source.
-    for (const t of delibTools) {
-      expect(mcpToolIsRegistered(t), `tool ${t} not registered in deliberate.ts`).toBe(true);
-    }
+    // zana_get_profile must be registered in the MCP server.
+    const mcpServerSrc = fs.readFileSync(
+      path.join(REPO_ROOT, "packages", "mcp", "src", "mcp-server.ts"),
+      "utf8",
+    );
+    expect(/name:\s*"zana_get_profile"/.test(mcpServerSrc)).toBe(true);
   });
 
-  it("body has Defaults / Workflow / Output / Escalation / Subcommands sections", () => {
+  it("body has Defaults / Workflow / Rules / daemon-path sections", () => {
     const { body } = readCommand("council.md");
     expect(body).toMatch(/##\s+Defaults/i);
     expect(body).toMatch(/##\s+Workflow/i);
-    expect(body).toMatch(/##\s+Output/i);
-    expect(body).toMatch(/##\s+Escalation/i);
-    expect(body).toMatch(/##\s+Subcommands/i);
+    expect(body).toMatch(/##\s+Rules/i);
+    expect(body).toMatch(/##\s+When to prefer/i);
     // Defaults must mention the three friendly voters.
     expect(body).toMatch(/architect/);
     expect(body).toMatch(/security-reviewer/);

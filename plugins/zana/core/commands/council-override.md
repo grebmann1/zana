@@ -7,7 +7,9 @@ allowed-tools: mcp__zana__zana_deliberation_status mcp__zana__zana_deliberation_
 
 # /zana:council:override
 
-Record a human override. The reason is content-addressed and stamped onto the deliberation. The deliberation lands on SETTLED with the override decision.
+Record a human override. **Daemon path only** — native councils convened via `/zana:council` don't have a daemon-side audit record; if the synthesizer returned an unsatisfying verdict, just respond directly in the host conversation or convene a fresh council.
+
+The reason is content-addressed and stamped onto the deliberation. The deliberation lands on SETTLED with the override decision.
 
 `$ARGUMENTS` is `<deliberationId> <approve|reject|rework> <reason...>`.
 

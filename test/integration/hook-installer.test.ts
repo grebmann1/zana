@@ -11,11 +11,18 @@ let installer: any;
 let tmpHome: string;
 let originalHome: string | undefined;
 let originalHostOverride: string | undefined;
+let originalSkipMcpInstall: string | undefined;
 
 beforeEach(async () => {
   tmpHome = mkdtempSync(path.join(tmpdir(), "zana-installer-"));
   originalHome = process.env.HOME;
   originalHostOverride = process.env.ZANA_HOST_OVERRIDE;
+  // mcp-server.ts bootstrap (triggered by mcp-server.test.ts) sets
+  // ZANA_SKIP_MCP_INSTALL=1 so it doesn't re-enter itself.  That env var
+  // leaks into this test's process and silently short-circuits installMcpServer.
+  // Save and clear it so the round-trip test exercises the real code path.
+  originalSkipMcpInstall = process.env.ZANA_SKIP_MCP_INSTALL;
+  delete process.env.ZANA_SKIP_MCP_INSTALL;
   process.env.HOME = tmpHome;
   // The installer's Phase 1 host guard short-circuits on non-Claude hosts.
   // These tests exercise the Claude path; force-on for that branch.
@@ -43,6 +50,8 @@ afterEach(() => {
   if (originalHome !== undefined) process.env.HOME = originalHome;
   if (originalHostOverride === undefined) delete process.env.ZANA_HOST_OVERRIDE;
   else process.env.ZANA_HOST_OVERRIDE = originalHostOverride;
+  if (originalSkipMcpInstall === undefined) delete process.env.ZANA_SKIP_MCP_INSTALL;
+  else process.env.ZANA_SKIP_MCP_INSTALL = originalSkipMcpInstall;
   rmSync(tmpHome, { recursive: true, force: true });
 });
 

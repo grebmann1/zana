@@ -2,13 +2,30 @@
 
 Orchestrate multi-agent workflows in Zana. You — the orchestrator — plan, delegate, and monitor. Workers do the implementation.
 
+## Two paths: native (Claude Code) vs daemon (headless / CI)
+
+Zana exposes the same primitives through two delivery paths. Pick the right one for the context.
+
+| Path | When | How |
+|---|---|---|
+| **Native** (Claude Code session) | You are inside a Claude Code chat. The host owns orchestration; subagents live in the conversation. | `Agent({ name, subagent_type, run_in_background, prompt })` + `SendMessage({ to, summary, message })`. Slash command: `/zana:team <id> <prompt>`. |
+| **Daemon** (headless / CI / scheduled) | No Claude Code chat is the orchestrator — a long-running daemon must drive the run from outside. | `mcp__zana__zana_start_team`, `mcp__zana__zana_spawn_agent`, etc. Used by `.zana/scheduler/*.yml` and external MCP callers. |
+
+**Inside a Claude Code session, prefer native.** Spawning a daemon orchestrator from inside a Claude Code chat duplicates the orchestrator role, burns extra tokens, and hides worker progress behind MCP polling. Use `mcp__zana__zana_start_team` only when you genuinely need a process that survives the Claude Code session ending — e.g., a cron-driven autopilot.
+
+The rest of this guide describes both, called out per section.
+
 ## When to spawn one agent vs a team
 
-Spawn a **single agent** when the task is well-scoped to a few files and one specialty (one bug fix, one component, one doc page). Use `zana_spawn_agent` with the right profile and a tight prompt.
+Spawn a **single agent** when the task is well-scoped to a few files and one specialty (one bug fix, one component, one doc page).
+- Native: `Agent({ subagent_type: "general-purpose", prompt: "..." })` (or `Plan` / `Explore` / a plugin subagent type as appropriate).
+- Daemon: `zana_spawn_agent` with the right profile and a tight prompt.
 
-Spawn a **team** when the task crosses concerns or benefits from parallelism: planning + implementation + tests, or three independent features that can ship in parallel. Compose a team via multiple `zana_spawn_agent` calls — one per role (e.g. an architect, two coders, a tester).
+Spawn a **team** when the task crosses concerns or benefits from parallelism: planning + implementation + tests, or three independent features that can ship in parallel.
+- Native: `/zana:team <id> <prompt>` — renders the template into named `Agent` calls + a `SendMessage` kickoff. Or hand-roll: spawn N named agents in ONE message with `run_in_background: true`, each agent's prompt names who it `SendMessage`s next, then issue ONE `SendMessage` to the head of the pipeline.
+- Daemon: `mcp__zana__zana_start_team` (or multiple `zana_spawn_agent` calls — one per role).
 
-Spawn a **child daemon swarm** (`zana_swarm_spawn`) only when each workstream is large enough to warrant its own orchestrator and workers — typically multi-day efforts or independent epics. In-process agents are cheaper for everything else.
+For very large multi-workstream efforts that need to span workspaces or survive process restarts, see the **Sub-daemon swarms** appendix at the bottom of this guide. Inside Claude Code you almost never need them — `Agent({ run_in_background: true })` already isolates per-agent context.
 
 ## Breaking a task into tickets
 
@@ -20,9 +37,11 @@ Before spawning anyone, decompose. A useful ticket is:
 
 Use `zana_ticket_create` for each piece, then `zana_sprint_create` to group them and `zana_sprint_start` to begin. Tickets are not bureaucracy — they are the unit of dispatch and the thing you mark `complete` so the orchestration loop stays honest about progress.
 
-## The review pipeline (auto-driven)
+## The review pipeline (auto-driven — daemon path only)
 
-Once a ticket is in `review`, Zana runs the cycle on autopilot via the ticket watcher (`packages/work/src/tickets/watcher.ts`). You don't have to dispatch a reviewer — the daemon does it. You DO have to know the contract.
+The ticket watcher described here runs **in the daemon**. Inside a Claude Code session with no daemon attached, `zana_ticket_update_status({ status: "review" })` does NOT auto-spawn a reviewer — you must spawn the reviewer yourself via `Agent` (or rely on the host's own review skill). The auto-driven pipeline below applies when a daemon is running and the watcher is subscribed (default for `zana headless`).
+
+Once a ticket is in `review`, the daemon's ticket watcher (`packages/work/src/tickets/watcher.ts`) runs the cycle on autopilot. You don't have to dispatch a reviewer — the daemon does it. You DO have to know the contract.
 
 State graph the watcher enforces:
 
@@ -46,7 +65,7 @@ Hard limit: 3 rework cycles → ticket auto-blocks with comment "BLOCKED: failed
 
 What this means for you, the orchestrator:
 
-- After spawning the implementer, **`zana_ticket_update_status({ ticketId, status: "review" })` is the hand-off** — the QA reviewer auto-spawns. Do not manually spawn a `code-reviewer` after the implementer; the watcher will, and you'll double-spawn.
+- After spawning the implementer, **`zana_ticket_update_status({ ticketId, status: "review" })` is the hand-off** — the QA reviewer auto-spawns *if the daemon's watcher is running*. Do not manually spawn a `code-reviewer` after the implementer in that case; the watcher will, and you'll double-spawn. On the native path (no daemon), spawn the reviewer yourself via `Agent`.
 - **Worker prompts must end in a `VERDICT:` line** when they're spawned by a watcher rule. Inspect the rule's `promptTemplate` if unsure (`zana ticket rules list`). Workers spawned directly by you don't need a verdict — only watcher-spawned ones do.
 - If the user wants to **skip auto-review** for a ticket (e.g., trivial doc fix), close it from `in-progress → done` with `zana_ticket_update_status` directly. Skipping review is a deliberate choice, not the default.
 - If a ticket lands in `blocked`, treat it like a deliberation escalation: read the comments, then either `zana_ticket_update_status` to `in-progress` with a corrective spawn, or `cancelled` if the work was wrong.
@@ -58,6 +77,13 @@ There is **no auto-claim from backlog** — `backlog → in-progress` is always 
 
 You drive every step. The orchestrator plans, dispatches, and verifies — Zana does not guess about success on your behalf.
 
+**Native path** (inside Claude Code):
+1. Decide the roster — what specialties, how many of each. `zana_list_profiles` is still useful for discovering available role personas (their `systemPrompt` becomes part of the per-agent prompt).
+2. Spawn ALL agents in ONE message with `run_in_background: true` and `name:` set on each. Each prompt names who to `SendMessage` next.
+3. Issue ONE `SendMessage` to the head of the pipeline. Stop.
+4. Agents message back as they finish. Don't poll — `SendMessage` traffic surfaces in the host conversation.
+
+**Daemon path** (headless / CI):
 1. `zana_list_profiles` to see who is available.
 2. `zana_spawn_agent` per ticket. Spawn independent tickets in parallel up to the concurrency cap (default 10).
 3. `zana_list_agents` periodically to monitor.
@@ -81,14 +107,14 @@ Good: "Add password authentication to packages/server/src/auth/. Use bcrypt 5+, 
 
 ## Monitoring and result collection
 
-`zana_list_agents` returns lightweight status. `zana_agent_status(agentId)` gives detail. `zana_agent_result(agentId)` returns the agent's final message and any structured output once `state === "terminated"`.
+**Native**: agents stream their progress into the host conversation; `SendMessage` deliveries surface there too. There is nothing to poll. If you need to inspect or kill a subagent, use Claude Code's built-in `/agents` controls — Zana has no handle on native subagents because it didn't spawn them.
 
-Two patterns:
+**Daemon**: `zana_list_agents` returns lightweight status. `zana_agent_status(agentId)` gives detail. `zana_agent_result(agentId)` returns the agent's final message and any structured output once `state === "terminated"`. If an agent stalls, kill it (`zana_kill_agent`) and respawn with a sharper prompt. Don't pile on retries with the same prompt — it failed for a reason.
 
-- **Fan-out, gather**: spawn N independent agents, poll until all are terminated, then collect results in order. Good for parallel research.
-- **Pipeline**: spawn agent A, wait for its result, feed it into agent B's prompt. Good when later steps depend on earlier outputs.
+Two patterns work for both paths:
 
-If an agent stalls, kill it (`zana_kill_agent`) and respawn with a sharper prompt. Don't pile on retries with the same prompt — it failed for a reason.
+- **Fan-out, gather**: spawn N independent agents in parallel, then collect results. Native: all agents `SendMessage` back to a single named "collector" subagent (or to the host). Daemon: poll until all are terminated, then call `zana_agent_result` in order.
+- **Pipeline**: A → B → C. Native: each agent's prompt names the next via `SendMessage`. Daemon: spawn A, await its result, feed it into B's prompt, repeat.
 
 ## Deliberation
 
@@ -134,7 +160,7 @@ From a Claude Code chat:
 > /zana:council should we drop Node 18 in v3?
 ```
 
-(See `plugins/zana/core/commands/council.md` for the slash sugar; full design lives in artifact `f4de8302-4a88-496c-be40-d67a6e765794` — `~/.zana/artifacts/`.)
+(See `plugins/zana/core/commands/council.md` for the slash sugar.)
 
 From an MCP-aware caller:
 
@@ -180,7 +206,7 @@ voters: [{lens: "security"}, {lens: "performance"}]
 
 Available lenses: `architecture`, `security`, `code-quality`, `testing`, `debugging`, `backend`, `frontend`, `research`, `docs`, `ux`, `performance`, `api-design`.
 
-Coordination profiles (`orchestrator`, `swarm-master`, `swarm-orchestrator`, `full-auto-coder`) are intentionally lens-less — they coordinate, they don't review.
+Coordination profiles (`orchestrator`, `full-auto-coder`, plus `swarm-master` / `swarm-orchestrator` — only relevant under `ZANA_MASTER_MODE`, see appendix) are intentionally lens-less — they coordinate, they don't review.
 
 ### Configuration
 
@@ -349,23 +375,33 @@ Use a sprint when the work is bounded and you want a single completion signal ac
 
 Always close sprints with `zana_sprint_end` once the tickets are done — open sprints accumulate noise and confuse autopilot loops that filter on sprint state.
 
-## Sub-daemons vs in-process agents
-
-In-process agents (`zana_spawn_agent`) share the parent daemon's resources, message bus, and lifetime. Light, fast, simple.
-
-Sub-daemons (`zana_swarm_spawn`) are full child Zana processes with their own orchestrator and workers. Heavier, but they:
-
-- Survive parent restarts
-- Isolate failures
-- Enable a master/worker hierarchy (one master, many child swarms)
-
-Reach for sub-daemons only when you have multiple independent workstreams large enough to each justify their own team. For everything smaller, stay in-process.
-
 ## Common mistakes
 
-- **Writing code yourself.** You are the orchestrator. If you find yourself editing source, you have already failed at delegation. Spawn a worker.
+- **Spawning a daemon orchestrator from inside Claude Code.** Calling `zana_start_team` or `zana_spawn_agent` inside a Claude Code session creates a *second* orchestrator that duplicates your role and burns extra tokens. Use `/zana:team` (native path) or hand-roll `Agent` + `SendMessage`. Reserve the daemon-spawning tools for headless callers.
+- **Writing code yourself.** When you've decided to delegate, stay delegated. If you find yourself editing source while a team is running, you've collapsed back into a solo orchestrator and the workers are now redundant.
+- **Sequential `Agent` calls when a pipeline is meant.** Spawn ALL agents in ONE tool-use block — sequential calls block parallel pipelines and force you to babysit handoffs the agents can do themselves via `SendMessage`.
 - **Vague prompts.** "Fix the bug" produces vague code. Specify files, criteria, and scope every time.
 - **No context.** Workers do not see the conversation. Inline the relevant context (file paths, conventions, prior decisions) into the prompt.
 - **Ignoring failures.** A worker that errors out needs diagnosis, not an immediate retry. Read its output, then respawn with a corrected prompt.
 - **Spawning too many at once.** Past the concurrency cap, agents queue. Past your machine's capacity, everything slows. Start small, scale up only after the first wave completes cleanly.
 - **Forgetting to close tickets.** Open tickets misrepresent progress and confuse autopilot evaluators.
+
+---
+
+## Appendix: Sub-daemon swarms (advanced — headless only)
+
+Sub-daemon swarms exist for one specific niche: long-running, cross-workspace, multi-workstream efforts that need their own process boundary so the parent process can restart without losing them. Inside a Claude Code session, this is almost never the right tool — `Agent({ run_in_background: true })` already gives you isolated per-agent context, and "survive parent restart" isn't meaningful for a chat session.
+
+**When sub-daemons are the right call**: a master daemon driving N independent epics in parallel across machines or workspaces, where each epic needs its own orchestrator + workers and must survive the master's failures.
+
+**When they're the wrong call**: anything inside a Claude Code session, or any team of <10 agents on one machine. Use the native path (`/zana:team` or hand-rolled `Agent` + `SendMessage`) or the in-process daemon path (`zana_spawn_agent`, `zana_start_team`) instead.
+
+**Surface** (gated behind `ZANA_MASTER_MODE=true`):
+- `zana_swarm_spawn(teamId, prompt)` — spawn a child daemon with its own orchestrator + workers
+- `zana_swarm_list` — child-daemon status
+- `zana_swarm_instruct(daemonId, message)` — instructions flow DOWN only (master → team lead → workers)
+- `zana_swarm_broadcast(message)` — fan an instruction to every child team lead
+- `zana_swarm_stop(daemonId)` — kill a child daemon
+- `zana_swarm_poll_events(since)` — progress updates
+
+The `swarm-master` / `swarm-orchestrator` profiles exist solely to delegate via `zana_swarm_spawn`. They are gated behind `ZANA_MASTER_MODE=true` and are not useful on the native path.

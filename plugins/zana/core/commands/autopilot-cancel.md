@@ -7,7 +7,9 @@ allowed-tools: mcp__zana__zana_autopilot_goal_status mcp__zana__zana_autopilot_g
 
 # /zana:autopilot:cancel
 
-Cancel a running autopilot goal. The goal lands as `cancelled`; in-flight step agents are not interrupted, but no further iterations will be scheduled.
+Cancel a running autopilot goal. **Daemon path only** — for native autopilot runs (started via `/zana:autopilot` inside this Claude Code session) use Claude Code's `/agents` controls to stop the in-flight step agents directly; there is no daemon-side `goalId` to cancel.
+
+The goal lands as `cancelled`; in-flight step agents are not interrupted, but no further iterations will be scheduled.
 
 `$ARGUMENTS` is the `goalId`.
 

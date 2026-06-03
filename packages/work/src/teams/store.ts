@@ -44,6 +44,12 @@ export function saveTeam(team) {
   if (!team.id) {
     team.id = crypto.randomUUID();
     team.createdAt = now;
+  } else {
+    const clean = sanitizeId(String(team.id));
+    if (!clean || clean !== team.id) {
+      throw new Error(`saveTeam: invalid team.id "${team.id}" — must match [a-zA-Z0-9_-]+`);
+    }
+    team.id = clean;
   }
   team.updatedAt = now;
 

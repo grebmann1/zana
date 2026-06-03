@@ -555,6 +555,66 @@ const TEAM_TOOLS = [
     },
   },
   {
+    name: "zana_save_team",
+    description: "Create or update a team template. Provide an id to update, omit for new. Fields: name, icon, description, orchestratorProfileId, slots ([{profileId, quantity}]), initialPrompt, rules, autoStart, dynamicSpawning, maxTotalWorkers.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        team: {
+          type: "object",
+          description: "Team template object. Include 'id' to update existing, omit for new.",
+          additionalProperties: false,
+          properties: {
+            id: { type: "string", pattern: "^[a-zA-Z0-9_-]+$", maxLength: 128 },
+            name: { type: "string", maxLength: 200 },
+            icon: { type: "string", maxLength: 16 },
+            description: { type: "string", maxLength: 1000 },
+            orchestratorProfileId: { type: "string", maxLength: 128 },
+            slots: {
+              type: "array",
+              maxItems: 32,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  profileId: { type: "string", maxLength: 128 },
+                  quantity: { type: "number", minimum: 1, maximum: 10 },
+                },
+                required: ["profileId", "quantity"],
+              },
+            },
+            initialPrompt: { type: "string", maxLength: 8000 },
+            rules: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                maxConcurrentWorkers: { type: "number", minimum: 1, maximum: 32 },
+                autoRestart: { type: "boolean" },
+                requireApproval: { type: "boolean" },
+                orchestratorAllowedTools: { type: "array", items: { type: "string", maxLength: 128 }, maxItems: 64 },
+              },
+            },
+            autoStart: { type: "boolean" },
+            dynamicSpawning: { type: "boolean" },
+            maxTotalWorkers: { type: "number", minimum: 1, maximum: 64 },
+          },
+        },
+      },
+      required: ["team"],
+    },
+  },
+  {
+    name: "zana_delete_team",
+    description: "Delete a team template by ID. Built-in templates re-seed on daemon restart unless their seed-marker tracks them as deleted.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        teamId: { type: "string", description: "Team ID to delete", pattern: "^[a-zA-Z0-9_-]+$", maxLength: 128 },
+      },
+      required: ["teamId"],
+    },
+  },
+  {
     name: "zana_list_running_teams",
     description: "List all currently running teams with their statuses.",
     inputSchema: { type: "object", properties: {} },
@@ -1418,6 +1478,10 @@ async function handleToolCall(name, args, callerAgentId) {
       return await callCore("team_status", { teamId: args.teamId });
     case "zana_list_running_teams":
       return await callCore("list_running_teams");
+    case "zana_save_team":
+      return await callCore("save_team", { team: args.team });
+    case "zana_delete_team":
+      return await callCore("delete_team", { teamId: args.teamId });
 
     // Scheduler tools
     case "zana_schedule_create":

@@ -2,12 +2,12 @@
 name: zana:council:status
 description: Load a deliberation by id and render its full state record (votes, dissent, synthesis, verdict).
 argument-hint: <deliberationId>
-allowed-tools: Read mcp__zana__zana_deliberation_status
+allowed-tools: mcp__zana__zana_deliberation_status
 ---
 
 # /zana:council:status
 
-Load a deliberation by id and render its full record.
+Load a deliberation by id and render its full record. **Daemon path only** — native councils convened via `/zana:council` inside this Claude Code session don't have a daemon-side `deliberationId`; their synthesizer's return message in the host conversation is the source of truth.
 
 The user's argument in `$ARGUMENTS` is the deliberation id (UUID).
 
