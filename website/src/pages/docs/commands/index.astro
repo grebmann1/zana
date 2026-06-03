@@ -152,7 +152,7 @@ const totalCmds = groups.reduce((n, g) => n + g.commands.length, 0);
           <code class="rounded bg-parchment px-1.5 py-0.5">allowed-tools</code>) plus the prompt body.
           Authoritative source: see <a href="https://github.com/grebmann1/zana/tree/main/plugins/zana/core/commands" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">plugins/zana/core/commands/</a> and <a href="https://github.com/grebmann1/zana/tree/main/plugins/zana/loop/commands" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry font-semibold">plugins/zana/loop/commands/</a>.
         </p>
-        <p class="mt-3 text-moss">For terminal CLI subcommands (<code class="rounded bg-parchment px-1.5 py-0.5">zana ticket list</code>, <code class="rounded bg-parchment px-1.5 py-0.5">zana schedule trigger</code>, …) see <a href="/docs/cli/" class="text-forest hover:text-berry font-semibold">CLI reference</a>.</p>
+        <p class="mt-3 text-moss">For terminal CLI subcommands (<code class="rounded bg-parchment px-1.5 py-0.5">zana ticket list</code>, <code class="rounded bg-parchment px-1.5 py-0.5">zana schedule trigger</code>, …) see <a href={`${import.meta.env.BASE_URL}docs/cli/`} class="text-forest hover:text-berry font-semibold">CLI reference</a>.</p>
       </section>
     </article>
   </section>

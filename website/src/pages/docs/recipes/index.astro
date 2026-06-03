@@ -2,6 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import DocsSubnav from '../../../components/DocsSubnav.astro';
 import MythicDivider from '../../../components/MythicDivider.astro';
+import { link } from '../../../lib/url';
 
 const recipes = [
   {
@@ -50,7 +51,7 @@ const recipes = [
     <div class="mt-12 grid gap-6 md:grid-cols-2">
       {recipes.map((r) => (
         <a
-          href={r.href}
+          href={link(r.href)}
           class="group block rounded-2xl border border-forest/15 bg-cream/60 p-6 transition hover:border-gold hover:bg-cream hover:shadow-md"
         >
           <h2 class="font-display text-2xl text-forest group-hover:text-berry">{r.title}</h2>

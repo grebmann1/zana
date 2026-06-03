@@ -92,7 +92,7 @@ const features = [
           <code class="rounded bg-parchment px-1.5 py-0.5 text-sm text-ink">scripts/qa/run-ticket-live.sh</code>
           against real Claude.
         </p>
-        <a href="/docs/" class="mt-6 inline-flex text-forest font-medium underline-offset-4 hover:underline">
+        <a href={`${import.meta.env.BASE_URL}docs/`} class="mt-6 inline-flex text-forest font-medium underline-offset-4 hover:underline">
           Read the full quickstart →
         </a>
       </div>
@@ -130,7 +130,7 @@ zana_ticket_complete({ ticketId: "tkt_abc",
         ))}
       </div>
       <div class="mt-10">
-        <a href="/features/" class="btn-ghost">Explore all features</a>
+        <a href={`${import.meta.env.BASE_URL}features/`} class="btn-ghost">Explore all features</a>
       </div>
     </div>
   </section>
@@ -145,7 +145,7 @@ zana_ticket_complete({ ticketId: "tkt_abc",
           into parallel tickets. All from one place.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a href="/docs/" class="btn-primary">Get started</a>
+          <a href={`${import.meta.env.BASE_URL}docs/`} class="btn-primary">Get started</a>
           <a href="https://github.com/grebmann1/zana" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
         </div>
       </div>

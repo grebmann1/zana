@@ -17,7 +17,7 @@ import MythicDivider from '../../../components/MythicDivider.astro';
     <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
       The building blocks behind the recipes. Read these when you want to
       understand <em>why</em> a primitive shapes the way it does — not how to
-      call it (that's <a href="/docs/recipes/" class="text-forest hover:text-berry font-semibold">Recipes</a>).
+      call it (that's <a href={`${import.meta.env.BASE_URL}docs/recipes/`} class="text-forest hover:text-berry font-semibold">Recipes</a>).
     </p>
 
     <article class="prose-zana mt-12 max-w-prose space-y-12">
@@ -37,7 +37,7 @@ import MythicDivider from '../../../components/MythicDivider.astro';
           <li>· <strong>Audit:</strong> every rationale is content-addressed; every transition is replayable from the event log.</li>
           <li>· <strong>Auto-judge</strong> resolves deadlocks without a human when <code class="rounded bg-parchment px-1.5 py-0.5">escalationStrategy: "judge" | "hybrid"</code> is set. <code class="rounded bg-parchment px-1.5 py-0.5">riskTag: "high"</code> still routes to a human regardless.</li>
         </ul>
-        <p class="mt-3 text-moss">→ <a href="/docs/recipes/deliberation/" class="text-forest hover:text-berry font-semibold">Deliberation recipe</a></p>
+        <p class="mt-3 text-moss">→ <a href={`${import.meta.env.BASE_URL}docs/recipes/deliberation/`} class="text-forest hover:text-berry font-semibold">Deliberation recipe</a></p>
       </section>
 
       <section>
@@ -80,7 +80,7 @@ import MythicDivider from '../../../components/MythicDivider.astro';
             </tbody>
           </table>
         </div>
-        <p class="mt-3 text-moss">→ <a href="/docs/recipes/scheduled-agent/" class="text-forest hover:text-berry font-semibold">Scheduled agent recipe</a></p>
+        <p class="mt-3 text-moss">→ <a href={`${import.meta.env.BASE_URL}docs/recipes/scheduled-agent/`} class="text-forest hover:text-berry font-semibold">Scheduled agent recipe</a></p>
       </section>
 
       <section>
@@ -111,7 +111,7 @@ import MythicDivider from '../../../components/MythicDivider.astro';
           Every status transition is auditable; every claim is exclusive; every completion
           carries a result summary.
         </p>
-        <p class="mt-3 text-moss">→ <a href="/docs/recipes/ticket-worker/" class="text-forest hover:text-berry font-semibold">Ticket-worker recipe</a></p>
+        <p class="mt-3 text-moss">→ <a href={`${import.meta.env.BASE_URL}docs/recipes/ticket-worker/`} class="text-forest hover:text-berry font-semibold">Ticket-worker recipe</a></p>
       </section>
 
       <section>
@@ -124,14 +124,14 @@ import MythicDivider from '../../../components/MythicDivider.astro';
           vs a team, how to author a schedule yml. They are not slash commands — agents never type
           them; they activate by matching.
         </p>
-        <p class="mt-3 text-moss">→ <a href="/docs/skills/" class="text-forest hover:text-berry font-semibold">Skills reference</a></p>
+        <p class="mt-3 text-moss">→ <a href={`${import.meta.env.BASE_URL}docs/skills/`} class="text-forest hover:text-berry font-semibold">Skills reference</a></p>
       </section>
 
       <MythicDivider />
 
       <section>
         <h2 class="font-display text-2xl text-forest">More</h2>
-        <p class="mt-2 text-moss">For the full primitive surface — sprints, workflows, vector memory, channels, profiles, skills, checkpoints, multi-daemon swarm, validated spawn, artifacts — see <a href="/how-it-works/" class="text-forest hover:text-berry font-semibold">How it works</a> and the auto-generated <a href="https://github.com/grebmann1/zana/blob/main/docs/MCP-TOOL-REFERENCE.md" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">MCP tool reference</a>.</p>
+        <p class="mt-2 text-moss">For the full primitive surface — sprints, workflows, vector memory, channels, profiles, skills, checkpoints, multi-daemon swarm, validated spawn, artifacts — see <a href={`${import.meta.env.BASE_URL}how-it-works/`} class="text-forest hover:text-berry font-semibold">How it works</a> and the auto-generated <a href="https://github.com/grebmann1/zana/blob/main/docs/MCP-TOOL-REFERENCE.md" target="_blank" rel="noopener noreferrer" class="text-forest hover:text-berry">MCP tool reference</a>.</p>
       </section>
     </article>
   </section>

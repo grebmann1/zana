@@ -1,5 +1,5 @@
 ---
-// Sub-navigation for /docs/* pages. Highlights the current section.
+import { link, stripBase } from '../lib/url';
 const links = [
   { href: '/docs/', label: 'Quickstart', match: /^\/docs\/?$/ },
   { href: '/docs/recipes/', label: 'Recipes', match: /^\/docs\/recipes(\/|$)/ },
@@ -8,7 +8,7 @@ const links = [
   { href: '/docs/commands/', label: 'Commands', match: /^\/docs\/commands(\/|$)/ },
   { href: '/docs/cli/', label: 'CLI', match: /^\/docs\/cli(\/|$)/ },
 ];
-const path = Astro.url.pathname;
+const path = stripBase(Astro.url.pathname);
 ---
 
 <nav aria-label="Docs sections" class="border-b border-forest/10 bg-parchment/30">
@@ -16,7 +16,7 @@ const path = Astro.url.pathname;
     <span class="text-xs uppercase tracking-widest text-gold">Docs</span>
     {links.map((l) => (
       <a
-        href={l.href}
+        href={link(l.href)}
         class:list={[
           'transition',
           l.match.test(path) ? 'text-forest font-semibold' : 'text-moss hover:text-forest',
