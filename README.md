@@ -7,11 +7,41 @@ Zana is a multi-agent orchestrator for Claude Code, available on **two paths**:
 
 Templates, profiles, tickets, sprints, artifacts, and deliberation work the same on both paths.
 
+## Install
+
+The fastest path: install the Claude Code plugin from the GitHub marketplace.
+No clone, no build, no daemon.
+
+In a Claude Code session:
+
+```
+/plugin marketplace add grebmann1/zana
+/plugin install zana@zana-marketplace        # orchestrator (27 commands, 2 skills)
+/plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling (3 cmds, 1 skill)
+```
+
+Restart Claude Code. Then in any workspace:
+
+```
+/zana:team backend-squad "Add a /healthz endpoint"
+/zana:council "Should we add a Redis cache?"
+/zana:council:arch "Adopt event sourcing here?"   # role-pack preset (NEW in 0.1.4)
+/zana:autopilot "Ship the dark-mode toggle"
+```
+
+For headless / CI / cron, also install the daemon:
+
+```bash
+npm install -g @zana-ai/mcp
+```
+
+Step-by-step incl. troubleshooting: [INSTALL.md](./INSTALL.md).
+
 ## What Zana is
 
 - Multi-agent orchestrator for Claude Code — native plugin first, daemon for headless
-- 30 slash commands across two plugins (`zana@zana-marketplace`, `zana-loop@zana-marketplace`)
-- 93 MCP `zana_*` tools (daemon path) for spawning agents, managing tickets/sprints, scheduling, and deliberation
+- 31 slash commands across two plugins (`zana@zana-marketplace`, `zana-loop@zana-marketplace`)
+- 94 MCP `zana_*` tools (daemon path) for spawning agents, managing tickets/sprints, scheduling, and deliberation
 - A standalone CLI (`zana …`) for the daemon path — same primitives, different surface
 - Pluggable module system for adding new capabilities without forking the core
 
@@ -116,6 +146,7 @@ For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the additional `z
 ## Status
 
 - Recent work:
+  - **0.1.4** — sfdc-council patterns landed: role packs + `/zana:council:arch` preset, generalist-seat invariant in deliberation, mid-deliberation human nudge (`zana_deliberation_nudge`), heterogeneous-model voters per deliberation
   - `zana-loop` plugin: `/zana:loop:start|stop|define` drive `.zana/scheduler/*.yml` via Claude Code's `/loop` — no daemon required
   - Async-by-default `zana_deliberate` — returns immediately, snap-judgment voter prompt cuts latency from ~520s to ~65s, 20-min timeout, `zana_deliberate_cancel`, recovers voter JSON from full transcript
   - Reliability: zombie reaper for orphaned headless agents, load-throttle starvation fix, team-start hard gate

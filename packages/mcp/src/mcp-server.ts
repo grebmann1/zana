@@ -1273,7 +1273,7 @@ const AUTOPILOT_TOOLS = [
 ];
 
 // T9 — Deliberation MCP tools (zana_deliberate + companions).
-const { DELIBERATION_TOOLS, deliberateHandler, deliberationStatusHandler, deliberationListHandler, deliberationOverrideHandler, deliberationCancelHandler } = require("./tools/deliberate");
+const { DELIBERATION_TOOLS, deliberateHandler, deliberationStatusHandler, deliberationListHandler, deliberationOverrideHandler, deliberationCancelHandler, deliberationNudgeHandler } = require("./tools/deliberate");
 
 const toolSkills = loadToolSkills();
 const DYNAMIC_TOOLS = toolSkills.map((t) => t.schema);
@@ -1613,6 +1613,8 @@ async function handleToolCall(name, args, callerAgentId) {
       return deliberationOverrideHandler(args);
     case "zana_deliberate_cancel":
       return deliberationCancelHandler(args);
+    case "zana_deliberation_nudge":
+      return await deliberationNudgeHandler(args);
 
     default: {
       // Check dynamic swarm tool skills

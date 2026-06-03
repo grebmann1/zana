@@ -28,5 +28,7 @@ export const EVENTS = {
   DELIBERATION_ESCALATED: "deliberation:escalated",
   DELIBERATION_OVERRIDE: "deliberation:override",
   DELIBERATION_DEGRADED: "deliberation:degraded",
+  DELIBERATION_GENERALIST_ADDED: "deliberation:generalistAdded",
+  DELIBERATION_HUMAN_NUDGE: "deliberation:humanNudge",
 };
 

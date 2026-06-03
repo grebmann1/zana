@@ -671,4 +671,107 @@ describe("deliberation quorum + graceful degradation (T6)", () => {
       expect(E.DELIBERATION_DEGRADED).toBe("deliberation:degraded");
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // applyGeneralistSeatInvariant — pure seat-injection logic (Slice B)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe("applyGeneralistSeatInvariant", () => {
+    const cfg: quorum.GeneralistSeatConfig = {
+      enabled: true,
+      profileId: "generalist",
+      threshold: 3,
+    };
+    const resolveProfile = (id: string) =>
+      id === "generalist" ? { id: "generalist", generalist: true } : null;
+
+    it("returns unchanged candidates when cfg.enabled=false", () => {
+      const candidates = [
+        { profileId: "a", profile: { id: "a" } },
+        { profileId: "b", profile: { id: "b" } },
+        { profileId: "c", profile: { id: "c" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(
+        candidates,
+        { ...cfg, enabled: false },
+        resolveProfile,
+      );
+      expect(result.candidates).toBe(candidates); // same reference — not copied
+      expect(result.appended).toBeNull();
+    });
+
+    it("returns unchanged when candidate count is below threshold", () => {
+      const candidates = [
+        { profileId: "a", profile: { id: "a" } },
+        { profileId: "b", profile: { id: "b" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(candidates, cfg, resolveProfile);
+      expect(result.candidates).toBe(candidates);
+      expect(result.appended).toBeNull();
+    });
+
+    it("returns unchanged when a candidate already carries generalist=true flag", () => {
+      const candidates = [
+        { profileId: "a", profile: { id: "a", generalist: true } },
+        { profileId: "b", profile: { id: "b" } },
+        { profileId: "c", profile: { id: "c" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(candidates, cfg, resolveProfile);
+      expect(result.candidates).toBe(candidates);
+      expect(result.appended).toBeNull();
+    });
+
+    it("returns unchanged when configured generalist profileId already in candidate list (even without flag)", () => {
+      const candidates = [
+        { profileId: "generalist", profile: { id: "generalist" } },
+        { profileId: "b", profile: { id: "b" } },
+        { profileId: "c", profile: { id: "c" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(candidates, cfg, resolveProfile);
+      expect(result.candidates).toBe(candidates);
+      expect(result.appended).toBeNull();
+    });
+
+    it("returns unchanged when profile cannot be resolved (best-effort silent skip)", () => {
+      const candidates = [
+        { profileId: "a", profile: { id: "a" } },
+        { profileId: "b", profile: { id: "b" } },
+        { profileId: "c", profile: { id: "c" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(
+        candidates,
+        { ...cfg, profileId: "missing-profile" },
+        () => null,
+      );
+      expect(result.candidates).toBe(candidates);
+      expect(result.appended).toBeNull();
+    });
+
+    it("appends generalist seat when threshold met, none present, and profile resolves", () => {
+      const candidates = [
+        { profileId: "a", profile: { id: "a" } },
+        { profileId: "b", profile: { id: "b" } },
+        { profileId: "c", profile: { id: "c" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(candidates, cfg, resolveProfile);
+      expect(result.candidates).toHaveLength(4);
+      expect(result.appended).not.toBeNull();
+      expect(result.appended!.profileId).toBe("generalist");
+      expect(result.appended!.profile).toEqual({ id: "generalist", generalist: true });
+      // Original array must not be mutated.
+      expect(candidates).toHaveLength(3);
+    });
+
+    it("appends exactly at threshold boundary (candidates.length === threshold)", () => {
+      const cfgThreshold3 = { ...cfg, threshold: 3 };
+      const candidates = [
+        { profileId: "x", profile: { id: "x" } },
+        { profileId: "y", profile: { id: "y" } },
+        { profileId: "z", profile: { id: "z" } },
+      ];
+      const result = quorum.applyGeneralistSeatInvariant(candidates, cfgThreshold3, resolveProfile);
+      expect(result.candidates).toHaveLength(4);
+      expect(result.appended).not.toBeNull();
+    });
+  });
 });

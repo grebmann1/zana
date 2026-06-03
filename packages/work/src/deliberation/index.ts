@@ -13,6 +13,7 @@ export {
   recordVote,
   recordDissent,
   recordOverride,
+  recordHumanNudge,
   loadDeliberation,
   listDeliberations,
   StaleDeliberationError,
@@ -43,6 +44,7 @@ export {
   reassembleCouncil,
   resolveQuorum,
   applyDegradation,
+  applyGeneralistSeatInvariant,
 } from "./quorum";
 export type {
   VoterCandidate,
@@ -57,4 +59,17 @@ export type {
   ProbeFailureKind,
   ReassembleInput,
   ReassembleOutcome,
+  GeneralistSeatConfig,
+  GeneralistSeatResult,
 } from "./quorum";
+export {
+  listRolePacks,
+  getRolePack,
+  resolveVoters,
+  normalizeVotersInput,
+} from "./role-packs";
+export type {
+  RolePackId,
+  RolePackSpec,
+  VotersInput,
+} from "./role-packs";

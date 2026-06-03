@@ -47,11 +47,16 @@ export interface AgentProbedPayload {
 export interface DeliberationProposedPayload {
   deliberationId: string;
   question: string;
-  voters: { profileId: string; agentId: string }[];
+  // Slice D — voters carry their resolved modelId explicitly so replay
+  // reconstructs the exact voter pool (including per-voter model overrides).
+  voters: { profileId: string; agentId: string; modelId?: string }[];
   rounds: number;          // hard cap
   quorum: number;          // resolved integer
   riskTag?: "low" | "medium" | "high";
   promptSnapshotHash: string;   // sha256 of the shared prompt
+  // Slice A — when voters were resolved from a role pack, record which one
+  // (and the requested quantity). Omitted on explicit profile-id lists.
+  rolePack?: { id: string; quantity: number };
   ts: string;              // ISO
 }
 
@@ -112,6 +117,26 @@ export interface DeliberationDegradedPayload {
   round: number;
   dropped: DroppedVoterRecord[];
   ts: string;              // ISO
+}
+
+// Slice B — generalist-seat invariant. Emitted when assembleCouncil appends
+// a generalist voter to satisfy the runtime-config invariant.
+export interface DeliberationGeneralistAddedPayload {
+  deliberationId: string;
+  profileId: string;
+  reason: "no_generalist_in_council";
+  ts: string;
+}
+
+// Slice C — mid-deliberation human nudge. Emitted when the orchestration loop
+// records a human reviewer's response between rounds. `textHash` is sha256 of
+// the nudge text in CAS (or null when the user chose Skip).
+export interface DeliberationHumanNudgePayload {
+  deliberationId: string;
+  afterRound: number;
+  contributedBy: "user" | "skip";
+  textHash: string | null;
+  ts: string;
 }
 
 export interface DeliberationOverridePayload {

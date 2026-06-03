@@ -34,6 +34,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 - [`zana_deliberate`](#zana_deliberate)
 - [`zana_deliberate_cancel`](#zana_deliberate_cancel)
 - [`zana_deliberation_list`](#zana_deliberation_list)
+- [`zana_deliberation_nudge`](#zana_deliberation_nudge)
 - [`zana_deliberation_override`](#zana_deliberation_override)
 - [`zana_deliberation_status`](#zana_deliberation_status)
 - [`zana_discover_agents`](#zana_discover_agents)
@@ -182,7 +183,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1018`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1078`
 
 ---
 
@@ -200,7 +201,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1033`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1093`
 
 ---
 
@@ -217,7 +218,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1044`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1104`
 
 ---
 
@@ -238,7 +239,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1055`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1115`
 
 ---
 
@@ -257,7 +258,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:718`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:778`
 
 ---
 
@@ -280,7 +281,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1204`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1264`
 - Handler: `packages/core/modules/autopilot/index.js:cancelGoal`
 
 **Common pitfalls:**
@@ -311,7 +312,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1163`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1223`
 - Handler: `packages/core/modules/autopilot/index.js:setGoal`
 
 **Common pitfalls:**
@@ -345,7 +346,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1196`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1256`
 - Handler: `packages/core/modules/autopilot/index.js:listGoals`
 
 **Common pitfalls:**
@@ -392,7 +393,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1187`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1247`
 - Handler: `packages/core/modules/autopilot/index.js:getGoal`
 
 **Common pitfalls:**
@@ -431,7 +432,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:801`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:861`
 - Handler: `packages/swarm/src/swarm/router.ts:getChannelHistory (via case 'channel_history')`
 
 **Common pitfalls:**
@@ -470,7 +471,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:731`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:791`
 - Handler: `packages/swarm/src/swarm/router.ts:drainInbox (via case 'check_inbox')`
 
 **Common pitfalls:**
@@ -494,7 +495,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:955`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1015`
 
 ---
 
@@ -512,7 +513,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:944`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1004`
 
 ---
 
@@ -529,7 +530,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:966`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1026`
 
 ---
 
@@ -547,7 +548,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:919`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:979`
 
 ---
 
@@ -598,7 +599,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:603`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:606`
 
 ---
 
@@ -612,12 +613,15 @@ _No input parameters._
 |---|---|---|---|
 | context | array<string> | no | Optional artifact IDs to seed context. Each is read and embedded in the shared prompt. |
 | escalationStrategy | string | no | `human` \| `judge` \| `hybrid` — Override the deliberation module's escalationStrategy for this call. 'judge' / 'hybrid' auto-resolve a non-high-risk ESCALATED outcome by spawning a judge agent that reads the transcript and emits a verdict. 'human' leaves the deliberation ESCALATED so an operator can call zana_deliberation_override. riskTag='high' always escalates to a human regardless of this setting. |
+| humanNudge | ? | no | Pause the loop after synthesizing the named round and exit with _outcome='awaiting_nudge'. Resume via zana_deliberation_nudge with either a free-text response (injected into next round) or null/empty (skip). |
 | mode | string | no | `synthesis` \| `tally` — Reduction mode (default from module config). |
+| modelDiversity | string | no | `uniform` \| `mixed` — uniform (default) — every voter uses its profile's declared model. mixed — rotate through {claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7} for monoculture-resistance. Per-voter overrides in voterModels still win over the rotation. |
 | question | string | yes | What the council is deliberating on. |
 | quorum | string \| number | no | majority \| all \| <integer>. Default from module config. |
 | riskTag | string | no | `low` \| `medium` \| `high` — high → mandatory escalation regardless of vote (default 'medium'). |
 | rounds | number | no | Hard cap on convergence rounds (default from module config). |
-| voters | array<string> | no | Voter profile IDs. Defaults to ['architect','security-reviewer','researcher'] when omitted. |
+| voterModels | object | no | Per-voter model override: { profileId → modelId }. Replaces the profile's declared model for this deliberation only. Each model must be in the local registry. |
+| voters | array<string> \| object | no | Voters to convene. Either an explicit profile-id array OR a named role pack { pack, quantity? }. Defaults to ['architect','security-reviewer','researcher'] when omitted. |
 | wait | boolean | no | If true, block until the deliberation reaches a terminal state. Default false (async). |
 
 **Output shape:**
@@ -653,7 +657,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:759`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1077`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberateHandler`
 
 **Common pitfalls:**
@@ -676,7 +680,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:865`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1253`
 
 ---
 
@@ -714,12 +718,30 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:833`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1221`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationListHandler`
 
 **Common pitfalls:**
 
 - `voters` here is a COUNT (number), not an array. Use `zana_deliberation_status` to get the full voter records.
+
+---
+
+## zana_deliberation_nudge
+
+**Description:** Resume a paused deliberation by recording an optional human reviewer note. Pass `response` as a non-empty string to inject the text verbatim into the next round's voter prompts (recorded with contributedBy='user'). Pass null or an empty string to record a 'skip' and continue without changing prompts. Errors if the deliberation is not currently awaiting a nudge.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| deliberationId | string | yes |  |
+| response | string \| null | no | Free-text human note. null or empty string = skip. |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1189`
 
 ---
 
@@ -759,7 +781,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:848`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1236`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationOverrideHandler`
 
 **Common pitfalls:**
@@ -805,7 +827,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:821`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1209`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationStatusHandler`
 
 **Common pitfalls:**
@@ -827,7 +849,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:708`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:768`
 
 ---
 
@@ -852,7 +874,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:678`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:738`
 - Handler: `packages/core/src/events/service.ts:emit (via case 'event_emit')`
 
 **Common pitfalls:**
@@ -892,7 +914,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:691`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:751`
 - Handler: `packages/core/src/events/store.ts:queryEvents (via case 'event_query')`
 
 **Common pitfalls:**
@@ -1068,7 +1090,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:796`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:856`
 - Handler: `packages/swarm/src/swarm/router.ts:listChannels (via case 'list_channels')`
 
 **Common pitfalls:**
@@ -1138,7 +1160,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:557`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:617`
 - Handler: `packages/work/src/teams/manager.ts:listRunningTeams`
 
 ---
@@ -1239,7 +1261,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:855`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:915`
 - Handler: `packages/intelligence/src/intelligence/vector-memory.ts:search`
 
 **Common pitfalls:**
@@ -1271,7 +1293,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:842`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:902`
 - Handler: `packages/intelligence/src/intelligence/vector-memory.ts:store`
 
 **Common pitfalls:**
@@ -1293,7 +1315,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:891`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:951`
 
 ---
 
@@ -1308,7 +1330,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:886`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:946`
 
 ---
 
@@ -1327,7 +1349,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:902`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:962`
 
 ---
 
@@ -1365,7 +1387,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:868`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:928`
 
 ---
 
@@ -1392,7 +1414,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:763`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:823`
 - Handler: `packages/swarm/src/swarm/router.ts:publishToChannel (via case 'publish_channel')`
 
 **Common pitfalls:**
@@ -1417,7 +1439,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:830`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:890`
 
 ---
 
@@ -1463,12 +1485,12 @@ _No input parameters._
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
-| team | object | yes | Team template object. Include 'id' to update existing, omit for new. — fields: id, name, icon, description, orchestratorProfileId, slots, initialPrompt, rules, autoStart, dynamicSpawning, maxTotalWorkers |
+| team | object | yes | Team template object. Include 'id' to update existing, omit for new. — fields: autoStart, description, dynamicSpawning, icon, id, initialPrompt, maxTotalWorkers, name, orchestratorProfileId, rules, slots |
 
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:558`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:557`
 
 ---
 
@@ -1519,7 +1541,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:566`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:626`
 - Handler: `packages/work/src/scheduling/service.ts:createSchedule`
 
 **Common pitfalls:**
@@ -1548,7 +1570,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:630`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:690`
 - Handler: `packages/core/src/agents/manager.ts case 'schedule_delete'`
 
 ---
@@ -1597,7 +1619,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:650`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:710`
 - Handler: `packages/work/src/scheduling/service.ts:disableSchedule`
 
 ---
@@ -1646,7 +1668,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:641`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:701`
 - Handler: `packages/work/src/scheduling/service.ts:enableSchedule`
 
 ---
@@ -1703,7 +1725,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:603`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:663`
 - Handler: `packages/core/src/agents/manager.ts case 'schedule_get'`
 
 **Common pitfalls:**
@@ -1753,7 +1775,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:598`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:658`
 - Handler: `packages/work/src/scheduling/store.ts:listSchedules`
 
 ---
@@ -1777,7 +1799,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:668`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:728`
 - Handler: `packages/work/src/scheduling/service.ts:loadFromDisk`
 
 ---
@@ -1835,7 +1857,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:659`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:719`
 - Handler: `packages/work/src/scheduling/service.ts:triggerSchedule`
 
 **Common pitfalls:**
@@ -1893,7 +1915,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:614`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:674`
 - Handler: `packages/work/src/scheduling/service.ts:updateSchedule`
 
 ---
@@ -1913,7 +1935,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:813`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:873`
 
 ---
 
@@ -1944,7 +1966,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:736`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:796`
 - Handler: `packages/swarm/src/swarm/router.ts:routeMessage (via packages/core/src/agents/manager.ts case 'send_message')`
 
 **Common pitfalls:**
@@ -2302,7 +2324,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:785`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:845`
 - Handler: `packages/swarm/src/swarm/router.ts:subscribeChannel (via case 'subscribe_channel')`
 
 **Common pitfalls:**
@@ -2326,7 +2348,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1114`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1174`
 
 ---
 
@@ -2344,7 +2366,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1091`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1151`
 
 ---
 
@@ -2359,7 +2381,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1086`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1146`
 
 ---
 
@@ -2376,7 +2398,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1125`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1185`
 
 ---
 
@@ -2395,7 +2417,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1074`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1134`
 
 ---
 
@@ -2412,7 +2434,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1103`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1163`
 
 ---
 
@@ -3112,7 +3134,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:881`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:941`
 
 ---
 
@@ -3151,7 +3173,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:1003`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1063`
 - Handler: `packages/work/src/scheduling/workflow-engine.ts:loadRun (via case 'zana_workflow_get_run')`
 
 **Common pitfalls:**
@@ -3175,7 +3197,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:993`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1053`
 
 ---
 
@@ -3216,7 +3238,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/mcp-server.ts:981`
+- MCP wrapper: `packages/mcp/src/mcp-server.ts:1041`
 - Handler: `packages/work/src/scheduling/workflow-engine.ts:executeWorkflow (via packages/mcp/src/mcp-server.ts case 'zana_workflow_run')`
 
 **Common pitfalls:**

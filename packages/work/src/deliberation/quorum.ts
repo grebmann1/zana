@@ -110,6 +110,58 @@ export interface DegradationDecision {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// applyGeneralistSeatInvariant — Slice B
+//
+// Returns a possibly-extended candidate list that satisfies the
+// generalist-seat invariant: when ≥ threshold voters are present and none of
+// them is flagged `generalist`, append the configured generalist profile.
+//
+// Pure function — caller (deliberateHandler) is responsible for emitting the
+// `deliberation:generalistAdded` event when `appended` is non-null.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface GeneralistSeatConfig {
+  enabled: boolean;
+  profileId: string;
+  threshold: number;
+}
+
+export interface GeneralistSeatResult {
+  candidates: VoterCandidate[];
+  appended: VoterCandidate | null;
+}
+
+export function applyGeneralistSeatInvariant(
+  candidates: VoterCandidate[],
+  cfg: GeneralistSeatConfig,
+  resolveProfile: (id: string) => any,
+): GeneralistSeatResult {
+  if (!cfg.enabled) return { candidates, appended: null };
+  if (candidates.length < cfg.threshold) {
+    return { candidates, appended: null };
+  }
+  const hasGeneralist = candidates.some((c) => {
+    const flag = c?.profile?.generalist;
+    return flag === true;
+  });
+  if (hasGeneralist) return { candidates, appended: null };
+  // Don't double-add if the configured generalist is already a voter (even
+  // without the flag).
+  if (candidates.some((c) => c.profileId === cfg.profileId)) {
+    return { candidates, appended: null };
+  }
+  const profile = resolveProfile(cfg.profileId)
+    ?? resolveProfile(`built-in-${cfg.profileId}`);
+  if (!profile) {
+    // Profile store doesn't carry the configured generalist (common in tests
+    // with synthetic profile sets). Skip silently — the invariant is best-
+    // effort; a hard failure would break callers who never asked for it.
+    return { candidates, appended: null };
+  }
+  const appended: VoterCandidate = { profileId: cfg.profileId, profile };
+  return { candidates: [...candidates, appended], appended };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // resolveQuorum — number | "majority" | "all" → integer
 // ─────────────────────────────────────────────────────────────────────────────
 export function resolveQuorum(

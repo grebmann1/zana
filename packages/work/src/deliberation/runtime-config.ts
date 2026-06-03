@@ -31,6 +31,14 @@ export interface DeliberationRuntimeConfig {
   escalationStrategy: "human" | "judge" | "hybrid";
   judgeProfileId: string;
   judgeTimeoutMs: number;
+  // Slice B — generalist-seat invariant.
+  //
+  // When a council has ≥ generalistSeatThreshold voters and none of them is
+  // flagged generalist, append `generalistProfileId` so cross-cutting concerns
+  // can't fall between specialist domains. Default ON, threshold=3, profile
+  // researcher. Off-switch via `generalistSeat: { enabled: false, ... }`.
+  generalistSeat: { enabled: boolean; profileId: string };
+  generalistSeatThreshold: number;
 }
 
 const DEFAULTS: DeliberationRuntimeConfig = {
@@ -47,6 +55,8 @@ const DEFAULTS: DeliberationRuntimeConfig = {
   escalationStrategy: "human",
   judgeProfileId: "judge",
   judgeTimeoutMs: 10 * 60 * 1000,
+  generalistSeat: { enabled: true, profileId: "researcher" },
+  generalistSeatThreshold: 3,
 };
 
 let active: DeliberationRuntimeConfig = { ...DEFAULTS };

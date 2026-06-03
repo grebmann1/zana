@@ -115,6 +115,9 @@ const PATCHABLE_FIELDS = new Set<keyof Deliberation>([
   // (existing entries + new entry) and passes it through here.
   "degradation",
   "verdictSource",
+  // Slice C — append-only humanNudges audit + ephemeral awaitingNudge marker.
+  "humanNudges",
+  "awaitingNudge",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -515,6 +518,61 @@ export function recordOverride(
     _bus().emit(_EVENTS().DELIBERATION_OVERRIDE, payload);
   } catch {}
 
+  return d;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// recordHumanNudge — Slice C
+//
+// Append a single nudge entry to the audit array and clear the awaitingNudge
+// marker so the orchestration loop can resume. State is NOT changed — nudges
+// happen inside CONVERGING and the post-resume transition is the caller's
+// responsibility.
+//
+// `textHash` is null for the "skip" path (CAS write skipped, audit still
+// captures the choice).
+// ─────────────────────────────────────────────────────────────────────────────
+export function recordHumanNudge(
+  deliberationId: string,
+  nudge: { afterRound: number; textHash: string | null; contributedBy: "user" | "skip" },
+  opts?: { expectedVersion?: number },
+): Deliberation {
+  const d = mustLoad(deliberationId);
+  assertVersion(d, opts?.expectedVersion);
+  if (!nudge || typeof nudge !== "object") {
+    throw new Error("recordHumanNudge: nudge is required");
+  }
+  if (typeof nudge.afterRound !== "number" || nudge.afterRound < 1) {
+    throw new Error(`recordHumanNudge: afterRound must be >= 1`);
+  }
+  if (nudge.contributedBy !== "user" && nudge.contributedBy !== "skip") {
+    throw new Error(`recordHumanNudge: contributedBy must be "user" | "skip"`);
+  }
+  if (d.state !== "CONVERGING" && d.state !== "REVIEWING" && d.state !== "SYNTHESIZING") {
+    throw new Error(`recordHumanNudge: cannot record nudge in state ${d.state}`);
+  }
+  const entry = {
+    afterRound: nudge.afterRound,
+    textHash: nudge.textHash,
+    contributedBy: nudge.contributedBy,
+    ts: nowIso(),
+  };
+  d.humanNudges = [...(Array.isArray(d.humanNudges) ? d.humanNudges : []), entry];
+  // Resume gate — clear the await marker.
+  if (d.awaitingNudge) {
+    d.awaitingNudge = undefined;
+  }
+  persist(d);
+
+  try {
+    _bus().emit(_EVENTS().DELIBERATION_HUMAN_NUDGE, {
+      deliberationId: d.id,
+      afterRound: entry.afterRound,
+      contributedBy: entry.contributedBy,
+      textHash: entry.textHash,
+      ts: entry.ts,
+    });
+  } catch {}
   return d;
 }
 

@@ -82,7 +82,10 @@ export interface DeliberateDeps extends CollectReviewsDeps {
 
 export interface DeliberateArgs {
   question: string;
-  voters?: string[];
+  // Either an explicit profile-id list, or a named role pack:
+  //   { pack: "arch" | "code-review" | "plan" | "review", quantity?: number }
+  // Pack-resolution lives in @zana-ai/work `role-packs` and is deterministic.
+  voters?: string[] | { pack: string; quantity?: number };
   rounds?: number;
   quorum?: number | "majority" | "all";
   mode?: "synthesis" | "tally";
@@ -99,6 +102,26 @@ export interface DeliberateArgs {
   // outcome via the judge profile; "human" leaves ESCALATED for manual
   // override. Omit to use the module-config default.
   escalationStrategy?: "human" | "judge" | "hybrid";
+  // Slice C — Mid-deliberation human-in-loop nudge. When set, the orchestration
+  // loop pauses after synthesizing round `afterRound` and exits with
+  // _outcome="awaiting_nudge". Caller resumes via zana_deliberation_nudge with
+  // either a free-text response or null/empty (skip). On resume, non-empty
+  // response text is content-addressed and prepended into the next round's
+  // voter prompt as a human-reviewer addendum.
+  //
+  // Off by default — must not change today's flow for any existing caller.
+  humanNudge?: false | { afterRound: number; promptText?: string };
+  // Slice D — Heterogeneous-model voters. Per-voter model override and/or
+  // diversity preset, applied BEFORE the smoke probe so the probe validates
+  // the actual model that will run.
+  //
+  //   voterModels — { profileId → modelId } map. Each entry replaces the
+  //                 profile's declared model for THIS deliberation only.
+  //   modelDiversity — "uniform" (default; every voter uses its profile model)
+  //                    or "mixed" (rotate through a small set of distinct
+  //                    Claude models for monoculture-resistance).
+  voterModels?: Record<string, string>;
+  modelDiversity?: "uniform" | "mixed";
   deps?: DeliberateDeps;
 }
 
@@ -140,9 +163,24 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
   const core = _core();
 
   const rt = delib.getRuntimeConfig();
-  const voterIds = Array.isArray(args.voters) && args.voters.length > 0
-    ? args.voters
-    : DEFAULT_VOTER_PROFILE_IDS;
+  // Accept either a string[] (legacy form) or { pack, quantity } (Slice A).
+  // normalizeVotersInput throws on malformed input and unknown pack ids.
+  let voterIds: string[];
+  let rolePackAudit: { id: string; quantity: number } | null = null;
+  if (args.voters && !Array.isArray(args.voters) && typeof (args.voters as any).pack === "string") {
+    rolePackAudit = {
+      id: (args.voters as any).pack,
+      quantity: typeof (args.voters as any).quantity === "number" ? (args.voters as any).quantity : 3,
+    };
+  }
+  try {
+    voterIds = delib.normalizeVotersInput(args.voters, DEFAULT_VOTER_PROFILE_IDS);
+  } catch (err: any) {
+    throw new Error(`zana_deliberate: ${err?.message ?? String(err)}`);
+  }
+  if (!Array.isArray(voterIds) || voterIds.length === 0) {
+    voterIds = DEFAULT_VOTER_PROFILE_IDS;
+  }
 
   const rounds = typeof args.rounds === "number" && args.rounds >= 1
     ? Math.floor(args.rounds)
@@ -166,7 +204,7 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
 
   // Resolve profiles up-front — assembleCouncil + collectReviews both need them.
   const getProfile = deps.getProfile ?? ((id: string) => core.agents.profileStore.getProfile(id));
-  const candidates: { profileId: string; profile: any }[] = [];
+  let candidates: { profileId: string; profile: any }[] = [];
   for (const id of voterIds) {
     const profile = getProfile(id) || getProfile(`built-in-${id}`);
     if (!profile) {
@@ -177,6 +215,68 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
       throw new Error(`zana_deliberate: duplicate voter profileId: ${id}`);
     }
     candidates.push({ profileId: id, profile });
+  }
+
+  // Slice D — Heterogeneous-model voters. Apply per-voter model override
+  // BEFORE assembleCouncil so the smoke probe validates the actual model.
+  // Validation: refuse override to a model that isn't in the local registry.
+  const voterModels = (args.voterModels && typeof args.voterModels === "object")
+    ? args.voterModels
+    : {};
+  const modelDiversity = args.modelDiversity === "mixed" ? "mixed" : "uniform";
+  const MIXED_LADDER = ["claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-7"];
+  // Best-effort registry — anything advertised as a model on a known profile
+  // is acceptable. We collect the set lazily; a missing registry simply skips
+  // the strict-validation gate.
+  const knownModels = new Set<string>();
+  try {
+    const profiles = core.agents.profileStore.listProfiles?.() ?? [];
+    for (const p of profiles) {
+      if (typeof p?.model === "string" && p.model.length > 0) knownModels.add(p.model);
+    }
+  } catch {}
+  for (const m of MIXED_LADDER) knownModels.add(m);
+
+  if (Object.keys(voterModels).length > 0 || modelDiversity === "mixed") {
+    candidates = candidates.map((c, i) => {
+      let resolvedModel: string | undefined = voterModels[c.profileId];
+      if (!resolvedModel && modelDiversity === "mixed") {
+        resolvedModel = MIXED_LADDER[i % MIXED_LADDER.length];
+      }
+      if (!resolvedModel) return c;
+      if (knownModels.size > 0 && !knownModels.has(resolvedModel)) {
+        throw new Error(
+          `zana_deliberate: voterModels[${c.profileId}]="${resolvedModel}" is not in the local model registry`,
+        );
+      }
+      // Clone the profile so we don't mutate the shared profile-store entry.
+      return { profileId: c.profileId, profile: { ...c.profile, model: resolvedModel } };
+    });
+  }
+
+  // Slice B — generalist-seat invariant. When the council size meets the
+  // configured threshold and no current voter carries the `generalist` flag,
+  // append the configured generalist profile (default `researcher`).
+  //
+  // Apply the invariant only on the default-voters path or the named-pack
+  // path — when the caller passed an explicit profile-id array, honor it
+  // verbatim (existing callers, including tests, may rely on the exact list).
+  const explicitVoters = Array.isArray(args.voters) && args.voters.length > 0;
+  const applySeatInvariant = !explicitVoters;
+  const generalistSeatCfg = {
+    enabled: applySeatInvariant && (rt.generalistSeat?.enabled ?? true),
+    profileId: rt.generalistSeat?.profileId ?? "researcher",
+    threshold: typeof rt.generalistSeatThreshold === "number" ? rt.generalistSeatThreshold : 3,
+  };
+  const seatOutcome = delib.applyGeneralistSeatInvariant(
+    candidates,
+    generalistSeatCfg,
+    getProfile,
+  );
+  candidates = seatOutcome.candidates;
+  const appendedGeneralist = seatOutcome.appended;
+  if (appendedGeneralist) {
+    voterIds = [...voterIds, appendedGeneralist.profileId];
   }
 
   // Build prompt snapshot (question + optional context artifacts).
@@ -208,6 +308,33 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
       : undefined,
   });
 
+  // Slice B — emit deliberation:generalistAdded once the deliberation has an
+  // id. Best-effort; bus errors do not block the run.
+  if (appendedGeneralist) {
+    try {
+      const ev = core.events;
+      ev.bus.emit(ev.EVENTS.DELIBERATION_GENERALIST_ADDED, {
+        deliberationId: proposed.id,
+        profileId: appendedGeneralist.profileId,
+        reason: "no_generalist_in_council",
+        ts: new Date().toISOString(),
+      });
+    } catch {}
+  }
+  // Slice A — record role-pack provenance for replay.
+  if (rolePackAudit) {
+    try {
+      const ev = core.events;
+      // Reuse the proposed event channel if available; otherwise fall back to a
+      // best-effort console trace that won't perturb tests.
+      ev.bus.emit("deliberation:rolePack", {
+        deliberationId: proposed.id,
+        rolePack: rolePackAudit,
+        ts: new Date().toISOString(),
+      });
+    } catch {}
+  }
+
   // Register active run record up front so cancel can find it even if the
   // background runner hasn't yet entered its first await.
   const killAgent = deps.killAgent ?? ((id: string) => {
@@ -236,6 +363,9 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
     getProfile,
     activeRun,
     escalationStrategy,
+    humanNudge: typeof args.humanNudge === "object" && args.humanNudge !== null && typeof args.humanNudge.afterRound === "number"
+      ? { afterRound: Math.floor(args.humanNudge.afterRound), promptText: args.humanNudge.promptText ?? "Optional input for next round (skip leaves it as-is):" }
+      : null,
   };
 
   // 2. Default: detach the orchestration loop and return the proposed record.
@@ -282,6 +412,12 @@ interface RunDeliberationContext {
   // Resolved at deliberateHandler entry: per-call arg | module config | "human".
   // Threaded into the post-loop finalize step where the auto-judge gate runs.
   escalationStrategy: "human" | "judge" | "hybrid";
+  // Slice C — when set, after synthesizing round `afterRound` the loop pauses
+  // and exits with _outcome="awaiting_nudge". Resume via zana_deliberation_nudge.
+  humanNudge: { afterRound: number; promptText: string } | null;
+  // Slice C — when resuming after a nudge, the first iteration of the loop
+  // must skip collect+synth (already done before the pause) and jump to decide.
+  skipFirstCollectAndSynth?: boolean;
 }
 
 async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
@@ -410,18 +546,26 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
 
   checkCancelled();
 
-  const assembleOutcome = await delib.assembleCouncil({
-    deliberationId,
-    candidates,
-    deps: assembleDeps,
-  });
-  if (assembleOutcome.kind === "ESCALATED") {
+  // Slice C — when resuming after a human-nudge pause, the deliberation is
+  // already past PROPOSED; skip the initial assembleCouncil call.
+  const preState: string = (delib.loadDeliberation(deliberationId) || {}).state || "PROPOSED";
+  const isResumingAfterNudge = preState === "CONVERGING" || preState === "REVIEWING";
+
+  const assembleOutcome = isResumingAfterNudge
+    ? { kind: "READY" as const }
+    : await delib.assembleCouncil({
+        deliberationId,
+        candidates,
+        deps: assembleDeps,
+      });
+  if ((assembleOutcome as any).kind === "ESCALATED") {
+    const esc = assembleOutcome as any;
     return {
       ...delib.loadDeliberation(deliberationId),
       _outcome: "escalated_at_assembly",
       _assemblyEscalation: {
-        reason: assembleOutcome.reason,
-        details: assembleOutcome.details,
+        reason: esc.reason,
+        details: esc.details,
       },
     };
   }
@@ -433,6 +577,7 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
   let iter = 0;
 
   let d: any = delib.loadDeliberation(deliberationId);
+  let skipFirst = ctx.skipFirstCollectAndSynth === true;
   while (d.state === "REVIEWING" || d.state === "CONVERGING") {
     checkCancelled();
     if (++iter > maxIterations) {
@@ -441,8 +586,53 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
       );
     }
 
+    if (skipFirst) {
+      // Slice C resume — collect+synth for the paused round already happened.
+      // Jump straight to decide() with the existing record. The pause itself
+      // recorded the nudge as a humanNudges entry; the next round's prompt
+      // will pick up the addendum via `promptSnapshotForRound` below on the
+      // NEXT iteration.
+      skipFirst = false;
+      const decision = delib.decide({ deliberation: d });
+      if (decision.action === "ADVANCE_ROUND") {
+        const prevDissenters = d.dissent.filter((x: any) => x.round === d.currentRound).map((x: any) => x.profileId);
+        const reOutcome = await delib.reassembleCouncil({
+          deliberationId: d.id,
+          candidates,
+          previousDissenterProfileIds: prevDissenters,
+          expectedSourceState: "CONVERGING",
+          deps: assembleDeps,
+        });
+        if (reOutcome.kind === "ESCALATED") {
+          return {
+            ...delib.loadDeliberation(d.id),
+            _outcome: "escalated_during_reassembly",
+            _reassemblyEscalation: { reason: reOutcome.reason, details: reOutcome.details },
+          };
+        }
+      } else {
+        await delib.applyDecision(d.id, decision, { expectedVersion: d.version });
+      }
+      d = delib.loadDeliberation(d.id);
+      continue;
+    }
+
     // 3a. Spawn-and-collect reviews for the current round.
-    const promptSnapshotForRound = promptSnapshot;
+    let promptSnapshotForRound = promptSnapshot;
+    // Slice C — if any humanNudges have been recorded, append the most-recent
+    // verbatim text as a "Human-reviewer addendum" so subsequent voters see it.
+    if (Array.isArray(d.humanNudges) && d.humanNudges.length > 0) {
+      const lastUser = [...d.humanNudges].reverse().find((n: any) => n.contributedBy === "user" && n.textHash);
+      if (lastUser) {
+        try {
+          const buf = work.runs.artifacts.readContentAddressed(lastUser.textHash);
+          const text = buf ? String(buf) : "";
+          if (text.length > 0) {
+            promptSnapshotForRound = `${promptSnapshot}\n\n## Human-reviewer addendum (after round ${lastUser.afterRound})\n${text}\n`;
+          }
+        } catch {}
+      }
+    }
     const voterSpecs: VoterSpec[] = d.voters.map((v: any) => ({
       agentId: v.agentId,
       profileId: v.profileId,
@@ -566,6 +756,33 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
       d = delib.loadDeliberation(d.id);
     }
 
+    // 3d-pre. Slice C — human-nudge pause. If a nudge is configured for this
+    // round AND we have not yet recorded one for it, mark the deliberation as
+    // awaiting and exit the loop. Caller polls status; resume via the nudge
+    // tool. Already-recorded nudges flow through unchanged.
+    if (ctx.humanNudge && ctx.humanNudge.afterRound === round) {
+      const already = Array.isArray(d.humanNudges)
+        ? d.humanNudges.some((n: any) => n.afterRound === round)
+        : false;
+      if (!already) {
+        const fresh = delib.loadDeliberation(d.id);
+        try {
+          delib.transition(d.id, "CONVERGING", {
+            awaitingNudge: {
+              afterRound: round,
+              promptText: ctx.humanNudge.promptText,
+              promptedAt: new Date().toISOString(),
+            },
+          }, { expectedVersion: fresh.version });
+        } catch {}
+        return {
+          ...delib.loadDeliberation(d.id),
+          _outcome: "awaiting_nudge",
+          _awaitingNudge: { afterRound: round, promptText: ctx.humanNudge.promptText },
+        };
+      }
+    }
+
     // 3d. Decide.
     const decision = delib.decide({ deliberation: d });
 
@@ -604,6 +821,107 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
   }
 
   return { ...d, _outcome: String(d.state).toLowerCase() };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// zana_deliberation_nudge — Slice C
+//
+// Resume a deliberation that paused waiting for human input. `response` is
+// either a non-empty string (recorded as user input + injected into next-round
+// voter prompts) or null/empty (recorded as "skip"; the loop resumes without
+// changing prompts). Either way, the orchestration loop is re-driven inline.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface DeliberationNudgeArgs {
+  deliberationId: string;
+  response: string | null;
+  deps?: DeliberateDeps;
+}
+
+export async function deliberationNudgeHandler(args: DeliberationNudgeArgs): Promise<any> {
+  if (!args || typeof args !== "object" || typeof args.deliberationId !== "string") {
+    throw new Error("zana_deliberation_nudge: deliberationId is required");
+  }
+  const work = _work();
+  const delib = _delib();
+  const core = _core();
+
+  const d = delib.loadDeliberation(args.deliberationId);
+  if (!d) throw new Error(`zana_deliberation_nudge: deliberation not found: ${args.deliberationId}`);
+  if (!d.awaitingNudge) {
+    throw new Error(`zana_deliberation_nudge: deliberation ${args.deliberationId} is not awaiting a nudge`);
+  }
+
+  const responseText = typeof args.response === "string" ? args.response.trim() : "";
+  let textHash: string | null = null;
+  let contributedBy: "user" | "skip";
+  if (responseText.length > 0) {
+    const stored = work.runs.artifacts.storeContentAddressed(responseText);
+    textHash = stored.hash;
+    contributedBy = "user";
+  } else {
+    contributedBy = "skip";
+  }
+
+  delib.recordHumanNudge(
+    args.deliberationId,
+    { afterRound: d.awaitingNudge.afterRound, textHash, contributedBy },
+    { expectedVersion: d.version },
+  );
+
+  // Re-drive the orchestration loop. Resolve candidates from the existing
+  // voter list — profiles via the deps-or-default getProfile.
+  const deps = args.deps ?? {};
+  const getProfile = deps.getProfile ?? ((id: string) => core.agents.profileStore.getProfile(id));
+  const fresh = delib.loadDeliberation(args.deliberationId);
+  const candidates: { profileId: string; profile: any }[] = fresh.voters.map((v: any) => {
+    const profile = getProfile(v.profileId) || getProfile(`built-in-${v.profileId}`);
+    return { profileId: v.profileId, profile: profile ?? { id: v.profileId, model: v.modelId } };
+  });
+
+  const killAgent = deps.killAgent ?? ((id: string) => {
+    try { return core.agents.manager.killAgent(id); } catch { return false; }
+  });
+  const activeRun: ActiveRun = {
+    startedAt: Date.now(),
+    cancelled: false,
+    killAgent,
+    liveAgentIds: new Set<string>(),
+  };
+  activeRuns.set(args.deliberationId, activeRun);
+
+  const rt = delib.getRuntimeConfig();
+  const escalationStrategy: "human" | "judge" | "hybrid" =
+    (rt.escalationStrategy as "human" | "judge" | "hybrid" | undefined) ?? "human";
+
+  // Reconstitute the original prompt snapshot from CAS so round-N voter
+  // prompts contain the original question + any nudge addenda.
+  let restoredPrompt = "";
+  try {
+    const buf = work.runs.artifacts.readContentAddressed(fresh.promptSnapshotHash);
+    if (buf) restoredPrompt = String(buf);
+  } catch {}
+  if (restoredPrompt === "") {
+    restoredPrompt = `# Deliberation\n\n## Question\n${fresh.question}\n`;
+  }
+
+  const ctx: RunDeliberationContext = {
+    deliberationId: args.deliberationId,
+    candidates,
+    promptSnapshot: restoredPrompt,
+    deps,
+    rounds: fresh.rounds,
+    getProfile,
+    activeRun,
+    escalationStrategy,
+    humanNudge: null, // already-resumed run; nudge already recorded
+    skipFirstCollectAndSynth: true,
+  };
+
+  try {
+    return await runDeliberation(ctx);
+  } finally {
+    activeRuns.delete(args.deliberationId);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -777,9 +1095,31 @@ export const deliberateTool = {
     properties: {
       question: { type: "string", description: "What the council is deliberating on." },
       voters: {
-        type: "array",
-        description: "Voter profile IDs. Defaults to ['architect','security-reviewer','researcher'] when omitted.",
-        items: { type: "string" },
+        anyOf: [
+          {
+            type: "array",
+            items: { type: "string" },
+            description: "Explicit voter profile IDs.",
+          },
+          {
+            type: "object",
+            required: ["pack"],
+            properties: {
+              pack: {
+                type: "string",
+                enum: ["arch", "code-review", "plan", "review"],
+                description: "Role-pack id; resolves to a deterministic voter list.",
+              },
+              quantity: {
+                type: "number",
+                description: "Number of voter slots to fill from the pack ladder. Default 3.",
+              },
+            },
+          },
+        ],
+        description:
+          "Voters to convene. Either an explicit profile-id array OR a named role pack { pack, quantity? }. " +
+          "Defaults to ['architect','security-reviewer','researcher'] when omitted.",
       },
       rounds: { type: "number", description: "Hard cap on convergence rounds (default from module config)." },
       quorum: {
@@ -813,6 +1153,54 @@ export const deliberateTool = {
           "'judge' / 'hybrid' auto-resolve a non-high-risk ESCALATED outcome by spawning a judge agent that reads the transcript and emits a verdict. " +
           "'human' leaves the deliberation ESCALATED so an operator can call zana_deliberation_override. " +
           "riskTag='high' always escalates to a human regardless of this setting.",
+      },
+      voterModels: {
+        type: "object",
+        additionalProperties: { type: "string" },
+        description:
+          "Per-voter model override: { profileId → modelId }. Replaces the profile's declared model for this deliberation only. Each model must be in the local registry.",
+      },
+      modelDiversity: {
+        type: "string",
+        enum: ["uniform", "mixed"],
+        description:
+          "uniform (default) — every voter uses its profile's declared model. mixed — rotate through {claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7} for monoculture-resistance. Per-voter overrides in voterModels still win over the rotation.",
+      },
+      humanNudge: {
+        oneOf: [
+          { type: "boolean", enum: [false] },
+          {
+            type: "object",
+            required: ["afterRound"],
+            properties: {
+              afterRound: { type: "number", description: "Round number after which to pause for human input." },
+              promptText: { type: "string", description: "Optional prompt shown to the operator." },
+            },
+          },
+        ],
+        description:
+          "Pause the loop after synthesizing the named round and exit with _outcome='awaiting_nudge'. " +
+          "Resume via zana_deliberation_nudge with either a free-text response (injected into next round) or null/empty (skip).",
+      },
+    },
+  },
+};
+
+export const deliberationNudgeTool = {
+  name: "zana_deliberation_nudge",
+  description:
+    "Resume a paused deliberation by recording an optional human reviewer note. " +
+    "Pass `response` as a non-empty string to inject the text verbatim into the next round's voter prompts (recorded with contributedBy='user'). " +
+    "Pass null or an empty string to record a 'skip' and continue without changing prompts. " +
+    "Errors if the deliberation is not currently awaiting a nudge.",
+  inputSchema: {
+    type: "object",
+    required: ["deliberationId"],
+    properties: {
+      deliberationId: { type: "string" },
+      response: {
+        anyOf: [{ type: "string" }, { type: "null" }],
+        description: "Free-text human note. null or empty string = skip.",
       },
     },
   },
@@ -887,6 +1275,7 @@ export const DELIBERATION_TOOLS = [
   deliberationListTool,
   deliberationOverrideTool,
   deliberationCancelTool,
+  deliberationNudgeTool,
 ];
 
 // Re-export the collected-review type for tests.

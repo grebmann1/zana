@@ -131,6 +131,25 @@ export interface Deliberation {
   // means audit consumers can answer "why is voter X missing from this
   // round?" by reading the deliberation alone.
   degradation?: DegradationEntry[];
+
+  // Slice C — Mid-deliberation human nudges. Append-only audit of any human
+  // input collected between rounds via zana_deliberation_nudge. Verbatim text
+  // is content-addressed in CAS (textHash); contributedBy="skip" means the
+  // user explicitly chose not to add input but the loop was paused.
+  humanNudges?: HumanNudge[];
+
+  // Slice C — When set, the orchestration loop has reached a configured
+  // human-nudge pause and is awaiting input. Cleared once the nudge is
+  // recorded (via recordHumanNudge) and the loop resumes. Lives inside the
+  // CONVERGING state — NOT a top-level state.
+  awaitingNudge?: { afterRound: number; promptText: string; promptedAt: string };
+}
+
+export interface HumanNudge {
+  afterRound: number;
+  textHash: string | null;        // null when contributedBy === "skip"
+  contributedBy: "user" | "skip";
+  ts: string;
 }
 
 export interface DroppedVoterAudit {

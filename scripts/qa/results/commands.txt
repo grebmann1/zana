@@ -4,10 +4,10 @@ S1     PASS  list_agents: []
 S2     PASS  list_running_teams: []
 S3     PASS  sprint_list: [{"id":"8ea18e7e-2503-4b68-b71f-d3b3e1b0aa9a","name":"MCP boot diagnostics 2026-
 S4     PASS  autopilot_goal_list: []
-S5     PASS  deliberation_list: [{"id":"427e1db5-f91c-4338-962d-7a39e2cd055a","state":"ESCALATED","question":"I'
+S5     PASS  deliberation_list: [{"id":"fabe7e5f-f3a5-48e3-bc64-822c9a388602","state":"ESCALATED","question":"I'
 M1     PASS  memory_search returned 3 match(es)
-T1     PASS  ticket_create id=2129b5d7-8109-4f2c-9770-0d825ac3d907
-T2     PASS  ticket_list found=true (n=52)
+T1     PASS  ticket_create id=7b68b7a3-4128-4def-a3b9-5db309e2be15
+T2     PASS  ticket_list found=true (n=53)
 T3     PASS  ticket_complete status=?
 TM1    PASS  list_teams returned 9 template(s)
 TM2    PASS  zana_get_team reachable
