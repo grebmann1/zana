@@ -28,8 +28,18 @@ import MythicDivider from '../../../../components/MythicDivider.astro';
 
     <article class="prose-zana mt-12 max-w-prose space-y-10">
       <section>
-        <h2 class="font-display text-2xl text-forest">The full lifecycle</h2>
-        <CodeBlock caption="claude code · MCP" lang="text">{`zana_ticket_create({
+        <h2 class="font-display text-2xl text-forest">Native — one slash command</h2>
+        <p class="mt-2 text-moss">In Claude Code, the simplest path is a team. The plugin maps slots to background <code class="rounded bg-parchment px-1.5 py-0.5">Agent()</code> calls and wires SendMessage handoffs for you.</p>
+        <CodeBlock caption="claude code" lang="text">{`/zana:team backend-squad "Reply with PONG"
+# → spawns architect + backend-dev(s) + test-writer in this session,
+#   each named, each running in background, no daemon required.`}</CodeBlock>
+        <p class="mt-2 text-sm text-moss">For one-off solo work without a template, spawn a single named background <code class="rounded bg-parchment px-1.5 py-0.5">Agent</code> directly and SendMessage from your conversation.</p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Daemon — full ticket lifecycle</h2>
+        <p class="mt-2 text-moss">When work needs to outlive the chat (CI, cron, autopilot), drive the same primitives through MCP:</p>
+        <CodeBlock caption="claude code · MCP (daemon path)" lang="text">{`zana_ticket_create({
   title: "QA-live: confirm PONG",
   description: "Reply with PONG to confirm.",
   priority: "low"
@@ -57,6 +67,11 @@ zana_ticket_complete({
 
       <section>
         <h2 class="font-display text-2xl text-forest">Why a ticket?</h2>
+        <p class="mt-2 text-moss leading-relaxed">
+          The ticket is the unit of dispatch on either path — native team
+          members can also claim tickets, and CI/cron jobs run against the
+          same store.
+        </p>
         <p class="mt-2 text-moss leading-relaxed">
           A ticket is a <em>contract</em>: a sized scope, a status the daemon
           can reason about, and an audit trail every step of the way. Zana

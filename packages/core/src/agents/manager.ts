@@ -1390,8 +1390,8 @@ export async function handleOrchestratorCommand(payload, getWorkspaceFn) {
       const daemons = swarmSpawner.listSubDaemons().filter((h) => h.status === "running");
       const results = [];
       for (const h of daemons) {
-        const r = await swarmSpawner.instructSubDaemon(h.daemonId || h.daemonId, params.message);
-        results.push({ daemonId: h.daemonId || h.daemonId, ...r });
+        const r = await swarmSpawner.instructSubDaemon(h.daemonId, params.message);
+        results.push({ daemonId: h.daemonId, ...r });
       }
       return { ok: true, results };
     }

@@ -2,37 +2,6 @@
 
 Scenario specs (authored by Phase A QA team) live under `scenarios/`.
 
-## How to run
-
-Phase B testers walk the markdown specs directly:
-
-```bash
-# clean slate
-rm -rf /tmp/zana-qa-* && node dist/bin/zana.js stop --all 2>/dev/null
-
-# fast: CLI + MCP
-bash scripts/qa/run-fast.sh   # produces results/cli.txt + results/mcp.txt
-
-# slow: daemon + plugin lifecycle (touches ~/.zana/)
-bash scripts/qa/run-slow.sh   # produces results/daemon.txt
-```
-
-Each results file is a flat list:
-
-```
-S1   PASS  zana --help
-S2   PASS  zana init creates .zana/
-...
-S99  FAIL  <reason>
-```
-
-Aggregate summary printed at end: `100% PASS (N scenarios, M deferred)`.
-
-## Pass-rate target
-
-100%. Failures must be fixed and the failing scenario re-run before the
-suite is considered green.
-
 ## Live-Claude-Code scripts
 
 These exercise real agent dispatch — they spawn the local `claude` CLI as

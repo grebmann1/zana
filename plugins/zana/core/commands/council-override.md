@@ -35,7 +35,7 @@ The reason is content-addressed and stamped onto the deliberation. The deliberat
    - Confirmation that the override was recorded
    - The `humanOverride` block from the returned deliberation (humanId, decision, reasonHash, ts)
    - New `state` (should be SETTLED) and `verdict`
-   - Audit path: `~/.zana/checkpoints/<deliberationId>.json`
+   - Audit path: `<workspace>/.zana/checkpoints/<deliberationId>.json`
 
 ## Rules
 

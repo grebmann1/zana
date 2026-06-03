@@ -11,6 +11,8 @@ import * as authMiddleware from "./auth-middleware";
 let server = null;
 let daemonInstance = null;
 
+const AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+
 function readBody(req) {
   return new Promise((resolve) => {
     let data = "";
@@ -506,6 +508,7 @@ async function handleRequest(req, res) {
   if (method === "GET" && pathname === "/swarm/inbox") {
     const agentId = url.searchParams.get("agentId");
     if (!agentId) { json(res, { error: "agentId required" }, 400); return; }
+    if (!AGENT_ID_PATTERN.test(agentId)) { json(res, { error: "invalid agentId" }, 400); return; }
     const drain = url.searchParams.get("drain") === "true";
     const messages = drain
       ? daemon.swarmRouter.drainInbox(agentId)
@@ -516,6 +519,10 @@ async function handleRequest(req, res) {
   if (method === "POST" && pathname === "/swarm/inbox") {
     const body = await readBody(req);
     if (body.toAgentId) {
+      if (!AGENT_ID_PATTERN.test(body.toAgentId)) {
+        json(res, { ok: false, error: "invalid toAgentId" }, 400);
+        return;
+      }
       daemon.swarmRouter.deliverLocal(body.toAgentId, body);
     }
     json(res, { ok: true });

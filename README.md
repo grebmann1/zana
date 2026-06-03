@@ -1,15 +1,21 @@
 # Zana
 
-Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daemon, exposes an MCP server that Claude Code attaches to, and lets a single conversation spawn, supervise, and synthesize the work of many specialized worker agents — each with its own profile, context, and tool surface.
+Zana is a multi-agent orchestrator for Claude Code, available on **two paths**:
+
+- **Native** (default in chat) — install the plugin (`/plugin install zana@zana-marketplace`), then type `/zana:team`, `/zana:council`, `/zana:autopilot`, etc. Slash commands drive Claude Code's first-class `Agent` + `SendMessage` primitives. No daemon required.
+- **Daemon** (headless / CI / cron) — a long-lived process exposing an MCP server (`mcp__zana__zana_*`) for scheduled tasks, autopilot loops, and multi-daemon swarms that must outlive any chat.
+
+Templates, profiles, tickets, sprints, artifacts, and deliberation work the same on both paths.
 
 ## What Zana is
 
-- Multi-agent orchestrator for Claude Code
-- MCP server exposing 91 `zana_*` tools for spawning agents, managing tickets/sprints, scheduling, and deliberation
-- A standalone CLI (`zana …`) for use without Claude Code — same primitives, different surface
+- Multi-agent orchestrator for Claude Code — native plugin first, daemon for headless
+- 30 slash commands across two plugins (`zana@zana-marketplace`, `zana-loop@zana-marketplace`)
+- 93 MCP `zana_*` tools (daemon path) for spawning agents, managing tickets/sprints, scheduling, and deliberation
+- A standalone CLI (`zana …`) for the daemon path — same primitives, different surface
 - Pluggable module system for adding new capabilities without forking the core
 
-## Repository layout (7 packages)
+## Repository layout (7 packages + 2 plugins)
 
 - `packages/core` — foundational engine (agents, events, project, modules, persistence)
 - `packages/work` — work tracking (tickets, scheduling, teams, runs)
@@ -32,20 +38,20 @@ Zana is a multi-agent orchestrator for Claude Code. It runs as a long-lived daem
 
 Zana is the same engine either way; the difference is who issues the commands.
 
-### A. From Claude Code (slash-command + MCP)
+### A. From Claude Code (native plugin)
 
-The richer surface. After install, restart Claude Code, then in any
-workspace:
+The default surface. After installing the plugin, in any workspace:
 
 ```
-/zana spawn team --members researcher,architect,coder,tester --topology pipeline --task "…"
-/zana:council         # multi-voter deliberation
-/zana:autopilot       # goal-driven loop
-/zana:schedule:list   # daemon-driven schedules
-/zana:loop:start      # daemon-free /loop scheduling
+/zana <task>                       # free-form orchestrator (spawns Agent + SendMessage)
+/zana:team <teamId> <prompt>       # spawn a curated team in-session
+/zana:council <question>           # multi-voter deliberation
+/zana:autopilot <goal>             # goal-driven loop
+/zana:schedule:list                # daemon-driven schedules (requires daemon)
+/zana:loop:start                   # daemon-free /loop scheduling
 ```
 
-24 slash commands + 91 MCP tools (`mcp__zana__zana_*`). See
+30 slash commands across two plugins. See
 [plugins/zana/core/commands/](plugins/zana/core/commands/) and
 [plugins/zana/loop/commands/](plugins/zana/loop/commands/).
 
@@ -110,7 +116,6 @@ For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the additional `z
 
 ## Status
 
-- Tests: 458/458 (45 test files)
 - Recent work:
   - `zana-loop` plugin: `/zana:loop:start|stop|define` drive `.zana/scheduler/*.yml` via Claude Code's `/loop` — no daemon required
   - `ZANA_RUNTIME=vercel-ai` dispatcher (Phase 3) + ClaudeSpawnAdapter (Phase 0–1, Phase 2)

@@ -21,17 +21,12 @@ export function scaffold(name, targetDir) {
   };
 
   const packageJson = {
-    name: `swarm-plugin-${name}`,
+    name: `zana-plugin-${name}`,
     version: "0.1.0",
     main: "index.js",
-    dependencies: {
-      "@zana-ai/sdk": "^0.1.0",
-    },
   };
 
-  const indexJs = `const { definePlugin } = require("@zana-ai/sdk/plugin");
-
-module.exports = definePlugin({
+  const indexJs = `module.exports = {
   id: "${name}",
   name: "${displayName}",
   version: "0.1.0",
@@ -43,7 +38,11 @@ module.exports = definePlugin({
       logger.info(\`Agent spawned: \${event.payload.profileName || event.source}\`);
     });
   },
-});
+
+  deactivate() {
+    // Cleanup hook — called on plugin unload.
+  },
+};
 `;
 
   fs.writeFileSync(path.join(targetDir, "plugin.json"), JSON.stringify(pluginJson, null, 2) + "\n", "utf8");

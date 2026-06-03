@@ -27,8 +27,16 @@ import MythicDivider from '../../../../components/MythicDivider.astro';
 
     <article class="prose-zana mt-12 max-w-prose space-y-10">
       <section>
-        <h2 class="font-display text-2xl text-forest">Run a council</h2>
-        <CodeBlock caption="claude code · MCP" lang="text">{`zana_deliberate({
+        <h2 class="font-display text-2xl text-forest">Native — slash command</h2>
+        <p class="mt-2 text-moss">In a Claude Code session, just convene the council:</p>
+        <CodeBlock caption="claude code" lang="text">{`/zana:council "Should we drop Node 18 support in v2.0?"
+# Picks voters, runs rounds, surfaces verdict + dissent in the chat.`}</CodeBlock>
+        <p class="mt-2 text-sm text-moss">Use <code class="rounded bg-parchment px-1.5 py-0.5">/zana:council:status</code>, <code class="rounded bg-parchment px-1.5 py-0.5">/zana:council:list</code>, and <code class="rounded bg-parchment px-1.5 py-0.5">/zana:council:override</code> to drive it.</p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-2xl text-forest">Daemon — run a council via MCP</h2>
+        <CodeBlock caption="claude code · MCP (daemon path)" lang="text">{`zana_deliberate({
   question: "Should we drop Node 18 support in v2.0?",
   voters: ["architect", "security-reviewer", "researcher"],
   rounds: 3,

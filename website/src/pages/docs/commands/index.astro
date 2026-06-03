@@ -15,6 +15,9 @@ const groups: Group[] = [
       { name: '/zana', args: '<task>', desc: 'Top-level coordinator. Spawns teams, manages sprints, runs autopilot — you become the executive.' },
       { name: '/zana:status', desc: 'Read-only dashboard: running agents, teams, sprints, autopilot goals, deliberations.' },
       { name: '/zana:memory', args: '<query>', desc: 'Vector-search Zana memory for prior patterns, decisions, run notes. Search-only.' },
+      { name: '/zana:trust', desc: 'Mark this workspace as trusted so background agents can run without per-call permission prompts.' },
+      { name: '/zana:version', desc: 'Print installed plugin + daemon versions and verify the marketplace registration.' },
+      { name: '/zana:update', desc: 'Pull the latest plugin release from the marketplace and walk you through the reinstall steps.' },
     ],
   },
   {
@@ -32,10 +35,12 @@ const groups: Group[] = [
     title: 'Teams',
     plugin: 'zana',
     commands: [
-      { name: '/zana:team', args: '<teamId> <prompt>', desc: 'Spawn a curated team — orchestrator + worker slots — to run a prompt.' },
-      { name: '/zana:team:list', desc: 'List configured templates and currently running teams.' },
-      { name: '/zana:team:status', args: '<teamId>', desc: 'Read live state of a running team. Read-only.' },
-      { name: '/zana:team:stop', args: '<teamId>', desc: 'Stop a running team. Kills orchestrator + every worker. Confirms before mutating.' },
+      { name: '/zana:team', args: '<teamId> <prompt>', desc: 'Spawn a curated team natively in this Claude Code session via Agent + SendMessage. No daemon needed; agents run as named background subagents.' },
+      { name: '/zana:team:list', desc: 'List configured templates and any teams running on the daemon.' },
+      { name: '/zana:team:status', args: '<teamId>', desc: 'Read live state of a daemon team. Native teams live in this session — check the host conversation instead.' },
+      { name: '/zana:team:stop', args: '<teamId>', desc: 'Stop a daemon team. Native teams are managed by Claude Code\'s agent controls.' },
+      { name: '/zana:team:save', args: '<teamId>', desc: 'Author or update a team template (slots, worker profiles, initial prompt) and persist it to the team store.' },
+      { name: '/zana:team:delete', args: '<teamId>', desc: 'Delete a team template from the store. Confirms before mutating.' },
     ],
   },
   {
@@ -88,7 +93,7 @@ const totalCmds = groups.reduce((n, g) => n + g.commands.length, 0);
 
 <BaseLayout
   title="Docs · Commands"
-  description="Every Zana slash command, grouped by family. Two plugins ship 25 commands total."
+  description="Every Zana slash command, grouped by family. Two plugins ship 30 commands total."
 >
   <DocsSubnav />
 

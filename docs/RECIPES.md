@@ -143,8 +143,8 @@ Initial status is always `backlog` — there's no `open`.
 **2. Claim it.**
 
 ```jsonc
-zana_ticket_claim({ ticketId, agentId: "<your-id>", agentName: "QA Live" })
-// → { ok: true, status: "in_progress" }
+zana_ticket_claim({ ticketId })
+// → { ok: true, status: "in-progress" }
 ```
 
 **3. Spawn a worker.**
@@ -166,14 +166,15 @@ then read the result with `zana_agent_result`. Real-Claude workers can take
 ```jsonc
 zana_ticket_complete({
   ticketId,
-  resultSummary: "Worker confirmed: PONG",
-  completedBy: "qa-live"
+  resultSummary: "Worker confirmed: PONG"
 })
-// → { ok: true, status: "done" }
+// → { ok: true, ticket: { …, status: "done", resultSummary: "…" } }
 
 zana_ticket_get({ ticketId })
 // → { …, status: "done", resultSummary: "…" }
 ```
+
+> **Native equivalent (chat):** `/zana:ticket "<title>"` to create, then spawn a worker with `Agent({ subagent_type, name, prompt, run_in_background: true })` and `SendMessage` it the ticket id. The MCP form above is the daemon path.
 
 **Live test result (`scripts/qa/run-ticket-live.sh`):**
 
@@ -423,10 +424,10 @@ zana_start_team({
   prompt: "Review packages/work/src/scheduling for race conditions.",
   cwd: "/abs/path/to/repo"
 })
-// → { runId, orchestratorAgentId, workerAgentIds: [...] }
+// → { ok: true, orchestratorAgentId, terminalId }
 
 zana_team_status({ teamId })
-// → { runId, orchestrator: { id, state }, workers: [{ id, profileId, state }, ...] }
+// → { orchestrator: { id, state }, workers: [{ id, profileId, state }, ...] }
 
 zana_list_running_teams({})
 // → all currently-active team runs
@@ -460,10 +461,12 @@ zana_sprint_start({ sprintId })
 
 zana_sprint_board({ sprintId })
 // → {
-//   backlog:    [...tickets with status==='backlog'],
-//   inProgress: [...],
-//   review:     [...],
-//   done:       [...]
+//   backlog:       [...tickets with status==='backlog'],
+//   "in-progress": [...],
+//   review:        [...],
+//   rework:        [...],
+//   blocked:       [...],
+//   done:          [...]
 // }
 
 zana_sprint_list({ status: "active" })   // optional filter
@@ -543,17 +546,17 @@ ordered list of MCP tool calls with templated arguments. Run one ad-hoc with
 `zana_workflow_run` or schedule it with `type: workflow`.
 
 ```jsonc
-zana_workflow_run({ skillId: "triage-stale-tickets", input: { dayThreshold: 14 } })
+zana_workflow_run({ skillId: "triage-stale-tickets", ticketId: "T-123" })
 // → { runId, status: "running" }
 
 zana_workflow_list_runs({})
-// → [ { runId, skillId, status, startedAt, finishedAt }, ... ]
+// → [ { runId, skillId, status, startedAt, completedAt }, ... ]
 
 zana_workflow_get_run({ runId })
 // → {
 //   id, skillId, status: "completed" | "failed" | "running",
 //   steps: [ { name, toolName, toolArgs, result, status }, ... ],
-//   startedAt, finishedAt, error?
+//   startedAt, completedAt, error?
 // }
 ```
 
@@ -583,14 +586,15 @@ zana_send_message({
 })
 // → { ok: true, delivered: "local" | "remote" | "failed", messageId }
 
-zana_check_inbox({ agentId })
+zana_check_inbox({})
 // → [ { messageId, from, type, payload, sentAt, ackRequired }, ... ]
+//   (the calling agent's id comes from the daemon-side context)
 
 zana_send_ack({ messageId, status: "completed", response: "Review done — LGTM" })
 // → ok
 
 // Synchronous ask/answer (rarely needed):
-zana_ask_agent({ targetAgentId, question, timeoutMs: 60000 })
+zana_ask_agent({ toAgentId, question })
 // → string answer
 ```
 
@@ -612,11 +616,11 @@ zana_memory_store({
   tags: ["scheduling", "race-condition", "bugfix"],
   metadata: { ticketId, commitSha: "abc1234" }
 })
-// → { id, embeddingId }
+// → { id, tier }
 
 zana_memory_search({
   query: "scheduler race condition",
-  k: 5,                                  // top-k results
+  limit: 5,                              // top-k results
   tags: ["scheduling"]                   // optional filter
 })
 // → [ { id, content, score, tags, metadata }, ... ]
@@ -643,12 +647,12 @@ zana_publish_channel({
   payload: { ticketId, decision: "approve", reviewer: agentId }
 })
 
-zana_subscribe_channel({ agentId, channel: "code-review" })
+zana_subscribe_channel({ channel: "code-review" })
 zana_list_channels({})
 zana_channel_history({ channel: "code-review", limit: 50 })
 
 // Event bus
-zana_event_emit({ type: "custom:my-event", data: { ... } })
+zana_event_emit({ type: "custom:my-event", payload: { ... } })
 zana_event_query({ types: ["agent:spawned", "ticket:completed"], since: "2026-05-29T00:00:00Z", limit: 100 })
 ```
 
@@ -668,11 +672,13 @@ CRUD-able through MCP.
 zana_list_profiles({})
 zana_get_profile({ profileId })
 zana_save_profile({
-  id: "security-auditor",
-  name: "Security Auditor",
-  systemPrompt: "...",
-  allowedTools: ["Read", "Grep", "WebFetch"],
-  inheritsFrom: "researcher"             // optional
+  profile: {
+    id: "security-auditor",
+    name: "Security Auditor",
+    systemPrompt: "...",
+    allowedTools: ["Read", "Grep", "WebFetch"],
+    inheritsFrom: "researcher"             // optional
+  }
 })
 zana_delete_profile({ profileId })
 
@@ -680,9 +686,11 @@ zana_delete_profile({ profileId })
 zana_list_skills({})
 zana_get_skill({ skillId })
 zana_save_skill({
-  id: "owasp-top-10",
-  type: "instruction",                   // instruction | workflow
-  body: "...markdown content..."
+  skill: {
+    id: "owasp-top-10",
+    type: "instruction",                   // instruction | workflow
+    content: "...markdown content..."
+  }
 })
 zana_toggle_skill({ skillId, enabled: false })
 zana_delete_skill({ skillId })
@@ -711,9 +719,10 @@ zana_module_config_get({ moduleId: "deliberation" })
 
 zana_module_config_set({
   moduleId: "deliberation",
-  config: { defaultRounds: 3, voterTimeoutMs: 1800000 }   // partial update
+  key: "defaultRounds",
+  value: 3
 })
-// → { ok: true, current: {...merged config} }
+// → { ok: true }
 ```
 
 **Knobs worth knowing.** Deliberation: `voterTimeoutMs` (default 20 min —
@@ -732,13 +741,12 @@ checkpoints from your own workflows.
 
 ```jsonc
 zana_checkpoint_save({
-  runId,
-  name: "after-research",
-  state: { foundFiles: [...], ranked: true }
+  teamId,
+  pendingAgents: [{ agentId, profileId, prompt }, ...]
 })
-// → { id, runId, name, savedAt }
+// → { ok: true, checkpointId }
 
-zana_checkpoint_list({ runId })
+zana_checkpoint_list({})
 zana_checkpoint_get({ checkpointId })
 zana_checkpoint_resume({ checkpointId })
 // → re-hydrates the run from the saved state and returns control
@@ -760,9 +768,9 @@ orchestrator + worker formation; the parent routes events and broadcasts.
 zana_swarm_spawn({
   teamId: "feature-pipeline",
   prompt: "Implement v2 auth — design, code, test, review, document.",
-  cwd: "/abs/path/to/repo"
+  workspace: "/abs/path/to/repo"
 })
-// → { daemonId, port, pid }
+// → { daemonId, pid }
 
 zana_swarm_list({})
 // → [ { daemonId, port, status, runId, ... }, ... ]
@@ -801,7 +809,7 @@ zana_spawn_agent_validated({
   ],
   maxRetries: 2                          // default 2
 })
-// → { agentId, status: "spawned", guardrailsApplied: 3 }
+// → { agentId, status: "spawned" }
 ```
 
 Each retry receives the validation feedback as additional prompt context, so

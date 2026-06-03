@@ -1327,14 +1327,6 @@ function handleScratchpad(args) {
   }
 }
 
-function handleBroadcast(args) {
-  if (localDaemon && localDaemon.swarmRouter) {
-    localDaemon.swarmRouter.broadcast(args.message || "");
-    return { ok: true };
-  }
-  return { ok: false, error: "swarm not available" };
-}
-
 function sendResponse(id, result) {
   const msg = { jsonrpc: "2.0", id, result };
   process.stdout.write(JSON.stringify(msg) + "\n");
@@ -1628,7 +1620,6 @@ async function handleToolCall(name, args, callerAgentId) {
       if (toolSkill) {
         const handler = toolSkill.skill.handler;
         if (handler === "scratchpad") return handleScratchpad(args);
-        if (handler === "broadcast") return handleBroadcast(args);
         return { error: `no handler implemented for: ${handler}` };
       }
 

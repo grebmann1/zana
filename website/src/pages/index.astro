@@ -49,10 +49,12 @@ const features = [
       <h2 class="font-display text-4xl text-forest">What is Zana?</h2>
       <div class="text-lg leading-relaxed text-ink/85">
         <p>
-          Zana is a long-lived daemon that exposes an
-          <abbr title="Model Context Protocol">MCP</abbr> server, letting a
-          single conversation in Claude Code spawn, supervise, and synthesize
-          the work of many specialized worker agents.
+          Zana is a multi-agent orchestrator for Claude Code, on two paths.
+          <strong>Native</strong> — install the plugin, type <code class="rounded bg-parchment px-1 text-sm">/zana:team</code>,
+          and a single conversation spawns, supervises, and synthesizes the
+          work of many specialized subagents. <strong>Daemon</strong> — a
+          long-lived <abbr title="Model Context Protocol">MCP</abbr> server
+          for headless / CI / cron when work must outlive any chat.
         </p>
         <p class="mt-4">
           You become the executive coordinator. Workers implement. Zana keeps
@@ -82,28 +84,25 @@ const features = [
         <p class="ornament text-xs text-gold">— a real first session —</p>
         <h2 class="mt-3 font-display text-4xl text-forest">From install to a worker on a ticket — in three calls.</h2>
         <p class="mt-4 text-moss leading-relaxed">
-          Zana ships as an MCP server you wire into Claude Code. After install
-          you call <code class="rounded bg-parchment px-1.5 py-0.5 text-sm text-ink">zana_*</code>
-          tools straight from Claude. The transcript on the right is the
-          ticket-driven worker recipe — every line is run end-to-end by
+          Native usage is one slash command —
+          <code class="rounded bg-parchment px-1.5 py-0.5 text-sm text-ink">/zana:team &lt;teamId&gt; &lt;prompt&gt;</code>
+          spawns a curated team in your current Claude Code session. The
+          transcript on the right is the daemon-path ticket-worker recipe —
+          every line is run end-to-end by
           <code class="rounded bg-parchment px-1.5 py-0.5 text-sm text-ink">scripts/qa/run-ticket-live.sh</code>
-          against real Claude (7/7 passing).
+          against real Claude.
         </p>
         <a href="/docs/" class="mt-6 inline-flex text-forest font-medium underline-offset-4 hover:underline">
           Read the full quickstart →
         </a>
       </div>
       <div class="space-y-4">
-        <CodeBlock caption="1 · install (node 20+)" lang="bash">{`# fastest — from npm
-npm install -g @zana-ai/mcp
-
-# or full repo + slash-command plugins
-git clone https://github.com/grebmann1/zana.git
-cd zana && bash scripts/install.sh
-claude plugin marketplace add "$(pwd)"
-claude plugin install zana@zana-marketplace
-claude plugin install zana-loop@zana-marketplace`}</CodeBlock>
-        <CodeBlock caption="2 · ticket → worker → done (real MCP)" lang="text">{`zana_ticket_create({
+        <CodeBlock caption="1 · install (Claude Code plugin — native path)" lang="bash">{`/plugin marketplace add grebmann1/zana
+/plugin install zana@zana-marketplace
+/plugin install zana-loop@zana-marketplace
+# restart Claude Code, then in any workspace:
+/zana:team backend-squad "Add a /healthz endpoint"`}</CodeBlock>
+        <CodeBlock caption="2 · daemon path — ticket → worker → done (real MCP)" lang="text">{`zana_ticket_create({
   title: "Confirm PONG", priority: "low",
   description: "Reply with PONG to confirm."
 })
@@ -115,7 +114,7 @@ zana_spawn_agent({ profileId: "researcher",
 
 zana_ticket_complete({ ticketId: "tkt_abc",
   resultSummary: "Worker confirmed: PONG" })
-// → { ok: true, status: "done" }`}</CodeBlock>
+// → { ok: true, ticket: { …, status: "done" } }`}</CodeBlock>
       </div>
     </div>
   </section>

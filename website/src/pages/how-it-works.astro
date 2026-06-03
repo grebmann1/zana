@@ -86,7 +86,7 @@ const lifecycle = [
   <section class="container-zana py-20">
     <MythicDivider />
     <h2 class="mt-10 font-display text-4xl text-forest">Six primitives.</h2>
-    <p class="mt-3 max-w-2xl text-moss">Composable, named, observable. Each survives daemon restarts; each leaves an audit trail.</p>
+    <p class="mt-3 max-w-2xl text-moss">Composable, named, observable. Native runs live inside one Claude Code session; the daemon path persists across restarts. Both leave an audit trail.</p>
     <div class="mt-12 grid gap-8 md:grid-cols-2">
       {primitives.map((p, i) => (
         <article class="rounded-2xl border border-forest/10 bg-cream p-7">
@@ -131,16 +131,21 @@ const lifecycle = [
           report to next.
         </p>
       </div>
-      <CodeBlock caption="agent-team.ts" lang="ts">{`Agent({ name: "researcher",
+      <CodeBlock caption="agent-team.ts" lang="ts">{`// Spawn the whole team in ONE message, all in background.
+Agent({ name: "researcher", subagent_type: "researcher",
+  run_in_background: true,
   prompt: "Survey codebase. SendMessage findings to 'architect'." })
 
-Agent({ name: "architect",
+Agent({ name: "architect", subagent_type: "Plan",
+  run_in_background: true,
   prompt: "Wait for 'researcher'. Design solution. SendMessage to 'coder'." })
 
-Agent({ name: "coder",
-  prompt: "Wait for 'architect'. Implement. SendMessage results to 'tester'." })
+Agent({ name: "coder", subagent_type: "general-purpose",
+  run_in_background: true,
+  prompt: "Wait for 'architect'. Implement. SendMessage to 'tester'." })
 
-Agent({ name: "tester",
+Agent({ name: "tester", subagent_type: "general-purpose",
+  run_in_background: true,
   prompt: "Wait for 'coder'. Verify. SendMessage to 'reviewer'." })
 
 // kick off the pipeline

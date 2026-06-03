@@ -184,10 +184,17 @@ Verify:
 
 ```bash
 claude plugin details zana@zana-marketplace
-# Skills count should be 23 (council family + autopilot/team/ticket/schedule/memory/status + collaboration/orchestration/zana).
+# Commands: 27 (zana, status, memory, trust, version, update,
+#               team {.,save,delete,list,status,stop},
+#               ticket {.,list,complete},
+#               autopilot {.,discover,list,status,cancel},
+#               council {.,list,status,override},
+#               schedule {list,reload,trigger}).
+# Skills: 2 (collaboration, orchestration).
 
 claude plugin details zana-loop@zana-marketplace
-# Skills count should be 4 (loop-start + loop-stop + loop-define + zana-scheduler).
+# Commands: 3 (loop:start, loop:stop, loop:define).
+# Skills: 1 (scheduler).
 ```
 
 ### 6. Register the Zana MCP server
@@ -432,7 +439,7 @@ claude plugin marketplace remove zana-marketplace
 claude mcp remove zana
 
 # Remove CLI
-npm uninstall -g zana
+npm uninstall -g @zana-ai/mcp
 
 # (Optional) wipe state — irreversible
 rm -rf ~/.zana
@@ -461,8 +468,8 @@ claude mcp list 2>&1 | grep -q 'zana.* ✓ Connected'
 claude plugin marketplace add "$(pwd)" 2>&1 | tail -1
 claude plugin install zana@zana-marketplace
 claude plugin install zana-loop@zana-marketplace
-claude plugin details zana@zana-marketplace | grep -q 'Skills (23)'
-claude plugin details zana-loop@zana-marketplace | grep -q 'Skills (4)'
+claude plugin details zana@zana-marketplace | grep -q 'Skills (2)'
+claude plugin details zana-loop@zana-marketplace | grep -q 'Skills (1)'
 node dist/bin/zana.js headless "$(pwd)" --background &
 sleep 4
 node dist/bin/zana.js status | grep -q '●'

@@ -9,7 +9,7 @@ const groups = [
     features: [
       { title: 'Agent profiles', body: '18 built-ins ship in core: api-designer, architect, backend-dev, code-reviewer, debugger, doc-generator, frontend-dev, full-auto-coder, judge, orchestrator, performance-engineer, researcher, security-reviewer, slack-notifier, swarm-master, swarm-orchestrator, test-writer, ux-designer. Add your own under ~/.zana/profiles/.' },
       { title: 'Topologies', body: 'Pipeline, fan-out, supervisor, and hierarchical-mesh. The right shape for sequential dependencies, independent parallel work, or ongoing coordination.' },
-      { title: 'Headless by default', body: 'Workers run without UI. Scriptable, CI-friendly. Spawn from Claude Code, the CLI, an MCP client, or another Zana daemon.' },
+      { title: 'Native + daemon, one engine', body: 'In Claude Code, slash commands drive native Agent + SendMessage — no daemon required. For headless, CI, cron, or multi-daemon swarms, the same primitives ride a long-lived MCP daemon.' },
       { title: 'SendMessage coordination', body: 'Named agents message each other directly. No polling, no shared mutable state, no lost hand-offs.' },
     ],
   },
@@ -36,7 +36,7 @@ const groups = [
     label: 'Runtime · Operations',
     features: [
       { title: 'Pluggable RuntimeAdapter', body: 'Switch the agent runtime via ZANA_RUNTIME. Ships with claude-spawn (default) and an experimental vercel-ai dispatcher. Same MCP surface, same profiles, swappable host.' },
-      { title: '91 MCP tools', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, deliberation, scheduling — all exposed to any MCP-aware tool. Full reference auto-generated from handler sources.' },
+      { title: '93 MCP tools (daemon path)', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, deliberation, scheduling — all exposed to any MCP-aware tool. Full reference auto-generated from handler sources.' },
       { title: 'Replayable event bus', body: 'Every spawn, message, ticket transition, and verdict is an event. Size-based log rotation via ZANA_EVENT_LOG_MAX_BYTES.' },
       { title: 'Reliability hardening', body: 'Zombie reaper for orphaned agents. Load-throttle starvation fixed, team-start hard gate enforced. Hook-server: error propagation, agent-id validation, graceful drain, 30s handler timeout, fan-out cap.' },
       { title: 'Multi-daemon swarm', body: 'Scale beyond one machine: child daemons, router-broadcast events, cross-daemon ticket dispatch.' },
@@ -45,7 +45,7 @@ const groups = [
   {
     label: 'Extensibility',
     features: [
-      { title: 'Two-plugin marketplace', body: 'zana@zana-marketplace ships orchestration (22 commands, 2 skills). zana-loop@zana-marketplace ships daemon-free scheduling (3 commands, 1 skill). Install one, both, or neither.' },
+      { title: 'Two-plugin marketplace', body: 'zana@zana-marketplace ships orchestration (27 commands, 2 skills). zana-loop@zana-marketplace ships daemon-free scheduling (3 commands, 1 skill). Install one, both, or neither.' },
       { title: 'Pluggable skills', body: 'Inject custom instructions and tools into all agents — without forking core. Per-workspace skill modules.' },
       { title: 'Custom profiles', body: 'Any string is a valid agent type. Define a profile JSON; ship it in your repo; share it across teams.' },
       { title: 'Vector memory', body: 'HNSW-backed pattern memory. After every successful run, store what worked. Before every task, search what came before.' },
@@ -63,9 +63,9 @@ const groups = [
     <p class="ornament text-xs text-gold">— what the fairy carries —</p>
     <h1 class="mt-3 font-display text-5xl text-forest md:text-6xl">Primitives for shipping real work.</h1>
     <p class="mt-6 max-w-2xl text-lg text-moss leading-relaxed">
-      Zana isn't a thin prompt-wrapper. It's a daemon, a protocol surface, and a
-      set of named primitives — built for teams who need agents to actually
-      converge on a coherent result.
+      Zana isn't a thin prompt-wrapper. It's a Claude Code plugin, an MCP
+      surface, and a set of named primitives — built for teams who need
+      agents to actually converge on a coherent result.
     </p>
   </section>
 

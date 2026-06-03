@@ -21,7 +21,7 @@ The user's argument in `$ARGUMENTS` is the deliberation id (UUID).
    - `verdict` + `escalationReason` (if any)
    - Per-voter votes (profileId, bit, rationaleHash)
    - Dissent — verbatim, grouped by round
-   - Audit path: `~/.zana/checkpoints/<deliberationId>.json`
+   - Audit path: `<workspace>/.zana/checkpoints/<deliberationId>.json`
 4. If the user wants to override an escalated deliberation, point them at `/zana:council:override`.
 
 ## Rules
