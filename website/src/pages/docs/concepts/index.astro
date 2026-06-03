@@ -84,18 +84,22 @@ import MythicDivider from '../../../components/MythicDivider.astro';
       </section>
 
       <section>
-        <h2 class="font-display text-3xl text-forest">Runtime adapter</h2>
+        <h2 class="font-display text-3xl text-forest">Runtime — Claude Code, native and headless</h2>
         <p class="mt-2 text-moss leading-relaxed">
-          Zana speaks to multiple agent runtimes through a single
-          <code class="rounded bg-parchment px-1.5 py-0.5">RuntimeAdapter</code> interface.
-          Profiles, tickets, deliberation, and the MCP surface all stay identical regardless
-          of which runtime is actually spawning the worker — that's the seam.
+          Zana doesn't ship its own model runtime. Native commands drive
+          Claude Code's in-session <code class="rounded bg-parchment px-1.5 py-0.5">Agent</code> +
+          <code class="rounded bg-parchment px-1.5 py-0.5">SendMessage</code> primitives directly.
+          Daemon workers spawn the local <code class="rounded bg-parchment px-1.5 py-0.5">claude</code>
+          CLI as background subprocesses and inherit whatever auth Claude Code itself uses
+          (subscription or API key). No second SDK, no extra runtime, no API key to wire up.
         </p>
-        <CodeBlock caption="terminal" lang="bash">{`# default — spawns agents the way Claude Code does
-ZANA_RUNTIME=claude-spawn zana headless /path/to/workspace --background
-
-# experimental — Vercel AI SDK dispatcher (Phase 3)
-ZANA_RUNTIME=vercel-ai zana headless /path/to/workspace --background`}</CodeBlock>
+        <p class="mt-3 text-moss text-sm">
+          The daemon resolves the <code class="rounded bg-parchment px-1.5 py-0.5">claude</code>
+          binary via <code class="rounded bg-parchment px-1.5 py-0.5">$ZANA_WORKER_BIN</code>,
+          then <code class="rounded bg-parchment px-1.5 py-0.5">~/.local/bin/claude</code>, then
+          <code class="rounded bg-parchment px-1.5 py-0.5">$PATH</code>. Override
+          <code class="rounded bg-parchment px-1.5 py-0.5">ZANA_WORKER_BIN</code> to pin a specific install.
+        </p>
       </section>
 
       <section>

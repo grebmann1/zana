@@ -2,14 +2,14 @@ D0     PASS  daemon up
 INIT   PASS  mcp handshake ok (server: zana)
 S1     PASS  list_agents: []
 S2     PASS  list_running_teams: []
-S3     PASS  sprint_list: [{"id":"b68c2b51-2d4e-4618-862b-84857af8b4eb","name":"Zana Beyond Claude Code — 
+S3     PASS  sprint_list: [{"id":"8ea18e7e-2503-4b68-b71f-d3b3e1b0aa9a","name":"MCP boot diagnostics 2026-
 S4     PASS  autopilot_goal_list: []
-S5     PASS  deliberation_list: [{"id":"d8b7669d-79f3-4fa9-a1a1-ec8e9e091a4e","state":"ESCALATED","question":"I'
-M1     PASS  memory_search returned 1 match(es)
-T1     PASS  ticket_create id=fb41182b-45b4-4cb2-97af-5874e784b964
-T2     PASS  ticket_list found=true (n=21)
+S5     PASS  deliberation_list: [{"id":"427e1db5-f91c-4338-962d-7a39e2cd055a","state":"ESCALATED","question":"I'
+M1     PASS  memory_search returned 3 match(es)
+T1     PASS  ticket_create id=2129b5d7-8109-4f2c-9770-0d825ac3d907
+T2     PASS  ticket_list found=true (n=52)
 T3     PASS  ticket_complete status=?
-TM1    PASS  list_teams returned 6 template(s)
+TM1    PASS  list_teams returned 9 template(s)
 TM2    PASS  zana_get_team reachable
 TM3    PASS  zana_team_status reachable
 TM4    PASS  zana_stop_team reachable
@@ -17,8 +17,8 @@ AP1    PASS  zana_autopilot_goal_status reachable
 AP2    PASS  zana_autopilot_goal_cancel reachable
 C1     PASS  zana_deliberation_status reachable
 C2     PASS  zana_deliberation_override reachable
-SC1    PASS  schedule_list returned 1 schedule(s)
-SC2    PASS  schedule_reload: {"started":1,"skipped":0,"total":1}
+SC1    PASS  schedule_list returned 2 schedule(s)
+SC2    PASS  schedule_reload: {"started":2,"skipped":0,"total":2}
 SC3    PASS  schedule_trigger reachable
 L1     PASS  loop yaml parses → id=qa-cmds-loop
 

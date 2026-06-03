@@ -151,16 +151,6 @@ into native `Agent`+`SendMessage` calls (no daemon round-trip).
 Slash commands are shipped through two plugins under `plugins/zana/{core,loop}`
 and installed as `zana@zana-marketplace` and `zana-loop@zana-marketplace`.
 
-## Runtime adapter
-
-`ZANA_RUNTIME` selects how worker agents are spawned:
-
-- `claude-spawn` (default) — mirrors Claude Code's own `Task` spawn
-- `vercel-ai` (experimental, Phase 3) — Vercel AI SDK dispatcher
-
-Profiles, tickets, deliberation, and the MCP surface stay identical regardless
-of runtime — that's the seam.
-
 ## Scheduling
 
 One YAML schema, two paths:

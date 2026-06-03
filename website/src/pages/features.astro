@@ -35,7 +35,7 @@ const groups = [
   {
     label: 'Runtime · Operations',
     features: [
-      { title: 'Pluggable RuntimeAdapter', body: 'Switch the agent runtime via ZANA_RUNTIME. Ships with claude-spawn (default) and an experimental vercel-ai dispatcher. Same MCP surface, same profiles, swappable host.' },
+      { title: 'Claude Code, end to end', body: 'Native — slash commands drive Claude Code\'s in-session Agent + SendMessage primitives. Daemon — workers spawn the local `claude` CLI as subprocesses, inheriting its auth (subscription or API key). No extra SDK, no second runtime to install.' },
       { title: '93 MCP tools (daemon path)', body: 'Agent spawn, ticket and sprint management, profile + skill stores, memory, event bus, deliberation, scheduling — all exposed to any MCP-aware tool. Full reference auto-generated from handler sources.' },
       { title: 'Replayable event bus', body: 'Every spawn, message, ticket transition, and verdict is an event. Size-based log rotation via ZANA_EVENT_LOG_MAX_BYTES.' },
       { title: 'Reliability hardening', body: 'Zombie reaper for orphaned agents. Load-throttle starvation fixed, team-start hard gate enforced. Hook-server: error propagation, agent-id validation, graceful drain, 30s handler timeout, fan-out cap.' },

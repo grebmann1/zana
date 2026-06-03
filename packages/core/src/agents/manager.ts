@@ -280,8 +280,7 @@ export function onAgentsChange(cb) {
 // emitTerminated — single source of truth for the AGENT_TERMINATED payload
 // shape. Multiple consumers depend on this exact shape (work/tickets/watcher,
 // scheduling/service, intelligence/goap-planner, background-workers,
-// server/api/sse-broadcaster, events/stats-engine). Centralized so the
-// vercel-ai dispatcher can emit identically without drift.
+// server/api/sse-broadcaster, events/stats-engine).
 export function emitTerminated(
   agentId: string,
   profileId: string,
@@ -351,32 +350,6 @@ export function spawnHeadlessAgent(profile, options = {}) {
     model: profile.model,
   });
   const routedProfile = profile.model ? profile : { ...profile, model: routedModel };
-
-  // ZANA_RUNTIME=vercel-ai fork. Spawn path below stays verbatim. See
-  // .zana/plans/phase-2-wiring.md (banner) for the architect/engineer
-  // decision rationale.
-  if ((process.env.ZANA_RUNTIME || "spawn") === "vercel-ai") {
-    const { spawnViaVercelAI } = require("./runtimes/vercel-ai-dispatch");
-    const agentTimeoutMs =
-      (moduleConfig.getModuleConfig("system")?.agentTimeoutMinutes || 10) * 60 * 1000;
-    return spawnViaVercelAI({
-      agentId,
-      terminalId,
-      cwd,
-      profile,
-      routedProfile,
-      options,
-      agents,
-      notifyChange,
-      getAgent,
-      emitSpawned: (id: string, pid: string) =>
-        bus.emit(EVENTS.AGENT_SPAWNED, { agentId: id, profileId: pid, mode: "headless" }),
-      emitTerminated,
-      persistAgentRun,
-      classifySpawnError,
-      agentTimeoutMs,
-    });
-  }
 
   const child = spawnHeadless(routedProfile, {
     name: `${profile.displayName} [${agentId.slice(0, 6)}]`,

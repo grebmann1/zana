@@ -314,7 +314,7 @@ zana_deliberation_status({ deliberationId: id })
 **Cheap proof the real path works (one voter, one round, ~45s):**
 
 ```bash
-ZANA_RUNTIME=spawn node scripts/diagnostics/run-real-deliberation-snap.js
+node scripts/diagnostics/run-real-deliberation-snap.js
 # [done] 45.0s — state=ESCALATED verdict=—
 #
 # vote: r1 architect CHANGES

@@ -32,8 +32,8 @@ const primitives = [
   },
   {
     name: 'Runtime',
-    tagline: 'Pluggable agent host.',
-    body: 'A RuntimeAdapter interface decouples Zana\'s primitives from how an agent is actually spawned. Default ships with claude-spawn (mirrors Claude Code spawning). Switch to vercel-ai or your own adapter via ZANA_RUNTIME — the MCP surface stays the same.',
+    tagline: 'Claude Code, native and headless.',
+    body: 'Native — slash commands drive Claude Code\'s in-session Agent + SendMessage primitives, no subprocess. Daemon — workers spawn the local `claude` CLI as background subprocesses, inheriting whatever auth `claude` itself uses (subscription or API key). No separate SDK, no extra runtime.',
   },
 ];
 

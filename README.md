@@ -32,7 +32,6 @@ Templates, profiles, tickets, sprints, artifacts, and deliberation work the same
 - 18 agent profiles in `packages/core/profiles/`: api-designer, architect, backend-dev, code-reviewer, debugger, doc-generator, frontend-dev, full-auto-coder, judge, orchestrator, performance-engineer, researcher, security-reviewer, slack-notifier, swarm-master, swarm-orchestrator, test-writer, ux-designer
 - 1 example module in `packages/core/modules/example/`
 - Two slash-command plugins in the `zana-marketplace` marketplace: `zana@zana-marketplace` (orchestration + daemon-driven schedules) and `zana-loop@zana-marketplace` (lightweight `/loop`-driven schedules — no daemon required)
-- Pluggable agent runtime via `ZANA_RUNTIME`: defaults to `claude-spawn`; experimental `vercel-ai` adapter available
 
 ## Two ways to run Zana
 
@@ -118,7 +117,6 @@ For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the additional `z
 
 - Recent work:
   - `zana-loop` plugin: `/zana:loop:start|stop|define` drive `.zana/scheduler/*.yml` via Claude Code's `/loop` — no daemon required
-  - `ZANA_RUNTIME=vercel-ai` dispatcher (Phase 3) + ClaudeSpawnAdapter (Phase 0–1, Phase 2)
   - Async-by-default `zana_deliberate` — returns immediately, snap-judgment voter prompt cuts latency from ~520s to ~65s, 20-min timeout, `zana_deliberate_cancel`, recovers voter JSON from full transcript
   - Reliability: zombie reaper for orphaned headless agents, load-throttle starvation fix, team-start hard gate
   - Hook-server hardening (Tier 1+2): error propagation, agentId regex, graceful drain, 30s handler timeout, fan-out cap, jq-safe terminal-id injection

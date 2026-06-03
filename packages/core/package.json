@@ -44,9 +44,7 @@
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0",
-    "node-pty": "^1.1.0",
-    "ai": "^4.0.0",
-    "@ai-sdk/anthropic": "^1.0.0"
+    "node-pty": "^1.1.0"
   },
   "files": [
     "dist/",
