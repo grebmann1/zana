@@ -5,19 +5,41 @@
 //     streak counter (explicitly exported for tests)
 //
 // No real spawning, no real PTY, no network — all deterministic.
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
-// Stub modules/config so tests don't need a real workspace context.
-vi.mock("@zana-ai/core/src/modules/config.ts", () => ({
-  get: () => null,
-  getModuleConfig: () => null,
-}));
-
-import {
+// classifySpawnError + the spawn-overload probe are pure helpers — they do
+// not read modules/config or workspace state, so the test runs against the
+// real (post-split) manager facade with no internal mocks.
+// Import from the built dist — the facade lazily `require()`s sibling modules
+// via raw CJS, which only resolves cleanly against compiled .js files.
+// (The vite SSR runner can't resolve relative `require("../project/...")`
+// inside .ts source files.)
+import * as core from "@zana-ai/core";
+const {
   classifySpawnError,
   _testSpawnOverloadProbe,
   _resetSpawnOverloadState,
-} from "@zana-ai/core/src/agents/manager.ts";
+} = (core as any).agents.manager;
+const workspaceContext: any = (core as any).project.workspaceContext;
+
+// `getSpawnThrottleStreakLimit` reads modules/config.get(), which lazy-requires
+// project/workspace-context for its config path. Initialise a tmp workspace
+// once so the whole suite can read defaults without a fake module.
+let tmpWs: string;
+
+beforeAll(() => {
+  tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), "zana-manager-test-"));
+  fs.mkdirSync(path.join(tmpWs, ".zana"), { recursive: true });
+  workspaceContext.init(tmpWs);
+});
+
+afterAll(() => {
+  try { (workspaceContext as any)._resetForTesting?.(); } catch {}
+  try { fs.rmSync(tmpWs, { recursive: true, force: true }); } catch {}
+});
 
 // ---------------------------------------------------------------------------
 // classifySpawnError

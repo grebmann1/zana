@@ -24,6 +24,9 @@ function blobsDir() {
 describe("artifact-store content-addressed storage (T2)", () => {
   beforeEach(() => {
     fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+    // Pre-create .zana/ so resolveProjectDir stops here instead of walking up
+    // to a parent dir that already has .zana/ (e.g. /tmp/.zana/).
+    fs.mkdirSync(path.join(TEST_WORKSPACE, ".zana"), { recursive: true });
     workspaceContext.init(TEST_WORKSPACE);
     // Also init the instance reached through the package main entry.
     try { (core as any).project.workspaceContext.init(TEST_WORKSPACE); } catch {}

@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
-import * as configMod from "../config";
+import * as workspaceContext from "../project/workspace-context";
 
-// FU-T2e — DO NOT snapshot EVENTS_DIR at module load time.
+// FU-T2e — DO NOT snapshot the events directory at module load time.
 //
 // Prior versions did `const EVENTS_DIR = configMod.EVENTS_DIR` at the top of
 // this module. Because this file is required from many entry points, the
@@ -12,16 +13,17 @@ import * as configMod from "../config";
 // modelIds, profileIds, tally distributions and deliberation cadence in those
 // records are sufficient to correlate activity between tenants.
 //
-// We instead lazy-resolve EVENTS_DIR on every call via the @zana-ai/core config
-// module's workspace-aware getter (see packages/core/src/config.ts where
-// EVENTS_DIR is exposed as a `get EVENTS_DIR()` accessor on module.exports).
-// Reading `configMod.EVENTS_DIR` here triggers that getter every time, so
-// switching the workspace mid-process is reflected on the very next call.
-// This matches the pattern already used by
-// packages/work/src/runs/artifact-store.ts:getArtifactsDir(). The cost is a
-// property read per write — cheap.
+// We instead lazy-resolve on every call via workspaceContext.getProjectPaths().
+// Switching the workspace mid-process is reflected on the very next call. The
+// write-side `_gateEventsWrite` below refuses to fall back to the global
+// `~/.zana/events` directory when no workspace is initialized; reads still
+// inspect the global path so legacy data remains observable.
 function getEventsDir(): string {
-  return (configMod as any).EVENTS_DIR;
+  if (workspaceContext.isInitialized()) {
+    return workspaceContext.getProjectPaths().eventsDir;
+  }
+  // Read-side fallback only — write-side is gated by _gateEventsWrite.
+  return path.join(os.homedir(), ".zana", "events");
 }
 
 function getEventsFile(): string {
@@ -38,7 +40,20 @@ const DEFAULT_CONFIG = {
   persistToDisk: true,
 };
 
+// Tenant isolation gate: refuse to write to ~/.zana/events when no
+// workspace is initialized. Voter modelIds, profileIds, tally distributions
+// and deliberation cadence in those records correlate activity between
+// tenants. Reads (queryEvents/loadConfig) remain open against the
+// fallback path so legacy global-scope data is still inspectable.
+function _gateEventsWrite(operation: string): void {
+  if (!workspaceContext.isInitialized()) {
+    const ErrCtor = (workspaceContext as any).WorkspaceNotInitializedError;
+    throw new ErrCtor({ operation, path: getEventsDir() });
+  }
+}
+
 export function ensureDir() {
+  _gateEventsWrite("write");
   fs.mkdirSync(getEventsDir(), { recursive: true });
 }
 
@@ -103,6 +118,9 @@ export function queryEvents(filter = {}, limit = 100) {
 }
 
 export function compact(config) {
+  // Gate before the try/catch so the WorkspaceNotInitializedError is
+  // surfaced to the caller rather than swallowed by the read-side catch.
+  _gateEventsWrite("compact");
   try {
     const eventsFile = getEventsFile();
     const raw = fs.readFileSync(eventsFile, "utf8");

@@ -1,0 +1,121 @@
+
+############################################################
+# scripts/qa/run-runtime.sh
+############################################################
+R1   PASS  claude-spawn oneshot returned PONG (R1_OUTPUT: {"output":"PONG","exitCode":0})
+R2   PASS  deliberation snap: real Claude voter ran ([done] 345.3s — state=ESCALATED verdict=—)
+
+=== SUMMARY ===
+PASS: 2
+FAIL: 0
+SKIP: 0
+TOTAL: 2
+[ok] scripts/qa/run-runtime.sh
+
+############################################################
+# scripts/qa/run-scheduler-agent-live.sh
+############################################################
+
+============================================================
+ID   RESULT DETAIL
+------------------------------------------------------------
+T1   PASS   qa-spawn schedule registered
+T2   PASS   trigger fired spawn-agent — history success | 2026-05-30T05:21:35.497Z | success | PONG
+T3   PASS   spawned agent terminated with PONG
+T4   PASS   history retained 2 entries after re-trigger
+------------------------------------------------------------
+PASS: 4 / 4    FAIL: 0
+============================================================
+[ok] scripts/qa/run-scheduler-agent-live.sh
+
+############################################################
+# scripts/qa/run-ticket-live.sh
+############################################################
+
+============================================================
+ID   RESULT DETAIL
+------------------------------------------------------------
+T0   PASS   daemon up on port 47413
+T1   PASS   ticket created id=46500ba5-e66b-4353-bd5c-a1b8e01e4adb
+T2   PASS   ticket present in /tickets list
+T3   PASS   ticket claimed by qa-live
+T4   PASS   researcher worker terminated with PONG
+T5   PASS   ticket completed
+T6   PASS   ticket status now 'done'
+------------------------------------------------------------
+PASS: 7 / 7    FAIL: 0
+============================================================
+rm: /tmp/zana-qa-ticket-17438/.zana: Directory not empty
+rm: /tmp/zana-qa-ticket-17438: Directory not empty
+[ok] scripts/qa/run-ticket-live.sh
+
+############################################################
+# scripts/qa/run-autopilot-live.sh
+############################################################
+
+============================================================
+ID   RESULT DETAIL
+------------------------------------------------------------
+T0   PASS   daemon up on port 47414
+T1   PASS   goal created id=d09ee5c8-d4fa-4f97-ab35-90979b5f1ee9
+T2   PASS   goal in list
+T3   PASS   goal advanced (iter=1 status=running)
+T4   PASS   goal cancelled
+T5   PASS   goal terminal status=cancelled
+------------------------------------------------------------
+PASS: 6 / 6    FAIL: 0
+============================================================
+[ok] scripts/qa/run-autopilot-live.sh
+
+############################################################
+# scripts/qa/run-judge-live.sh
+############################################################
+J1   PASS  judge resolved escalation: state=SETTLED verdictSource=judge humanId=judge:judge
+J2   PASS  high-risk bypassed judge: state=ESCALATED verdictSource=undefined outcome=escalated
+J3   PASS  hybrid strategy invoked judge: state=SETTLED verdictSource=judge
+
+=== SUMMARY ===
+PASS: 3
+FAIL: 0
+SKIP: 0
+TOTAL: 3
+[ok] scripts/qa/run-judge-live.sh
+
+############################################################
+# scripts/qa/run-commands-live.sh
+############################################################
+D0     PASS  daemon up
+INIT   PASS  mcp handshake ok (server: zana)
+S1     PASS  list_agents: []
+S2     PASS  list_running_teams: []
+S3     PASS  sprint_list: [{"id":"b68c2b51-2d4e-4618-862b-84857af8b4eb","name":"Zana Beyond Claude Code — 
+S4     PASS  autopilot_goal_list: []
+S5     PASS  deliberation_list: [{"id":"a4d6d5ae-2bd7-4d6c-a37f-87179067c28a","state":"ESCALATED","question":"I'
+M1     PASS  memory_search returned 1 match(es)
+T1     PASS  ticket_create id=296c6cac-a151-4752-9bb4-9c96944c708a
+T2     PASS  ticket_list found=true (n=22)
+T3     PASS  ticket_complete status=?
+TM1    PASS  list_teams returned 6 template(s)
+TM2    PASS  zana_get_team reachable
+TM3    PASS  zana_team_status reachable
+TM4    PASS  zana_stop_team reachable
+AP1    PASS  zana_autopilot_goal_status reachable
+AP2    PASS  zana_autopilot_goal_cancel reachable
+C1     PASS  zana_deliberation_status reachable
+C2     PASS  zana_deliberation_override reachable
+SC1    PASS  schedule_list returned 1 schedule(s)
+SC2    PASS  schedule_reload: {"started":1,"skipped":0,"total":1}
+SC3    PASS  schedule_trigger reachable
+L1     PASS  loop yaml parses → id=qa-cmds-loop
+
+=== SUMMARY ===
+PASS: 23
+FAIL: 0
+SKIP: 0
+TOTAL: 23
+[ok] scripts/qa/run-commands-live.sh
+
+############################################################
+# OVERALL
+############################################################
+All 6 suites passed.

@@ -30,6 +30,8 @@ import {
   cleanExpiredAcks,
   routeMessage,
   generateMessageId,
+  discoverAgents,
+  refreshRoutingTable,
 } from "@zana-ai/swarm/src/swarm/router.ts";
 
 // Each test uses a unique prefix so module-level Maps don't bleed between tests.
@@ -194,5 +196,42 @@ describe("routeMessage", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/not found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// discoverAgents — routing-table search (no network: subDaemonPorts=[])
+// ---------------------------------------------------------------------------
+describe("discoverAgents", () => {
+  it("includes a local agent after refreshRoutingTable", async () => {
+    const agentId = id("disco");
+    await refreshRoutingTable([{ id: agentId, profileName: "AlphaAgent" }], [], true);
+    const results = discoverAgents(undefined);
+    expect(results.some((r: any) => r.id === agentId)).toBe(true);
+  });
+
+  it("filters case-insensitively by profileName", async () => {
+    const agentId = id("disco");
+    await refreshRoutingTable([{ id: agentId, profileName: "SearchableProfile" }], [], true);
+    expect(discoverAgents("searchable").some((r: any) => r.id === agentId)).toBe(true);
+    expect(discoverAgents("SEARCHABLE").some((r: any) => r.id === agentId)).toBe(true);
+  });
+
+  it("returns empty array when query matches nothing", async () => {
+    await refreshRoutingTable([{ id: id("disco"), profileName: "XUniqXProfile" }], [], true);
+    expect(discoverAgents("no-match-zzz-abc-xyz")).toEqual([]);
+  });
+
+  it("deduplicates when both agentId and terminalId map to the same agent", async () => {
+    const agentId = id("disco");
+    const termId  = id("term");
+    await refreshRoutingTable(
+      [{ id: agentId, terminalId: termId, profileName: "DedupAgentProfile" }],
+      [],
+      true,
+    );
+    // routing table holds two entries (agentId + terminalId); discoverAgents should return one
+    const results = discoverAgents("DedupAgentProfile");
+    expect(results.length).toBe(1);
   });
 });

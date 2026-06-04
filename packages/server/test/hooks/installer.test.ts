@@ -1,26 +1,28 @@
-// Unit tests for packages/server/src/hooks/installer.ts
-// Covers: HOOK_EVENTS shape, installMcpServer early-exits, isMcpInstalled
-// file-presence logic, and isHooksInstalled guard paths.
-// Uses a real tmpdir for HOME so no actual ~/.claude is touched.
+// Integration test for packages/server/src/hooks/installer.ts.
+//
+// Strategy: redirect HOME to a tmpdir so the REAL @zana-ai/core's
+// `config.BIN_DIR` / `config.CLAUDE_SETTINGS_BACKUP` resolve under the
+// tmpdir. `isClaudeHost()` is steered by the public `ZANA_HOST_OVERRIDE`
+// env var rather than a module mock — that's the documented external-control
+// knob and keeps the boundary explicit. No internal-module mocks.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
-// ── Module mocks (must be hoisted before any imports of the module under test)
-
-const mockIsClaudeHost = vi.hoisted(() => vi.fn(() => false));
-vi.mock("@zana-ai/core/dist/src/host/detect.js", () => ({
-  isClaudeHost: mockIsClaudeHost,
-}));
-
-vi.mock("@zana-ai/core", () => ({
-  config: {
-    BIN_DIR: "/tmp/fake-zana-bin",
-    CLAUDE_SETTINGS_BACKUP: "/tmp/fake-zana-backup.json",
-  },
-}));
+const { fakeHome, origHome } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _fs = require("node:fs") as typeof import("node:fs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _path = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _os = require("node:os") as typeof import("node:os");
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-installer-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome };
+});
 
 import {
   HOOK_EVENTS,
@@ -32,7 +34,8 @@ import {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 let tmpHome: string;
-let origHome: string | undefined;
+let origHomeBeforeEach: string | undefined;
+let origHostOverride: string | undefined;
 
 function writeSettings(obj: unknown) {
   const dir = path.join(tmpHome, ".claude");
@@ -44,15 +47,26 @@ function writeSettings(obj: unknown) {
 
 beforeEach(() => {
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "zana-installer-test-"));
-  origHome = process.env.HOME;
+  origHomeBeforeEach = process.env.HOME;
   process.env.HOME = tmpHome;
-  mockIsClaudeHost.mockReturnValue(true);
+  origHostOverride = process.env.ZANA_HOST_OVERRIDE;
+  // Default each test to "Claude host present" via the public env override.
+  process.env.ZANA_HOST_OVERRIDE = "claude";
 });
 
 afterEach(() => {
-  process.env.HOME = origHome;
+  process.env.HOME = origHomeBeforeEach;
+  if (origHostOverride === undefined) {
+    delete process.env.ZANA_HOST_OVERRIDE;
+  } else {
+    process.env.ZANA_HOST_OVERRIDE = origHostOverride;
+  }
   fs.rmSync(tmpHome, { recursive: true, force: true });
-  vi.clearAllMocks();
+});
+
+afterAll(() => {
+  process.env.HOME = origHome;
+  try { fs.rmSync(fakeHome, { recursive: true, force: true }); } catch {}
 });
 
 // ── HOOK_EVENTS ───────────────────────────────────────────────────────────────
@@ -79,7 +93,8 @@ describe("installMcpServer", () => {
     try {
       expect(installMcpServer(3000)).toEqual({ ok: true, skipped: true });
     } finally {
-      process.env.ZANA_SKIP_MCP_INSTALL = orig;
+      if (orig === undefined) delete process.env.ZANA_SKIP_MCP_INSTALL;
+      else process.env.ZANA_SKIP_MCP_INSTALL = orig;
     }
   });
 
@@ -111,7 +126,7 @@ describe("isMcpInstalled", () => {
 
 describe("isHooksInstalled", () => {
   it("returns false immediately when isClaudeHost() is false", () => {
-    mockIsClaudeHost.mockReturnValue(false);
+    process.env.ZANA_HOST_OVERRIDE = "generic";
     expect(isHooksInstalled()).toBe(false);
   });
 

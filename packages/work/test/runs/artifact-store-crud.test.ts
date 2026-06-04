@@ -15,6 +15,7 @@ const TEST_WORKSPACE = path.join(
 describe("artifact-store CRUD", () => {
   beforeEach(() => {
     fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+    fs.mkdirSync(path.join(TEST_WORKSPACE, ".zana"), { recursive: true });
     workspaceContext.init(TEST_WORKSPACE);
     try { (core as any).project.workspaceContext.init(TEST_WORKSPACE); } catch {}
   });

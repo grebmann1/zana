@@ -1,8 +1,8 @@
 // Verifies the opt-in `history` block: when disabled the run-history file
 // is never written; when retain is set, history is capped to that count.
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync, existsSync, readFileSync } from "node:fs";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,15 +10,33 @@ describe("scheduler — opt-in history", () => {
   let svc: any;
   let store: any;
   let dir: string;
+  let tmpDir: string;
 
   beforeEach(async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "sched-hist-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "sched-hist-"));
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
+    // Also init the dist instance — service/store reach workspaceContext via
+    // require("@zana-ai/core") which resolves to dist; otherwise the
+    // tenant-isolation gate refuses the write.
+    const core = await import("@zana-ai/core");
+    try { (core as any).project.workspaceContext.init(tmpDir); } catch {}
     svc = await import("@zana-ai/work/src/scheduling/service.ts");
     store = await import("@zana-ai/work/src/scheduling/store.ts");
-    const cfg = require("@zana-ai/core").config;
-    dir = cfg.SCHEDULER_DIR;
+    // worker-7 retired cfg.SCHEDULER_DIR; resolve via workspaceContext.
+    dir = ws.getProjectPaths().schedulerDir;
+  });
+
+  afterEach(async () => {
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try {
+      const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+      (ws as any)._resetForTesting?.();
+    } catch {}
+    try {
+      const core = await import("@zana-ai/core");
+      (core as any).project.workspaceContext._resetForTesting?.();
+    } catch {}
   });
 
   it("default: history file is written (back-compat)", async () => {

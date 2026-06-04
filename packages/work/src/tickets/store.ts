@@ -10,13 +10,25 @@ import { ZANA_DIR } from "@zana-ai/core/dist/src/config";
 function getTicketsDir() {
   const ctx = _ctx();
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
-  return path.join(ZANA_DIR, "tickets");
+  // Tenant isolation gate: refuse to fall back to ~/.zana/tickets. The
+  // shared directory would silently mix tickets across every workspace
+  // on the host.
+  const ErrCtor = ctx.WorkspaceNotInitializedError;
+  throw new ErrCtor({
+    operation: "resolve",
+    path: path.join(ZANA_DIR, "tickets"),
+  });
 }
 
 function getSprintsDir() {
   const ctx = _ctx();
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
-  return path.join(ZANA_DIR, "sprints");
+  // Tenant isolation gate: refuse to fall back to ~/.zana/sprints.
+  const ErrCtor = ctx.WorkspaceNotInitializedError;
+  throw new ErrCtor({
+    operation: "resolve",
+    path: path.join(ZANA_DIR, "sprints"),
+  });
 }
 
 // ─── Dir helpers ─────────────────────────────────────────────────────────────

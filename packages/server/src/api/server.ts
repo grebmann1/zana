@@ -2,10 +2,17 @@ import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as sseBroadcaster from "./sse-broadcaster";
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
 function _core() { return require("@zana-ai/core"); }
-const connectionRegistry: any = new Proxy({}, { get: (_t, p) => _core().daemon.connectionRegistry[p] });
+type ConnectionRegistry = typeof import("@zana-ai/core/dist/src/daemon/connection-registry");
+const connectionRegistry = lazyRequire<ConnectionRegistry>(
+  () => require("@zana-ai/core").daemon.connectionRegistry
+);
 import * as healthMonitor from "./health-monitor";
-const terminalRelay: any = new Proxy({}, { get: (_t, p) => _core().agents.terminalRelay[p] });
+type TerminalRelay = typeof import("@zana-ai/core/dist/src/agents/terminal-relay");
+const terminalRelay = lazyRequire<TerminalRelay>(
+  () => require("@zana-ai/core").agents.terminalRelay
+);
 import * as authMiddleware from "./auth-middleware";
 
 let server = null;
@@ -705,8 +712,7 @@ async function handleRequest(req, res) {
   const moduleConfigMatch = pathname.match(/^\/api\/modules\/([^/]+)\/config$/);
   if (moduleConfigMatch) {
     const workspaceContext = _core().project.workspaceContext;
-    const root = workspaceContext.getWorkspaceRoot();
-    const configPath = path.join(root, ".zana", "config.json");
+    const configPath = workspaceContext.getProjectPaths().configPath;
     if (method === "GET") {
       let config = {};
       try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch {}

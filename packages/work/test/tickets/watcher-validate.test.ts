@@ -129,6 +129,49 @@ describe("loadRules + getRuleWarnings — invalid rules", () => {
   });
 });
 
+// ─── workflow action type ───────────────────────────────────────────────────
+
+describe("loadRules + getRuleWarnings — workflow action", () => {
+  it("accepts a workflow action with skillId without errors", () => {
+    const cfg = writeCfg([
+      {
+        name: "on-created-workflow",
+        trigger: { event: "ticket:created" },
+        action: { type: "workflow", skillId: "my-skill" },
+      },
+    ]);
+    loadRules(cfg);
+    const errors = getRuleWarnings().filter((w) => w.level === "error");
+    expect(errors).toHaveLength(0);
+  });
+
+  it("reports an error for a workflow action missing skillId", () => {
+    const cfg = writeCfg([
+      {
+        name: "workflow-no-skill",
+        trigger: { event: "ticket:created" },
+        action: { type: "workflow" },
+      },
+    ]);
+    loadRules(cfg);
+    const errors = getRuleWarnings().filter((w) => w.level === "error");
+    expect(errors.some((w) => w.message.includes("skillId"))).toBe(true);
+  });
+
+  it("reports a warning for an unknown action.type", () => {
+    const cfg = writeCfg([
+      {
+        name: "unknown-type",
+        trigger: { event: "ticket:created" },
+        action: { type: "notify", spawnProfile: "p" },
+      },
+    ]);
+    loadRules(cfg);
+    const warnings = getRuleWarnings().filter((w) => w.level === "warn");
+    expect(warnings.some((w) => w.message.includes("notify"))).toBe(true);
+  });
+});
+
 // ─── fallback to DEFAULT_RULES on bad / missing config ──────────────────────
 
 describe("loadRules — fallback behaviour", () => {

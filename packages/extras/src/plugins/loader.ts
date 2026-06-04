@@ -1,11 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
 // Lazy access to @zana-ai/core — avoids load-order issues during core init.
 function _core() { return require("@zana-ai/core"); }
 function PLUGINS_DIR() { return _core().config.PLUGINS_DIR; }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
 function SETTINGS_PATH() { return _core().config.SETTINGS_PATH; }
-const eventBusService: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
+type EventBusService = typeof import("@zana-ai/core/dist/src/events/service");
+const eventBusService = lazyRequire<EventBusService>(() => require("@zana-ai/core").events.service);
 
 const plugins = new Map();
 const disabledSet = new Set();

@@ -1,45 +1,39 @@
-// Unit tests for packages/core/src/daemon/registry.ts
+// Integration test for packages/core/src/daemon/registry.ts.
 //
-// Covers: generateDaemonId, register, deregister, list, listAlive, cleanStale,
-// and findRunningDaemon.  DAEMONS_DIR is redirected to a temp directory so no
-// real ~/.zana writes occur.  Process-liveness uses the current PID (always
-// alive) or a bogus PID (999999999, always dead).
+// Strategy: redirect HOME to a tmpdir before any @zana-ai/* module loads —
+// `config.ts` derives DAEMONS_DIR from `os.homedir()`/`process.env.HOME` at
+// module-load time. No internal modules are mocked. Process-liveness uses the
+// current PID (always alive) or a bogus PID (999999999, always dead).
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-// ── temp dir must be ready before vi.mock factory runs ──────────────────────
-const { daemonsTestDir, tmpRoot } = vi.hoisted(() => {
+const { fakeHome, origHome } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _fs = require("node:fs") as typeof import("node:fs");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _path = require("node:path") as typeof import("node:path");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _os = require("node:os") as typeof import("node:os");
-  const tmpRoot = _fs.mkdtempSync(
-    _path.join(_os.tmpdir(), "zana-daemon-registry-test-"),
-  );
-  return { daemonsTestDir: _path.join(tmpRoot, "daemons"), tmpRoot };
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-daemon-registry-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome };
 });
-
-// Redirect DAEMONS_DIR so all file writes stay in the temp directory.
-vi.mock("@zana-ai/core/src/config.ts", () => ({
-  DAEMONS_DIR: daemonsTestDir,
-}));
 
 import * as registry from "@zana-ai/core/src/daemon/registry.ts";
 
-// ── lifecycle ───────────────────────────────────────────────────────────────
+const daemonsTestDir = path.join(fakeHome, ".zana", "daemons");
 
 beforeAll(() => {
   fs.mkdirSync(daemonsTestDir, { recursive: true });
 });
 
 afterAll(() => {
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  process.env.HOME = origHome;
+  fs.rmSync(fakeHome, { recursive: true, force: true });
 });
 
 // Wipe the daemons dir before each test for isolation.

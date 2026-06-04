@@ -11,11 +11,24 @@ describe("createSprint + getSprintBoard", () => {
     tmpDir = mkdtempSync(join(tmpdir(), "sprint-board-"));
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
+    // Also init the dist instance — db.ts reaches workspaceContext via
+    // require("@zana-ai/core") which resolves to dist; otherwise the
+    // tenant-isolation gate refuses the open.
+    const core = await import("@zana-ai/core");
+    try { (core as any).project.workspaceContext.init(tmpDir); } catch {}
     svc = await import("@zana-ai/work/src/tickets/service.ts");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+      (ws as any)._resetForTesting?.();
+    } catch {}
+    try {
+      const core = await import("@zana-ai/core");
+      (core as any).project.workspaceContext._resetForTesting?.();
+    } catch {}
   });
 
   it("backfills sprintId on each ticket when sprint is created with ticketIds", () => {

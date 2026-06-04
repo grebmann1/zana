@@ -155,3 +155,54 @@ describe("cancelPlan()", () => {
     expect(planner.cancelPlan(planId)).toBe(false);
   });
 });
+
+// ─── replan ───────────────────────────────────────────────────────────────────
+//
+// replan() is called by executePlan() when a layer has failures, and can also
+// be invoked externally to reroute an in-flight plan.  It updates plan.layers
+// and plan.actions in-place.
+//
+// We exercise the three code paths that don't require real agent execution:
+//   1. Non-existent planId              → { success: false }
+//   2. Goals still unmet (fresh plan)   → { success: true, newLayers: [...] }
+//   3. Actions are reset to "pending"   → visible via getPlanStatus()
+
+describe("replan()", () => {
+  it("returns { success: false } for a non-existent planId", () => {
+    expect(planner.replan("__ghost_replan_plan__")).toEqual({ success: false });
+  });
+
+  it("returns { success: true } with newLayers when goals are unmet", () => {
+    // A freshly created plan has currentState = all-false and goalState = desired
+    // truths, so every goal key remains unmet.  replan() must find a new path.
+    const { planId } = planner.createPlan("implement a feature and write tests");
+    const result = planner.replan(planId) as { success: boolean; newLayers: unknown[][] };
+    expect(result.success).toBe(true);
+    expect(Array.isArray(result.newLayers)).toBe(true);
+    expect(result.newLayers.length).toBeGreaterThan(0);
+    // Each layer must itself be a non-empty array of action objects.
+    for (const layer of result.newLayers) {
+      expect(Array.isArray(layer)).toBe(true);
+      expect(layer.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("actions in the replanned plan remain accessible via getPlanStatus() as pending", () => {
+    const { planId } = planner.createPlan("review code and fix bugs");
+    planner.replan(planId);
+    const status = planner.getPlanStatus(planId);
+    expect(status).not.toBeNull();
+    // All actions (original + any added by replan) should still be pending
+    // since no execution has occurred.
+    for (const action of status!.actions) {
+      expect(action.status).toBe("pending");
+    }
+  });
+
+  it("plan remains listed after replan (planId is stable)", () => {
+    const { planId } = planner.createPlan("develop a new feature");
+    planner.replan(planId);
+    const listed = planner.listPlans();
+    expect(listed.some((p) => p.planId === planId)).toBe(true);
+  });
+});

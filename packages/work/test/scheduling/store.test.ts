@@ -1,28 +1,48 @@
 // Tests for the scheduling store: YAML/JSON round-trip, YAML-wins-over-JSON
 // deduplication in listSchedules, and run-history append/update invariants.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
 import * as core from "@zana-ai/core";
 import * as store from "@zana-ai/work/src/scheduling/store.ts";
+
+// Both the .ts source and the compiled dist may be different module instances;
+// initialize and reset both to avoid cross-test bleed (same pattern as events/store.test.ts).
+const wcDist: any = (core as any).project?.workspaceContext ?? (core as any).default?.project?.workspaceContext;
+
+function resetWorkspace() {
+  for (const wc of [workspaceContextTs as any, wcDist]) {
+    try {
+      if (wc && typeof wc._resetForTesting === "function") wc._resetForTesting();
+    } catch {}
+  }
+}
+
+function initWorkspace(root: string) {
+  // Pre-create .zana/ so resolveProjectDir stops here and does NOT walk up
+  // to /tmp/.zana/ (which accumulates cross-test state from previous runs).
+  mkdirSync(join(root, ".zana"), { recursive: true });
+  workspaceContextTs.init(root);
+  if (wcDist && typeof wcDist.init === "function") wcDist.init(root);
+}
 
 describe("scheduling/store", () => {
   let tmpRoot: string;
 
   function schedulerDir() {
-    return (core as any).config.SCHEDULER_DIR as string;
+    return wcDist.getProjectPaths().schedulerDir as string;
   }
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-sched-store-"));
-    workspaceContext.init(tmpRoot);
-    try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
+    initWorkspace(tmpRoot);
   });
 
   afterEach(() => {
+    resetWorkspace();
     try { rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
   });
 

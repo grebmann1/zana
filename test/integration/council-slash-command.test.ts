@@ -55,12 +55,17 @@ describe("/zana:council slash command", () => {
     expect(tools).toContain("SendMessage");
     expect(tools).toContain("mcp__zana__zana_get_profile");
 
-    // zana_get_profile must be registered in the MCP server.
-    const mcpServerSrc = fs.readFileSync(
-      path.join(REPO_ROOT, "packages", "mcp", "src", "mcp-server.ts"),
-      "utf8",
-    );
-    expect(/name:\s*"zana_get_profile"/.test(mcpServerSrc)).toBe(true);
+    // zana_get_profile must be registered in the MCP server. Tool surface
+    // lives under packages/mcp/src/registrations/ since the bootstrap split.
+    const registrationsDir = path.join(REPO_ROOT, "packages", "mcp", "src", "registrations");
+    const found = fs.existsSync(registrationsDir)
+      ? fs.readdirSync(registrationsDir).some((f) => {
+          if (!f.endsWith(".ts")) return false;
+          const src = fs.readFileSync(path.join(registrationsDir, f), "utf8");
+          return /name:\s*"zana_get_profile"/.test(src);
+        })
+      : false;
+    expect(found).toBe(true);
   });
 
   it("body has Defaults / Workflow / Rules / daemon-path sections", () => {

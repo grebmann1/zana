@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import * as taskRouter from "@zana-ai/intelligence/src/intelligence/task-router.ts";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 
 /**
  * route(), recordOutcome(), getStats(), reset() — core routing logic.
@@ -7,7 +12,23 @@ import * as taskRouter from "@zana-ai/intelligence/src/intelligence/task-router.
  * The module uses lazy-loaded core (profileStore + eventBus) via Proxy, so
  * real registered profiles are available. We reset() before each test to
  * ensure a clean outcomes list.
+ *
+ * recordOutcome() persists to disk; the tenant-isolation gate now refuses
+ * to fall back to ~/.zana when no workspace is initialized, so we bootstrap
+ * a temp workspace for the entire suite.
  */
+
+let tmpWorkspace: string;
+beforeAll(() => {
+  tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "zana-task-router-route-"));
+  fs.mkdirSync(path.join(tmpWorkspace, ".zana"), { recursive: true });
+  workspaceContext.init(tmpWorkspace);
+  try { (core as any).project.workspaceContext.init(tmpWorkspace); } catch {}
+});
+
+afterAll(() => {
+  try { fs.rmSync(tmpWorkspace, { recursive: true, force: true }); } catch {}
+});
 
 beforeEach(() => {
   taskRouter.reset();

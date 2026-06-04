@@ -9,9 +9,11 @@ Zana exposes the same primitives through two delivery paths. Pick the right one 
 | Path | When | How |
 |---|---|---|
 | **Native** (Claude Code session) | You are inside a Claude Code chat. The host owns orchestration; subagents live in the conversation. | `Agent({ name, subagent_type, run_in_background, prompt })` + `SendMessage({ to, summary, message })`. Slash command: `/zana:team <id> <prompt>`. |
-| **Daemon** (headless / CI / scheduled) | No Claude Code chat is the orchestrator — a long-running daemon must drive the run from outside. | `mcp__zana__zana_start_team`, `mcp__zana__zana_spawn_agent`, etc. Used by `.zana/scheduler/*.yml` and external MCP callers. |
+| **Daemon** (headless / CI / scheduled) | No Claude Code chat is the orchestrator — a long-running daemon must drive the run from outside. | `mcp__zana__zana_start_team`, `mcp__zana__zana_spawn_agent`, etc. Used by `.zana/scheduler/*.yml` and external MCP callers. **These tools are gated** — see below. |
 
 **Inside a Claude Code session, prefer native.** Spawning a daemon orchestrator from inside a Claude Code chat duplicates the orchestrator role, burns extra tokens, and hides worker progress behind MCP polling. Use `mcp__zana__zana_start_team` only when you genuinely need a process that survives the Claude Code session ending — e.g., a cron-driven autopilot.
+
+> **Daemon-tool gate.** As of 0.1.5 the daemon-only MCP tools (`zana_spawn_agent*`, `zana_kill_agent`, `zana_agent_status`, `zana_agent_result`, `zana_list_agents`, `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`, `zana_list_running_teams`, `zana_ask_agent`, `zana_check_inbox`, `zana_send_ack`, `zana_autopilot_goal_*`, `zana_deliberate*`) are **hidden by default** to keep the Claude Code surface lean. They appear in `tools/list` and become callable only when the MCP server is launched with `ZANA_DAEMON_TOOLS=1` in its env (mirroring `ZANA_MASTER_MODE=true` for the swarm tools). Headless / CI / cron callers should set both flags; chat-driven users typically need neither — the slash commands cover everything.
 
 The rest of this guide describes both, called out per section.
 
@@ -108,6 +110,8 @@ Good: "Add password authentication to packages/server/src/auth/. Use bcrypt 5+, 
 ## Monitoring and result collection
 
 **Native**: agents stream their progress into the host conversation; `SendMessage` deliveries surface there too. There is nothing to poll. If you need to inspect or kill a subagent, use Claude Code's built-in `/agents` controls — Zana has no handle on native subagents because it didn't spawn them.
+
+> **Nested subagents and SendMessage availability.** Top-level subagents spawned by the host conversation (`Agent({...})`) have native `SendMessage` in their tool environment. Subagents that themselves were spawned by a parent subagent (e.g. council voters spawned by an outer orchestrator subagent) may NOT have native `SendMessage` — only the MCP fallback `mcp__zana__zana_send_message`. The fallback now accepts `toAgentName` (resolves by active-agent name) so addressing-by-name still works without a UUID. For strict cases (nested council voters that can't reach the synthesizer), the safe pattern is "voters return their stance as final assistant message; host collects all and spawns the synthesizer with the verbatim text inlined" — that's exactly what `/zana:council` and `/zana:council:arch` do today.
 
 **Daemon**: `zana_list_agents` returns lightweight status. `zana_agent_status(agentId)` gives detail. `zana_agent_result(agentId)` returns the agent's final message and any structured output once `state === "terminated"`. If an agent stalls, kill it (`zana_kill_agent`) and respawn with a sharper prompt. Don't pile on retries with the same prompt — it failed for a reason.
 

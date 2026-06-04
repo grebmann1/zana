@@ -7,13 +7,20 @@
 
 import * as http from "node:http";
 import * as url from "node:url";
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
 function _core() { return require("@zana-ai/core"); }
 function _log() { return _core().util.logger.getLogger("hook-server"); }
-const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
+type WorkspaceContextModule = typeof import("@zana-ai/core/dist/src/project/workspace-context");
+type TicketService = typeof import("@zana-ai/work/dist/src/tickets/service");
+type SchedulingService = typeof import("@zana-ai/work/dist/src/scheduling/service");
+type EventBusService = typeof import("@zana-ai/core/dist/src/events/service");
+const workspaceContext = lazyRequire<WorkspaceContextModule>(
+  () => require("@zana-ai/core").project.workspaceContext
+);
 function appendAudit(...args: any[]) { return _core().events.log.appendAudit(...args); }
-const ticketService: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/work").tickets.service[p] });
-const schedulerService: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/work").scheduling.service[p] });
-const eventBusService: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
+const ticketService = lazyRequire<TicketService>(() => require("@zana-ai/work").tickets.service);
+const schedulerService = lazyRequire<SchedulingService>(() => require("@zana-ai/work").scheduling.service);
+const eventBusService = lazyRequire<EventBusService>(() => require("@zana-ai/core").events.service);
 
 function DEFAULT_PORT() { return _core().config.DEFAULT_HOOK_PORT; }
 const MAX_BODY_BYTES = 256 * 1024;

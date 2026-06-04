@@ -13,6 +13,11 @@ describe("scheduler command action — shell injection guard", () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-cmd-"));
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
+    // The store.ts file resolves @zana-ai/core via require → dist. Dual-init
+    // the dist instance too so the wave-1 tenant-isolation gate passes.
+    const core = await import("@zana-ai/core");
+    const wcDist: any = (core as any).project?.workspaceContext;
+    if (wcDist && typeof wcDist.init === "function") wcDist.init(tmpDir);
     svc = await import("@zana-ai/work/src/scheduling/service.ts");
   });
 

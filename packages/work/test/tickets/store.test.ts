@@ -46,7 +46,9 @@ beforeEach(() => {
     os.tmpdir(),
     `zana-test-ticket-store-${Date.now()}-${process.pid}`
   );
-  fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+  // Pre-create .zana/ so resolveProjectDir finds THIS dir rather than
+  // walking up to /tmp/.zana (or any other ancestor .zana directory).
+  fs.mkdirSync(path.join(TEST_WORKSPACE, ".zana"), { recursive: true });
   // Init both the source-module singleton and the dist-module singleton so
   // that the store (which calls require("@zana-ai/core")) sees the temp dir.
   workspaceContext.init(TEST_WORKSPACE);

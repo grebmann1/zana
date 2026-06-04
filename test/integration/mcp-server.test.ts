@@ -48,6 +48,9 @@ describe("MCP Server (real stdio process)", () => {
         ...process.env,
         ZANA_WORKSPACE: WORKSPACE,
         ZANA_AUTO_INIT: "0",
+        // Integration test asserts agent/team-lifecycle tools are visible and
+        // callable; expose them via the daemon-tools gate.
+        ZANA_DAEMON_TOOLS: "1",
       },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -93,7 +96,7 @@ describe("MCP Server (real stdio process)", () => {
   it("rejects tools/list before initialization", async () => {
     // Spawn a fresh server to test pre-init rejection
     const freshProc = spawn(process.execPath, [MCP_SERVER_PATH], {
-      env: { ...process.env, ZANA_WORKSPACE: WORKSPACE, ZANA_AUTO_INIT: "0" },
+      env: { ...process.env, ZANA_WORKSPACE: WORKSPACE, ZANA_AUTO_INIT: "0", ZANA_DAEMON_TOOLS: "1" },
       stdio: ["pipe", "pipe", "pipe"],
     });
 

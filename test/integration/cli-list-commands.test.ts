@@ -101,6 +101,9 @@ describe("cli schedule list", () => {
   it("emits '(no scheduler directory)' for a fresh workspace", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-sched-"));
     try {
+      // Pre-create .zana/ so resolveProjectDir stops here and doesn't walk
+      // up to any ambient /tmp/.zana that may exist on the host machine.
+      fs.mkdirSync(path.join(tmp, ".zana"), { recursive: true });
       const result = runCli(["schedule", "list", "--workspace", tmp]);
       expect(result.code).toBe(0);
       expect(result.stdout).toMatch(/no scheduler directory/);
@@ -143,6 +146,9 @@ describe("cli run list", () => {
   it("emits '(no runs directory)' for a fresh workspace", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "zana-cli-run-"));
     try {
+      // Pre-create .zana/ so resolveProjectDir stops here and doesn't walk
+      // up to any ambient /tmp/.zana that may exist on the host machine.
+      fs.mkdirSync(path.join(tmp, ".zana"), { recursive: true });
       const result = runCli(["run", "list", "--workspace", tmp]);
       expect(result.code).toBe(0);
       expect(result.stdout).toMatch(/no runs directory/);

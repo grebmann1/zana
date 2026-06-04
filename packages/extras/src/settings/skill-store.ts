@@ -6,8 +6,15 @@ import { execSync } from "node:child_process";
 // required during core initialization.
 function _core() { return require("@zana-ai/core"); }
 import { SKILLS_DIR } from "@zana-ai/core/dist/src/config";
-const profileStoreMod: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
-const workspaceCtxMod: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+type ProfileStoreModule = typeof import("@zana-ai/core/dist/src/agents/profile-store");
+type WorkspaceContextModule = typeof import("@zana-ai/core/dist/src/project/workspace-context");
+const profileStoreMod = lazyRequire<ProfileStoreModule>(
+  () => require("@zana-ai/core").agents.profileStore
+);
+const workspaceCtxMod = lazyRequire<WorkspaceContextModule>(
+  () => require("@zana-ai/core").project.workspaceContext
+);
 
 const ALLOWED_DYNAMIC_COMMANDS = /^(git|node|cat|ls|find|grep|wc|date|pwd|echo|head|tail)\b/;
 const SHELL_METACHARACTERS = /&&|\|\||;|\||`|\$\(|>|</;
@@ -200,8 +207,7 @@ export function getEnabledInstructions() {
 }
 
 export function getInstructionsForProfile(profileId) {
-  const profileStore: any = profileStoreMod;
-  const profile = profileStore.getProfile(profileId);
+  const profile = profileStoreMod.getProfile(profileId);
   const skills = listSkills();
 
   const globalInstructions = skills

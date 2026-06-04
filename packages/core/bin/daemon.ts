@@ -11,7 +11,7 @@ const HELP = `Usage: zana-daemon [options] [command]
 
 Options:
   --workspace <path>   Working directory (default: cwd)
-  --port <number>      API server port (default: 47402)
+  --port <number>      Hook server port (default: 47400; API port = hook + 1)
   --background         Fork to background (daemonize)
   --pid-file <path>    PID file location
   --token <string>     Static auth token (bypasses auto-generated)
@@ -309,7 +309,7 @@ if (configIdx !== -1) {
 
 let workspace = process.env.ZANA_WORKSPACE || process.cwd();
 let teamId: string | null = null;
-let apiPort = parseInt(process.env.ZANA_PORT || "47402", 10);
+let apiPort = parseInt(process.env.ZANA_PORT || "47400", 10);
 let background = false;
 let pidFile = path.join(os.homedir(), ".zana", "daemon.pid");
 let token: string | null = null;

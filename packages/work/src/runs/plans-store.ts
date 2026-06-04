@@ -16,7 +16,14 @@ function getPlansDir() {
   const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().plansDir;
-  return path.join(core.config.ZANA_DIR, "plans");
+  // Tenant isolation gate: refuse to fall back to ~/.zana/plans. Plans
+  // contain orchestrator reasoning and decision logs; mixing them across
+  // tenants leaks cross-workspace state.
+  const ErrCtor = ctx.WorkspaceNotInitializedError;
+  throw new ErrCtor({
+    operation: "resolve",
+    path: path.join(core.config.ZANA_DIR, "plans"),
+  });
 }
 
 function ensureDir() {

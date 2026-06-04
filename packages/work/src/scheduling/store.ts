@@ -1,13 +1,52 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { serializeYaml, parseYaml } from "./yaml-format";
 import { resolveHistoryConfig } from "./schema";
 
 function getSchedulerDir(): string {
-  return require("@zana-ai/core").config.SCHEDULER_DIR;
+  const wc = require("@zana-ai/core").project.workspaceContext;
+  if (wc.isInitialized()) return wc.getProjectPaths().schedulerDir;
+  // Read-side fallback. All write entry points
+  // (ensureDir / saveSchedule / saveScheduleYaml / saveScheduleSameFormat /
+  //  deleteSchedule / appendRunResult / updateRunResult) gate on
+  // workspaceContext.isInitialized() and throw WorkspaceNotInitializedError
+  // before reaching this branch — so this fallback only ever serves reads
+  // (listSchedules / getSchedule / getRunHistory) of legacy host-global
+  // schedules.
+  return path.join(os.homedir(), ".zana", "scheduler");
+}
+
+/**
+ * Throws WorkspaceNotInitializedError when no workspace is initialized.
+ * Use from every write path. Reads remain tolerant on purpose so legacy
+ * host-global schedules stay inspectable.
+ */
+function assertWorkspaceForWrite(operation: string) {
+  const core = require("@zana-ai/core");
+  const ctx = core.project.workspaceContext;
+  if (!ctx.isInitialized()) {
+    const ErrCtor = ctx.WorkspaceNotInitializedError;
+    throw new ErrCtor({
+      operation,
+      path: path.join(os.homedir(), ".zana", "scheduler"),
+    });
+  }
 }
 
 export function ensureDir() {
+  // Tenant isolation gate: any caller forcing the dir into existence is
+  // about to write — block the ~/.zana/scheduler fallback.
+  assertWorkspaceForWrite("ensureDir");
+  fs.mkdirSync(getSchedulerDir(), { recursive: true });
+}
+
+/**
+ * Read-side dir bootstrap. Same as ensureDir() but does NOT gate on
+ * workspaceContext — used by tolerant readers (listSchedules) that are
+ * allowed to walk the global ~/.zana/scheduler fallback.
+ */
+function ensureDirForRead() {
   fs.mkdirSync(getSchedulerDir(), { recursive: true });
 }
 
@@ -33,7 +72,7 @@ function readFileMaybe(p: string): string | null {
  * same id, the YAML wins.
  */
 export function listSchedules() {
-  ensureDir();
+  ensureDirForRead();
   let files: string[];
   try {
     files = fs.readdirSync(getSchedulerDir());
@@ -111,6 +150,10 @@ export function getSchedule(id) {
  * schedules is saveScheduleYaml below.
  */
 export function saveSchedule(schedule) {
+  // Tenant isolation gate: refuse to write into ~/.zana/scheduler fallback.
+  // (ensureDir() also gates, but we assert here too so the error message
+  // names the actual operation.)
+  assertWorkspaceForWrite("saveSchedule");
   ensureDir();
   // Strip in-memory _format marker before persisting.
   const { _format, ...rest } = schedule || {};
@@ -126,6 +169,7 @@ export function saveSchedule(schedule) {
  * Write the schedule as YAML. The default format for v2.
  */
 export function saveScheduleYaml(schedule) {
+  assertWorkspaceForWrite("saveScheduleYaml");
   ensureDir();
   const { _format, ...rest } = schedule || {};
   const yaml = serializeYaml(rest);
@@ -138,11 +182,14 @@ export function saveScheduleYaml(schedule) {
  * Falls back to YAML for new schedules.
  */
 export function saveScheduleSameFormat(schedule) {
+  // Gating happens transitively via saveSchedule / saveScheduleYaml.
   if (schedule && schedule._format === "json") return saveSchedule(schedule);
   return saveScheduleYaml(schedule);
 }
 
 export function deleteSchedule(id) {
+  // Tenant isolation gate: deletes are writes; same rationale as saveSchedule.
+  assertWorkspaceForWrite("deleteSchedule");
   for (const p of [jsonPath(id), yamlPath(id), path.join(getSchedulerDir(), `${id}.yaml`)]) {
     try {
       fs.unlinkSync(p);
@@ -167,6 +214,7 @@ export function getRunHistory(id) {
 }
 
 export function appendRunResult(id, result) {
+  assertWorkspaceForWrite("appendRunResult");
   ensureDir();
   const schedule = getSchedule(id);
   const cfg = resolveHistoryConfig(schedule);
@@ -198,6 +246,7 @@ export function appendRunResult(id, result) {
  * agentId. Returns the updated entry, or null if no match was found.
  */
 export function updateRunResult(scheduleId, agentId, fields) {
+  assertWorkspaceForWrite("updateRunResult");
   ensureDir();
   // If history is disabled there's nothing to patch; appendRunResult would
   // have skipped writing the entry in the first place.

@@ -3,30 +3,35 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const EVENTS_DIR = path.join(os.homedir(), ".zana", "events");
-const EVENTS_FILE = path.join(EVENTS_DIR, "bus-events.ndjson");
-const CONFIG_FILE = path.join(EVENTS_DIR, "bus-config.json");
-
 import * as eventBusStore from "@zana-ai/core/src/events/store.ts";
+import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
+
+// Each test bootstraps a temp workspace so writes land inside the test's
+// own .zana directory rather than ~/.zana — required by the tenant-isolation
+// gate that refuses the global fallback for events writes.
 
 describe("event-bus-store", () => {
-  let originalContent = null;
+  let tmpRoot: string;
+  let EVENTS_DIR: string;
+  let EVENTS_FILE: string;
+  let CONFIG_FILE: string;
 
   beforeEach(() => {
-    try {
-      originalContent = fs.readFileSync(EVENTS_FILE, "utf8");
-    } catch {
-      originalContent = null;
-    }
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zana-evt-bus-store-"));
+    fs.mkdirSync(path.join(tmpRoot, ".zana"), { recursive: true });
+    workspaceContext.init(tmpRoot);
+    try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
+    EVENTS_DIR = path.join(tmpRoot, ".zana", "events");
+    EVENTS_FILE = path.join(EVENTS_DIR, "bus-events.ndjson");
+    CONFIG_FILE = path.join(EVENTS_DIR, "bus-config.json");
   });
 
   afterEach(() => {
-    if (originalContent !== null) {
-      fs.writeFileSync(EVENTS_FILE, originalContent, "utf8");
-    } else {
-      try { fs.unlinkSync(EVENTS_FILE); } catch {}
-    }
-    try { fs.unlinkSync(CONFIG_FILE); } catch {}
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
+    try { (workspaceContext as any)._resetForTesting?.(); } catch {}
+    try { (core as any).project.workspaceContext._resetForTesting?.(); } catch {}
+    void EVENTS_FILE; void CONFIG_FILE; void EVENTS_DIR;
   });
 
   it("appends and queries events", () => {

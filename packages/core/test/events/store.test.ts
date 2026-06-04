@@ -39,6 +39,9 @@ let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-store-test-"));
+  // Pre-create .zana/ so resolveProjectDir anchors here instead of walking
+  // up to any ancestor .zana/ directory (e.g. /tmp/.zana on macOS).
+  fs.mkdirSync(path.join(tmpDir, ".zana"), { recursive: true });
   initWorkspace(tmpDir);
 });
 

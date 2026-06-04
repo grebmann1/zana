@@ -5,14 +5,25 @@ function getTicketsDir() {
   const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().ticketsDir;
-  return path.join(core.config.ZANA_DIR, "tickets");
+  // Tenant isolation gate: refuse to fall back to ~/.zana/tickets. Migration
+  // would mix tickets across tenants reading the global directory.
+  const ErrCtor = ctx.WorkspaceNotInitializedError;
+  throw new ErrCtor({
+    operation: "resolve",
+    path: path.join(core.config.ZANA_DIR, "tickets"),
+  });
 }
 
 function getSprintsDir() {
   const core = require("@zana-ai/core");
   const ctx = core.project.workspaceContext;
   if (ctx.isInitialized()) return ctx.getProjectPaths().sprintsDir;
-  return path.join(core.config.ZANA_DIR, "sprints");
+  // Tenant isolation gate: refuse to fall back to ~/.zana/sprints.
+  const ErrCtor = ctx.WorkspaceNotInitializedError;
+  throw new ErrCtor({
+    operation: "resolve",
+    path: path.join(core.config.ZANA_DIR, "sprints"),
+  });
 }
 
 function loadJsonTickets() {

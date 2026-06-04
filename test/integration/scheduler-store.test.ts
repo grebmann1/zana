@@ -1,56 +1,48 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const SCHEDULER_DIR = path.join(os.homedir(), ".zana", "scheduler");
-
+import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 import * as schedulerStore from "@zana-ai/work/src/scheduling/store.ts";
 
 const PREFIX = `test-sched-${Date.now()}`;
 
-function cleanup() {
-  try {
-    const files = fs.readdirSync(SCHEDULER_DIR);
-    for (const f of files) {
-      if (f.startsWith(PREFIX)) {
-        try { fs.unlinkSync(path.join(SCHEDULER_DIR, f)); } catch {}
-      }
-    }
-  } catch {}
-  // Also clean by reading content (json files)
-  try {
-    const files = fs.readdirSync(SCHEDULER_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".history.json"));
-    for (const f of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(SCHEDULER_DIR, f), "utf8"));
-        if (data.name?.startsWith(PREFIX) || data.id?.startsWith(PREFIX)) {
-          fs.unlinkSync(path.join(SCHEDULER_DIR, f));
-          try { fs.unlinkSync(path.join(SCHEDULER_DIR, f.replace(".json", ".history.json"))); } catch {}
-        }
-      } catch {}
-    }
-  } catch {}
-  // Clean YAML files matching prefix
-  try {
-    const files = fs.readdirSync(SCHEDULER_DIR).filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
-    for (const f of files) {
-      if (f.startsWith(PREFIX)) {
-        try { fs.unlinkSync(path.join(SCHEDULER_DIR, f)); } catch {}
-        continue;
-      }
-      try {
-        const content = fs.readFileSync(path.join(SCHEDULER_DIR, f), "utf8");
-        if (content.includes(PREFIX)) {
-          fs.unlinkSync(path.join(SCHEDULER_DIR, f));
-        }
-      } catch {}
-    }
-  } catch {}
+// Tenant-isolation gate (wave-1): writes refuse to fall back to ~/.zana/.
+// Use a per-test tmp workspace and dual-init both module instances so
+// store.ts (resolved via require → dist) and the test (.ts source) agree.
+const wcDist: any = (core as any).project.workspaceContext;
+
+let tmpRoot: string;
+let SCHEDULER_DIR: string;
+
+function resetWorkspace() {
+  for (const wc of [workspaceContextTs as any, wcDist]) {
+    try {
+      if (wc && typeof wc._resetForTesting === "function") wc._resetForTesting();
+    } catch {}
+  }
 }
 
-describe("scheduler-store", () => {
-  afterEach(cleanup);
+function initWorkspace(root: string) {
+  fs.mkdirSync(path.join(root, ".zana"), { recursive: true });
+  workspaceContextTs.init(root);
+  if (wcDist && typeof wcDist.init === "function") wcDist.init(root);
+}
+
+describe("scheduler-store", { timeout: 20000 }, () => {
+  beforeEach(() => {
+    resetWorkspace();
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zana-sched-int-"));
+    initWorkspace(tmpRoot);
+    SCHEDULER_DIR = path.join(tmpRoot, ".zana", "scheduler");
+  });
+
+  afterEach(() => {
+    resetWorkspace();
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
+  });
 
   it("saves and retrieves a schedule", () => {
     const schedule = {
@@ -186,6 +178,8 @@ describe("scheduler-store", () => {
 
   it("YAML wins when both .yml and .json exist for the same id", () => {
     const id = `${PREFIX}-yaml-wins`;
+    // Tmp workspace is fresh — bootstrap the scheduler dir before manual writes.
+    fs.mkdirSync(SCHEDULER_DIR, { recursive: true });
     // Drop two files manually with the same id but different name fields.
     fs.writeFileSync(
       path.join(SCHEDULER_DIR, `${id}.json`),

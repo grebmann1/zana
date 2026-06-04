@@ -4,8 +4,11 @@ import * as os from "node:os";
 import * as fs from "node:fs";
 import * as configMod from "../config";
 import * as workspaceContext from "../project/workspace-context";
-const skillStore: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/extras").settings.skillStore[p] });
-const settingsStore: any = new Proxy({}, { get: (_t, p) => require("@zana-ai/extras").settings.store[p] });
+import { lazyRequire } from "../util/lazy-require";
+type SkillStoreModule = typeof import("@zana-ai/extras/dist/src/settings/skill-store");
+type SettingsStoreModule = typeof import("@zana-ai/extras/dist/src/settings/store");
+const skillStore = lazyRequire<SkillStoreModule>(() => require("@zana-ai/extras").settings.skillStore);
+const settingsStore = lazyRequire<SettingsStoreModule>(() => require("@zana-ai/extras").settings.store);
 
 export function findClaude() {
   if (process.env.ZANA_WORKER_BIN) return process.env.ZANA_WORKER_BIN;
@@ -146,7 +149,9 @@ function sanitizePathSegment(value) {
 
 function writeTempMcpConfig(profile, options = {}) {
   if (!profile.mcpConfig) return null;
-  const dir = configMod.TMP_DIR;
+  const dir = workspaceContext.isInitialized()
+    ? workspaceContext.getProjectPaths().tmpDir
+    : path.join(configMod.ZANA_DIR, "tmp");
   fs.mkdirSync(dir, { recursive: true });
 
   // Resolve placeholders in MCP config

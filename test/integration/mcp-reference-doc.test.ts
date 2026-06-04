@@ -14,11 +14,20 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const DOC = path.join(REPO_ROOT, "docs", "MCP-TOOL-REFERENCE.md");
 const MCP_SERVER_TS = path.join(REPO_ROOT, "packages", "mcp", "src", "mcp-server.ts");
 const DELIBERATE_TS = path.join(REPO_ROOT, "packages", "mcp", "src", "tools", "deliberate.ts");
+const REGISTRATIONS_DIR = path.join(REPO_ROOT, "packages", "mcp", "src", "registrations");
 
 function extractRegisteredTools(): Set<string> {
   const re = /name:\s*"(zana_[a-zA-Z0-9_]+)"/g;
   const set = new Set<string>();
-  for (const file of [MCP_SERVER_TS, DELIBERATE_TS]) {
+  // Per-domain registration files own the tool surface; mcp-server.ts is now
+  // just bootstrap. Scan all three locations.
+  const files = [MCP_SERVER_TS, DELIBERATE_TS];
+  if (fs.existsSync(REGISTRATIONS_DIR)) {
+    for (const f of fs.readdirSync(REGISTRATIONS_DIR)) {
+      if (f.endsWith(".ts")) files.push(path.join(REGISTRATIONS_DIR, f));
+    }
+  }
+  for (const file of files) {
     const src = fs.readFileSync(file, "utf8");
     let m: RegExpExecArray | null;
     while ((m = re.exec(src))) set.add(m[1]);

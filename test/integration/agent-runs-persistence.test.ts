@@ -6,9 +6,12 @@ import * as os from "node:os";
 import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
 
 const TEST_WORKSPACE = path.join(os.tmpdir(), `zana-test-runs-${Date.now()}`);
+// After the agents/manager split (worker-4), the spawn close-handler and
+// persistAgentRun helper live in lifecycle.ts. manager.ts is now a thin
+// facade that re-exports the public surface.
 const MANAGER_SRC_PATH = path.resolve(
   __dirname,
-  "../../packages/core/src/agents/manager.ts"
+  "../../packages/core/src/agents/lifecycle.ts"
 );
 
 describe("agent-runs-persistence", () => {

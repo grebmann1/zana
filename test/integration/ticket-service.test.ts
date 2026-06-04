@@ -1,46 +1,34 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-
-const TICKETS_DIR = path.join(os.homedir(), ".zana", "tickets");
-const SPRINTS_DIR = path.join(os.homedir(), ".zana", "sprints");
+import * as core from "@zana-ai/core";
 
 import * as ticketService from "@zana-ai/work/src/tickets/service.ts";
 
-function cleanupTestFiles(prefix) {
-  // Clean tickets (stored as directories with ticket.json inside)
-  try {
-    const entries = fs.readdirSync(TICKETS_DIR, { withFileTypes: true });
-    for (const entry of entries) {
-      let data = null;
-      if (entry.isDirectory()) {
-        const ticketPath = path.join(TICKETS_DIR, entry.name, "ticket.json");
-        try { data = JSON.parse(fs.readFileSync(ticketPath, "utf8")); } catch {}
-      } else if (entry.name.endsWith(".json") && !entry.name.startsWith("_")) {
-        try { data = JSON.parse(fs.readFileSync(path.join(TICKETS_DIR, entry.name), "utf8")); } catch {}
-      }
-      if (data && (data.title?.startsWith(prefix) || data.name?.startsWith(prefix))) {
-        const fullPath = path.join(TICKETS_DIR, entry.name);
-        fs.rmSync(fullPath, { recursive: true, force: true });
-      }
-    }
-  } catch {}
+const wcDist: any = (core as any).project.workspaceContext;
 
-  // Clean sprints (flat JSON files)
-  try {
-    const files = fs.readdirSync(SPRINTS_DIR);
-    for (const f of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(SPRINTS_DIR, f), "utf8"));
-        if (data.title?.startsWith(prefix) || data.name?.startsWith(prefix)) {
-          fs.unlinkSync(path.join(SPRINTS_DIR, f));
-        }
-      } catch {}
-    }
-  } catch {}
-}
+// db.ts caches the SQLite connection at module level, so we initialize the
+// workspace once per file rather than per test.  Each test still uses a
+// unique PREFIX so rows don't bleed across test cases within the run.
+let tmpRoot: string;
+
+beforeAll(() => {
+  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zana-ticket-svc-"));
+  // .git boundary prevents resolveProjectDir from walking up to a shared /tmp/.zana
+  fs.mkdirSync(path.join(tmpRoot, ".git"));
+  wcDist.init(tmpRoot);
+});
+
+afterAll(() => {
+  wcDist._resetForTesting();
+  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
+});
+
+// No-op: the SQLite backend is now workspace-scoped and the tmpRoot is
+// deleted in afterAll.  Kept as a stub so beforeEach/afterEach calls compile.
+function cleanupTestFiles(_prefix: string) {}
 
 const BASE_PREFIX = `test-${Date.now()}`;
 let PREFIX = BASE_PREFIX;

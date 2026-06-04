@@ -1,48 +1,40 @@
-// Unit tests for packages/core/src/agents/profile-store.ts
+// Integration test for packages/core/src/agents/profile-store.ts.
 //
-// profile-lens.test.ts already covers built-in profile reads and getProfilesByLens.
-// This file focuses on the mutable CRUD surface:
-//   - saveProfile: persists to disk, auto-generates ID, sets timestamps
-//   - deleteProfile: removes the file, returns correct boolean
-//   - getProfile: round-trips through the user profile directory
-//
-// No real ~/.zana writes — PROFILES_DIR is redirected to a tmp directory.
+// Strategy: redirect HOME to a tmpdir before any @zana-ai/* module loads.
+// `config.ts` derives PROFILES_DIR from `os.homedir()`/`process.env.HOME` at
+// module-load time, so the redirect must happen in vi.hoisted(). No internal
+// modules are mocked — the real profile-store writes to and reads from
+// the tmpdir-backed PROFILES_DIR.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-// ── temp dir must be ready before vi.mock factory runs ──────────────────────
-// vi.hoisted runs before any import is initialised — use require() here.
-const { profilesTestDir, tmpRoot } = vi.hoisted(() => {
+const { fakeHome, origHome } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _fs = require("node:fs") as typeof import("node:fs");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _path = require("node:path") as typeof import("node:path");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _os = require("node:os") as typeof import("node:os");
-  const tmpRoot = _fs.mkdtempSync(
-    _path.join(_os.tmpdir(), "zana-profile-store-test-"),
-  );
-  return { profilesTestDir: _path.join(tmpRoot, "profiles"), tmpRoot };
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-profile-store-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome };
 });
-
-// Redirect PROFILES_DIR so all writes stay in the temp directory.
-vi.mock("@zana-ai/core/src/config.ts", () => ({
-  PROFILES_DIR: profilesTestDir,
-}));
 
 import * as profileStore from "@zana-ai/core/src/agents/profile-store.ts";
 
-// ── lifecycle ───────────────────────────────────────────────────────────────
+const profilesTestDir = path.join(fakeHome, ".zana", "profiles");
 
 beforeAll(() => {
   fs.mkdirSync(profilesTestDir, { recursive: true });
 });
 
 afterAll(() => {
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  process.env.HOME = origHome;
+  fs.rmSync(fakeHome, { recursive: true, force: true });
 });
 
 // ── saveProfile ─────────────────────────────────────────────────────────────

@@ -98,5 +98,6 @@ module.exports = {
   guardrails: require("./guardrails/index"),
   util: {
     logger: require("./util/logger"),
+    lazyRequire: require("./util/lazy-require").lazyRequire,
   },
 };

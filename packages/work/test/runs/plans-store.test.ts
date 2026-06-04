@@ -21,6 +21,7 @@ const TEST_WORKSPACE = path.join(
 describe("plans-store CRUD", () => {
   beforeEach(() => {
     fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+    fs.mkdirSync(path.join(TEST_WORKSPACE, ".zana"), { recursive: true });
     workspaceContext.init(TEST_WORKSPACE);
     try { (core as any).project.workspaceContext.init(TEST_WORKSPACE); } catch {}
   });
@@ -171,5 +172,28 @@ describe("plans-store CRUD", () => {
   it("listPlans returns empty array when no plans exist", () => {
     // Fresh workspace — no plans written yet
     expect(listPlans()).toEqual([]);
+  });
+});
+
+describe("plans-store tenant-isolation gate", () => {
+  // This describe deliberately does NOT bootstrap a workspace; it asserts
+  // that createPlan refuses to write into the global ~/.zana/plans fallback.
+  beforeEach(() => {
+    try { (workspaceContext as any)._resetForTesting?.(); } catch {}
+    try { (core as any).project.workspaceContext._resetForTesting?.(); } catch {}
+  });
+
+  it("createPlan throws WorkspaceNotInitializedError when workspace not initialized", () => {
+    const wcDist: any = (core as any).project.workspaceContext;
+    const ErrCtor = wcDist.WorkspaceNotInitializedError;
+    expect(wcDist.isInitialized()).toBe(false);
+    let caught: any = null;
+    try {
+      createPlan({ title: "blocked", content: "x", createdBy: "u", linkedTickets: [], tags: [] });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ErrCtor);
+    expect(caught.code).toBe("WORKSPACE_NOT_INITIALIZED");
   });
 });

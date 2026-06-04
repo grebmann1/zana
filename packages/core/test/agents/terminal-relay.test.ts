@@ -1,6 +1,11 @@
 /**
  * Tests for packages/core/src/agents/terminal-relay.ts
  *
+ * pty-host is treated as a native-PTY BOUNDARY (it wraps `node-pty`, a C++
+ * native binding) and is mocked here so the test does not require a real
+ * shell or live PTY process. terminal-relay is exercised in full — URL
+ * routing, handshake, frame plumbing, connection-count book-keeping.
+ *
  * Covers:
  *  - URL routing: non-terminal paths destroy the socket
  *  - Terminal-not-found: 404 response + socket destroyed
@@ -11,11 +16,9 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// ─── Mock pty-host before importing terminal-relay ───────────────────────────
-// terminal-relay imports pty-host for getTerminal / onTerminalData /
-// onTerminalExit / resizeTerminal / writeTerminal.  We supply a controllable
-// fake so tests run without a real PTY process.
-
+// pty-host is the native-PTY boundary (`require("node-pty")`). Mocking it
+// keeps tests deterministic + avoids spawning real shells. Everything else
+// in terminal-relay (handshake, frames, connection bookkeeping) runs for real.
 let mockTerminals: Record<string, any> = {};
 const mockDataUnsub = vi.fn();
 const mockExitUnsub = vi.fn();

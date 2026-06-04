@@ -1,6 +1,33 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
-function RUNS_DIR() { return require("@zana-ai/core").config.RUNS_DIR; }
+
+function RUNS_DIR() {
+  const wc = require("@zana-ai/core").project.workspaceContext;
+  if (wc.isInitialized()) return wc.getProjectPaths().runsDir;
+  // Read-side fallback. The write paths (saveRun / deleteRun) gate on
+  // workspaceContext.isInitialized() and throw WorkspaceNotInitializedError
+  // before reaching this branch — so this fallback only ever serves reads
+  // (listRuns / getRun) of legacy global-scope state.
+  return path.join(os.homedir(), ".zana", "runs");
+}
+
+/**
+ * Throws WorkspaceNotInitializedError when no workspace is initialized.
+ * Use ONLY from write paths — reads are intentionally tolerant of the
+ * global fallback so legacy host-global runs stay inspectable.
+ */
+function assertWorkspaceForWrite(operation: string) {
+  const core = require("@zana-ai/core");
+  const ctx = core.project.workspaceContext;
+  if (!ctx.isInitialized()) {
+    const ErrCtor = ctx.WorkspaceNotInitializedError;
+    throw new ErrCtor({
+      operation,
+      path: path.join(os.homedir(), ".zana", "runs"),
+    });
+  }
+}
 
 function ensureDir() {
   fs.mkdirSync(RUNS_DIR(), { recursive: true });
@@ -54,6 +81,11 @@ export function getRun(id) {
 }
 
 export function saveRun(run) {
+  // Tenant isolation gate: refuse to write into the global ~/.zana/runs
+  // fallback when no workspace is bootstrapped — runs can carry tenant
+  // context (artifact ids, deliberation refs) that must not leak across
+  // workspaces sharing the host.
+  assertWorkspaceForWrite("saveRun");
   ensureDir();
   const filePath = path.join(RUNS_DIR(), `${run.id}.json`);
   fs.writeFileSync(filePath, JSON.stringify(run, null, 2) + "\n", "utf8");
@@ -62,6 +94,8 @@ export function saveRun(run) {
 
 export function deleteRun(id) {
   if (!id) return false;
+  // Tenant isolation gate: deletes are writes; same rationale as saveRun.
+  assertWorkspaceForWrite("deleteRun");
   const filePath = path.join(RUNS_DIR(), `${id}.json`);
   try {
     fs.unlinkSync(filePath);

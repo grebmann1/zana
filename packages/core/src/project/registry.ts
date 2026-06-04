@@ -11,6 +11,7 @@ import * as crypto from "node:crypto";
 
 import * as config from "../config";
 import { initProjectDir, isProjectInitialized } from "./init";
+import { createForWorkspace } from "./workspace-context";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -129,9 +130,7 @@ function migrateFromRecentWorkspaces() {
  * Read a project name from .zana/config.json, falling back to path.basename().
  */
 function readProjectName(absPath) {
-  const configPath = fs.existsSync(path.join(absPath, ".zana", "config.json"))
-    ? path.join(absPath, ".zana", "config.json")
-    : path.join(absPath, ".zana", "config.json");
+  const configPath = createForWorkspace(absPath).getProjectPaths().configPath;
   try {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, "utf8");
@@ -346,9 +345,7 @@ export function checkHealth(id) {
   const projectInitialized = isProjectInitialized(entry.path);
 
   let configValid = false;
-  const configPath = fs.existsSync(path.join(entry.path, ".zana", "config.json"))
-    ? path.join(entry.path, ".zana", "config.json")
-    : path.join(entry.path, ".zana", "config.json");
+  const configPath = createForWorkspace(entry.path).getProjectPaths().configPath;
   try {
     if (fs.existsSync(configPath)) {
       JSON.parse(fs.readFileSync(configPath, "utf8"));

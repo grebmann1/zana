@@ -1,48 +1,39 @@
-// Unit tests for packages/core/src/project/registry.ts
+// Integration test for packages/core/src/project/registry.ts.
 //
-// Covers: list, importProject, getById, getByPath, removeProject,
-//         togglePin (pinned-first sort), archiveProject, reorder, updateProject.
-//
-// No writes to real ~/.zana/ — ZANA_DIR and RECENT_WORKSPACES_PATH are
-// redirected to a temp directory via vi.mock (hoisted before module load).
+// Strategy: redirect HOME to a tmpdir before any @zana-ai/* module loads, so
+// `config.ts` derives ZANA_DIR/RECENT_WORKSPACES_PATH inside that tmpdir.
+// No internal modules are mocked — the real registry persists JSON to and
+// reads JSON from the tmpdir-backed paths.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-// ── create temp directory before vi.mock factory runs ──────────────────────
-const { registryTmpRoot, fakeZanaDir } = vi.hoisted(() => {
+const { fakeHome, origHome } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const _fs   = require("node:fs")   as typeof import("node:fs");
+  const _fs = require("node:fs") as typeof import("node:fs");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _path = require("node:path") as typeof import("node:path");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const _os   = require("node:os")   as typeof import("node:os");
-  const registryTmpRoot = _fs.mkdtempSync(
-    _path.join(_os.tmpdir(), "zana-registry-test-"),
-  );
-  const fakeZanaDir = _path.join(registryTmpRoot, "fake-zana");
-  return { registryTmpRoot, fakeZanaDir };
+  const _os = require("node:os") as typeof import("node:os");
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-registry-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome };
 });
-
-// Redirect ZANA_DIR and RECENT_WORKSPACES_PATH so nothing touches ~/.zana/.
-vi.mock("@zana-ai/core/src/config.ts", () => ({
-  ZANA_DIR: fakeZanaDir,
-  RECENT_WORKSPACES_PATH: require("node:path").join(fakeZanaDir, "recent-workspaces.json"),
-  PROFILES_DIR: require("node:path").join(fakeZanaDir, "profiles"),
-}));
 
 import * as registry from "../../src/project/registry.ts";
 
-// ── lifecycle ────────────────────────────────────────────────────────────────
+const fakeZanaDir = path.join(fakeHome, ".zana");
 
 beforeAll(() => {
   fs.mkdirSync(fakeZanaDir, { recursive: true });
 });
 
 afterAll(() => {
-  try { fs.rmSync(registryTmpRoot, { recursive: true, force: true }); } catch {}
+  process.env.HOME = origHome;
+  try { fs.rmSync(fakeHome, { recursive: true, force: true }); } catch {}
 });
 
 // helper: create a real tmpdir to act as a "project root"
@@ -54,12 +45,9 @@ function makeProjectDir(suffix: string): string {
 // ── list ─────────────────────────────────────────────────────────────────────
 
 describe("list()", () => {
-  it("returns an empty array when no projects have been imported", () => {
+  it("returns an array (possibly empty if no projects have been imported yet)", () => {
     const result = registry.list();
-    // Fresh temp dir — registry has no entries.
     expect(Array.isArray(result)).toBe(true);
-    // The registry may already have entries from sibling tests running first,
-    // but we can still assert it is an array.
   });
 });
 

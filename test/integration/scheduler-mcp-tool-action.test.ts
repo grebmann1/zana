@@ -13,6 +13,10 @@ describe("scheduler mcp_tool action", () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-mcp-"));
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
+    // Dual-init the dist instance — store.ts requires @zana-ai/core → dist.
+    const core = await import("@zana-ai/core");
+    const wcDist: any = (core as any).project?.workspaceContext;
+    if (wcDist && typeof wcDist.init === "function") wcDist.init(tmpDir);
     svc = await import("@zana-ai/work/src/scheduling/service.ts");
   });
 

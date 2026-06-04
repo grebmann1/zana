@@ -33,6 +33,7 @@ function findRepoRoot(start) {
 const ROOT = findRepoRoot(__dirname);
 const MCP_SERVER_PATH = path.join(ROOT, "packages/mcp/src/mcp-server.ts");
 const DELIBERATE_PATH = path.join(ROOT, "packages/mcp/src/tools/deliberate.ts");
+const REGISTRATIONS_DIR = path.join(ROOT, "packages/mcp/src/registrations");
 const OUTPUT_PATH = path.join(ROOT, "docs/MCP-TOOL-REFERENCE.md");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -974,14 +975,22 @@ function renderIndex(tools) {
 function main() {
   let tools;
   try {
-    const fromMcp = extractToolsFromSource(MCP_SERVER_PATH);
-    const fromDelib = extractToolsFromSource(DELIBERATE_PATH);
-    const merged = [...fromMcp];
-    const seen = new Set(fromMcp.map((t) => t.name));
-    for (const t of fromDelib) {
-      if (!seen.has(t.name)) {
-        merged.push(t);
-        seen.add(t.name);
+    // Per-domain registration files own the tool surface; mcp-server.ts is
+    // bootstrap-only since the split.
+    const sources = [MCP_SERVER_PATH, DELIBERATE_PATH];
+    if (fs.existsSync(REGISTRATIONS_DIR)) {
+      for (const f of fs.readdirSync(REGISTRATIONS_DIR)) {
+        if (f.endsWith(".ts")) sources.push(path.join(REGISTRATIONS_DIR, f));
+      }
+    }
+    const merged = [];
+    const seen = new Set();
+    for (const src of sources) {
+      for (const t of extractToolsFromSource(src)) {
+        if (!seen.has(t.name)) {
+          merged.push(t);
+          seen.add(t.name);
+        }
       }
     }
     tools = merged;
@@ -992,7 +1001,7 @@ function main() {
   }
 
   if (tools.length === 0) {
-    process.stderr.write("no zana_* tools found in mcp-server.ts — aborting\n");
+    process.stderr.write("no zana_* tools found in mcp registrations — aborting\n");
     process.exit(1);
     return;
   }

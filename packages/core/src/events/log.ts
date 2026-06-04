@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as os from "node:os";
 
 let sessionId = null;
 let sessionDir = null;
@@ -14,24 +15,22 @@ function _ctx() {
     return require("../project/workspace-context");
   }
 }
-function _config() {
-  try {
-    return require("@zana-ai/core").config;
-  } catch {
-    return require("../config");
-  }
-}
+
+const GLOBAL_ZANA_DIR = path.join(os.homedir(), ".zana");
 
 function getSessionsDir() {
   const ctx = _ctx();
+  // Sessions/audit logs are best-effort, non-tenant-isolated diagnostics.
+  // When no workspace is wired (e.g. early CLI bootstrap, tests without
+  // init), fall back to the global ~/.zana location rather than crash.
   if (ctx.isInitialized()) return ctx.getProjectPaths().sessionsDir;
-  return _config().SESSIONS_DIR;
+  return path.join(GLOBAL_ZANA_DIR, "sessions");
 }
 
 function getAuditDir() {
   const ctx = _ctx();
   if (ctx.isInitialized()) return ctx.getProjectPaths().auditDir;
-  return path.join(_config().ZANA_DIR, "audit");
+  return path.join(GLOBAL_ZANA_DIR, "audit");
 }
 
 // --- size-based rotation ---

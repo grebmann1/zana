@@ -1,9 +1,11 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
 function _core() { return require("@zana-ai/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
-const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
+type EventBusService = typeof import("@zana-ai/core/dist/src/events/service");
+const eventBus = lazyRequire<EventBusService>(() => require("@zana-ai/core").events.service);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -123,6 +125,14 @@ function scheduleSave() {
 
 function flushToDisk() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  // Tenant isolation gate: refuse to fall back to ~/.zana/memory. Vector
+  // memory entries (auto-indexed agent completions) carry workspace-private
+  // payloads; the global path is shared across every workspace on the host.
+  const ctx = _core().project.workspaceContext;
+  if (!ctx.isInitialized()) {
+    const ErrCtor = ctx.WorkspaceNotInitializedError;
+    throw new ErrCtor({ operation: "write", path: MEMORY_DIR() });
+  }
   fs.mkdirSync(MEMORY_DIR(), { recursive: true });
   fs.writeFileSync(VECTORS_PATH(), JSON.stringify(entries), "utf8");
   fs.writeFileSync(VOCAB_PATH(), JSON.stringify(vocabulary), "utf8");

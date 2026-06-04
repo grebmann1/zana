@@ -3,14 +3,35 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as core from "@zana-ai/core";
 import * as schedulerService from "@zana-ai/work/src/scheduling/service.ts";
 import * as schedulerStore from "@zana-ai/work/src/scheduling/store.ts";
 import { serializeYaml } from "@zana-ai/work/src/scheduling/yaml-format.ts";
 
-// Same dir resolution that store.ts will use when workspace-context is not
-// initialized: ~/.zana/scheduler.
-const SCHEDULER_DIR = path.join(os.homedir(), ".zana", "scheduler");
+// Both the .ts source and the compiled dist may be different module instances;
+// initialize and reset both to avoid cross-test bleed (same pattern as store.test.ts).
+const wcDist: any = (core as any).project?.workspaceContext ?? (core as any).default?.project?.workspaceContext;
+
+function resetWorkspace() {
+  for (const wc of [workspaceContextTs as any, wcDist]) {
+    try {
+      if (wc && typeof wc._resetForTesting === "function") wc._resetForTesting();
+    } catch {}
+  }
+}
+
+function initWorkspace(root: string) {
+  // Pre-create .zana/ so resolveProjectDir stops here and does NOT walk up
+  // to ~/.zana/ (which accumulates cross-test state and thousands of files).
+  fs.mkdirSync(path.join(root, ".zana"), { recursive: true });
+  workspaceContextTs.init(root);
+  if (wcDist && typeof wcDist.init === "function") wcDist.init(root);
+}
+
 const PREFIX = `hyd-test-${Date.now()}`;
+let tmpRoot: string;
+let SCHEDULER_DIR: string;
 
 function writeYaml(id: string, schedule: any) {
   fs.mkdirSync(SCHEDULER_DIR, { recursive: true });
@@ -19,25 +40,18 @@ function writeYaml(id: string, schedule: any) {
   return fpath;
 }
 
-function cleanupPrefixed() {
-  try {
-    const files = fs.readdirSync(SCHEDULER_DIR);
-    for (const f of files) {
-      if (f.startsWith(PREFIX)) {
-        try { fs.unlinkSync(path.join(SCHEDULER_DIR, f)); } catch {}
-      }
-    }
-  } catch {}
-}
-
-describe("scheduler hydrate-from-disk", () => {
+describe("scheduler hydrate-from-disk", { timeout: 20000 }, () => {
   beforeEach(() => {
-    cleanupPrefixed();
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zana-hydrate-"));
+    initWorkspace(tmpRoot);
+    SCHEDULER_DIR = wcDist.getProjectPaths().schedulerDir as string;
+    fs.mkdirSync(SCHEDULER_DIR, { recursive: true });
   });
 
   afterEach(() => {
     schedulerService.stopAll();
-    cleanupPrefixed();
+    resetWorkspace();
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
   });
 
   it("loads enabled YAML schedules and registers triggers", () => {
@@ -104,5 +118,5 @@ describe("scheduler hydrate-from-disk", () => {
     const active = schedulerService._getActiveTriggers();
     const matches = active.filter((t: any) => t.scheduleId === `${PREFIX}-idem`);
     expect(matches.length).toBe(1);
-  });
+  }, 30_000);
 });

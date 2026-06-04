@@ -1,48 +1,42 @@
-// Unit tests for packages/server/src/hooks/server.ts
+// Integration test for packages/server/src/hooks/server.ts.
+//
+// Strategy: redirect HOME so the REAL @zana-ai/core resolves all global paths
+// under a tmpdir, and initialise a real workspace context. The hook server
+// runs against the real core/work modules — no internal-module mocks. We
+// assert HTTP behaviour over a real loopback HTTP server.
+//
 // Covers: registerRoute dispatch (GET + POST), 404 for unknown routes,
 // 400 for malformed JSON body, and handler error → 500 response.
-// Starts a real loopback HTTP server; no mock clock needed.
 
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import http from "node:http";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
-// Stub @zana-ai/core before hooks/server.ts lazily requires it.
-const fakeLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-vi.mock("@zana-ai/core", () => ({
-  util: { logger: { getLogger: () => fakeLogger } },
-  project: { workspaceContext: { getProjectPaths: () => ({}) } },
-  events: {
-    service: { emit: vi.fn(), query: vi.fn(() => []) },
-    log: { appendAudit: vi.fn() },
-  },
-  config: { DEFAULT_HOOK_PORT: 47801 },
-}));
-
-// Stub @zana-ai/work (ticket / scheduler proxies inside registerServiceRoutes).
-vi.mock("@zana-ai/work", () => ({
-  tickets: {
-    service: {
-      listTickets: vi.fn(() => []),
-      getTicket: vi.fn(() => null),
-      createTicket: vi.fn(() => ({})),
-      updateTicket: vi.fn(() => ({})),
-      claimTicket: vi.fn(() => ({})),
-      completeTicket: vi.fn(() => ({})),
-      commentTicket: vi.fn(() => ({})),
-    },
-  },
-  scheduling: {
-    service: { listSchedules: vi.fn(() => []), triggerSchedule: vi.fn(() => ({})) },
-  },
-}));
+const { fakeHome, origHome, tmpWorkspace } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _fs = require("node:fs") as typeof import("node:fs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _path = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _os = require("node:os") as typeof import("node:os");
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-hook-server-home-"));
+  const tmpWorkspace = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-hook-server-ws-"));
+  _fs.mkdirSync(_path.join(tmpWorkspace, ".zana"), { recursive: true });
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome, tmpWorkspace };
+});
 
 import {
   startHookServer,
   registerRoute,
   setSwarmModules,
 } from "../../src/hooks/server.ts";
+import * as core from "@zana-ai/core";
 
-// ─── Stubs for swarm modules ─────────────────────────────────────────────────
+// ─── Stubs for swarm modules (these are caller-provided, not internal) ─────
 
 const mockRouter = {
   deliverLocal: vi.fn(),
@@ -106,6 +100,11 @@ let server: any;
 let port: number;
 
 beforeAll(async () => {
+  // Initialise a real workspace context — the hook server lazy-requires
+  // workspace-context for ticket/scheduler routes, and an uninitialised
+  // context throws on read.
+  (core as any).project.workspaceContext.init(tmpWorkspace);
+
   setSwarmModules({ router: mockRouter, events: mockEvents, getAgents: mockGetAgents });
 
   // Register custom routes BEFORE startHookServer so they land in the Map
@@ -132,6 +131,9 @@ beforeAll(async () => {
 
 afterAll(() => {
   server?.stop();
+  process.env.HOME = origHome;
+  try { fs.rmSync(fakeHome, { recursive: true, force: true }); } catch {}
+  try { fs.rmSync(tmpWorkspace, { recursive: true, force: true }); } catch {}
 });
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

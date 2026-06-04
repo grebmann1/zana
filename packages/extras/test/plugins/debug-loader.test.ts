@@ -1,43 +1,68 @@
-import { describe, it, vi, beforeEach, afterEach } from "vitest";
+// Smoke test for the plugin loader running with relative imports through
+// vitest's SSR runner. Mirrors the production loader.test.ts setup but is a
+// minimal sanity check to catch resolver regressions early.
+//
+// Strategy: redirect HOME to a tmpdir before any @zana-ai/* module loads, so
+// the REAL @zana-ai/core's `config.PLUGINS_DIR` resolves under that tmpdir.
+// We then write one plugin manifest into a project-local scratch dir (Vite's
+// SSR sandbox refuses requires from outside the project root).
+
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as os from "node:os";
 
-let pluginsDir = "";
+const { fakeHome, origHome, scratchBase } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _fs = require("node:fs") as typeof import("node:fs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _path = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _os = require("node:os") as typeof import("node:os");
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-debug-loader-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  const here = _path.dirname(new URL(import.meta.url).pathname);
+  const scratchBase = _path.join(here, ".scratch-debug");
+  return { fakeHome, origHome, scratchBase };
+});
 
-vi.mock("@zana-ai/core", () => ({
-  config: {
-    get PLUGINS_DIR() { console.log("[MOCK] PLUGINS_DIR called, returning:", pluginsDir); return pluginsDir; },
-    get ZANA_DIR()    { return pluginsDir; },
-    get SETTINGS_PATH() { return path.join(pluginsDir, "settings.json"); },
-  },
-  events: { service: { emit: vi.fn(), subscribe: vi.fn(() => vi.fn()), query: vi.fn(() => []) } },
-  agents: { manager: { listAgents: vi.fn(() => []), spawnHeadlessAgent: vi.fn(), killAgent: vi.fn() } },
-}));
-
-vi.mock("@zana-ai/work", () => ({
-  tickets: { service: { listTickets: vi.fn(() => []), getTicket: vi.fn(), createTicket: vi.fn(), updateTicket: vi.fn() } },
-}));
-
-// Use RELATIVE path, same as sse-broadcaster.test.ts does
 import * as loader from "../../src/plugins/loader.ts";
 
-describe("debug loader", () => {
-  beforeEach(() => {
-    pluginsDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-debug-"));
-  });
-  afterEach(() => {
-    loader.unloadPlugins();
-    fs.rmSync(pluginsDir, { recursive: true, force: true });
-  });
+let realCore: any;
+let pluginsDir = "";
 
-  it("PLUGINS_DIR mock called during loadPlugins with relative import?", () => {
+beforeEach(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  realCore = require("@zana-ai/core");
+  fs.mkdirSync(scratchBase, { recursive: true });
+  pluginsDir = fs.mkdtempSync(path.join(scratchBase, "zana-debug-"));
+  realCore.config.PLUGINS_DIR = pluginsDir;
+});
+
+afterEach(() => {
+  loader.unloadPlugins();
+  try { fs.rmSync(pluginsDir, { recursive: true, force: true }); } catch {}
+  try { fs.rmdirSync(scratchBase); } catch {}
+});
+
+afterAll(() => {
+  process.env.HOME = origHome;
+  try { fs.rmSync(fakeHome, { recursive: true, force: true }); } catch {}
+});
+
+describe("debug loader", () => {
+  it("PLUGINS_DIR is honoured for a single plugin loaded via relative import", () => {
     const pluginDir = path.join(pluginsDir, "alpha");
     fs.mkdirSync(pluginDir, { recursive: true });
-    fs.writeFileSync(path.join(pluginDir, "plugin.json"), JSON.stringify({ id: "alpha", name: "Alpha", version: "1.0.0", main: "index.js" }));
+    fs.writeFileSync(
+      path.join(pluginDir, "plugin.json"),
+      JSON.stringify({ id: "alpha", name: "Alpha", version: "1.0.0", main: "index.js" }),
+    );
     fs.writeFileSync(path.join(pluginDir, "index.js"), "module.exports = {};");
-    
+
     loader.loadPlugins();
-    console.log("listPlugins:", loader.listPlugins());
+
+    const list = loader.listPlugins();
+    expect(list.find((p) => p.id === "alpha")).toBeDefined();
   });
 });

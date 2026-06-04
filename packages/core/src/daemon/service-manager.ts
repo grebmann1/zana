@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { execSync } = require('node:child_process');
+const { execSync, execFileSync } = require('node:child_process');
 
 const LABEL = 'com.zana.daemon';
 const CONFIG_DIR = path.join(os.homedir(), '.zana');
@@ -12,6 +12,61 @@ const DAEMON_BIN = path.resolve(__dirname, '..', 'bin', 'daemon.js');
 
 function nodePath() {
   return process.execPath;
+}
+
+// XML entity escape for plist <string> bodies. Order matters — `&` first so
+// later replacements don't double-escape. Without this, a workspace path
+// containing `</string><string>...` could break out of WorkingDirectory and
+// inject ProgramArguments into the launchd plist (persistent code execution).
+function escapeXml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// Build the launchd plist text for the given inputs. Pure — exported under
+// `__test` for unit tests; production callers go through `install()`.
+function buildMacosPlist(opts: {
+  label: string;
+  node: string;
+  daemonBin: string;
+  workspace: string;
+  port: string;
+  logPath: string;
+}): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    '<dict>',
+    `  <key>Label</key>`,
+    `  <string>${escapeXml(opts.label)}</string>`,
+    '  <key>ProgramArguments</key>',
+    '  <array>',
+    `    <string>${escapeXml(opts.node)}</string>`,
+    `    <string>${escapeXml(opts.daemonBin)}</string>`,
+    `    <string>--workspace</string>`,
+    `    <string>${escapeXml(opts.workspace)}</string>`,
+    `    <string>--port</string>`,
+    `    <string>${escapeXml(opts.port)}</string>`,
+    '  </array>',
+    '  <key>RunAtLoad</key>',
+    '  <true/>',
+    '  <key>KeepAlive</key>',
+    '  <true/>',
+    `  <key>StandardOutPath</key>`,
+    `  <string>${escapeXml(opts.logPath)}</string>`,
+    `  <key>StandardErrorPath</key>`,
+    `  <string>${escapeXml(opts.logPath)}</string>`,
+    `  <key>WorkingDirectory</key>`,
+    `  <string>${escapeXml(opts.workspace)}</string>`,
+    '</dict>',
+    '</plist>',
+    '',
+  ].join('\n');
 }
 
 // --- macOS (launchd) ---
@@ -31,45 +86,25 @@ const macos = {
 
     const logPath = path.join(LOG_DIR, 'daemon.log');
 
-    const plist = [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
-      '<plist version="1.0">',
-      '<dict>',
-      `  <key>Label</key>`,
-      `  <string>${label}</string>`,
-      '  <key>ProgramArguments</key>',
-      '  <array>',
-      `    <string>${nodePath()}</string>`,
-      `    <string>${DAEMON_BIN}</string>`,
-      `    <string>--workspace</string>`,
-      `    <string>${workspace}</string>`,
-      `    <string>--port</string>`,
-      `    <string>${port}</string>`,
-      '  </array>',
-      '  <key>RunAtLoad</key>',
-      '  <true/>',
-      '  <key>KeepAlive</key>',
-      '  <true/>',
-      `  <key>StandardOutPath</key>`,
-      `  <string>${logPath}</string>`,
-      `  <key>StandardErrorPath</key>`,
-      `  <string>${logPath}</string>`,
-      `  <key>WorkingDirectory</key>`,
-      `  <string>${workspace}</string>`,
-      '</dict>',
-      '</plist>',
-      '',
-    ].join('\n');
+    const plist = buildMacosPlist({
+      label,
+      node: nodePath(),
+      daemonBin: DAEMON_BIN,
+      workspace,
+      port,
+      logPath,
+    });
 
     fs.writeFileSync(macos.plistPath(), plist, 'utf8');
-    execSync(`launchctl load -w "${macos.plistPath()}"`, { stdio: 'pipe' });
+    // Use execFile-style argv (via execFileSync) so plistPath cannot be
+    // injected into a shell command.
+    execFileSync('launchctl', ['load', '-w', macos.plistPath()], { stdio: 'pipe' });
   },
 
   uninstall() {
     const plist = macos.plistPath();
     if (fs.existsSync(plist)) {
-      try { execSync(`launchctl unload "${plist}"`, { stdio: 'pipe' }); } catch {}
+      try { execFileSync('launchctl', ['unload', plist], { stdio: 'pipe' }); } catch {}
       fs.unlinkSync(plist);
     }
   },
@@ -82,7 +117,7 @@ const macos = {
 
     if (installed) {
       try {
-        const out = execSync(`launchctl list "${LABEL}" 2>/dev/null`, { encoding: 'utf8' });
+        const out = execFileSync('launchctl', ['list', LABEL], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
         const pidMatch = out.match(/"PID"\s*=\s*(\d+)/);
         if (pidMatch) {
           pid = parseInt(pidMatch[1], 10);
@@ -222,4 +257,11 @@ function logs(lines) {
   return backend().logs(lines);
 }
 
-module.exports = { install, uninstall, status, logs };
+module.exports = {
+  install,
+  uninstall,
+  status,
+  logs,
+  // Test-only surface — pure helpers used by service-manager-xml-escape.test.ts.
+  __test: { escapeXml, buildMacosPlist },
+};

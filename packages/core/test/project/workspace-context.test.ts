@@ -235,6 +235,10 @@ describe("multi-tenant configPath isolation", () => {
   it("two workspace roots produce two distinct configPath values via createForWorkspace", () => {
     const dirA = makeTmpDir();
     const dirB = makeTmpDir();
+    // Plant a .git dir so resolveProjectDir stops here instead of walking
+    // up to a shared /tmp/.zana that may exist in this environment.
+    fs.mkdirSync(path.join(dirA, ".git"));
+    fs.mkdirSync(path.join(dirB, ".git"));
 
     const ctxA = createForWorkspace(dirA);
     const ctxB = createForWorkspace(dirB);
@@ -255,6 +259,10 @@ describe("multi-tenant configPath isolation", () => {
   it("singleton getProjectPaths().configPath is scoped to the init()'d workspace", () => {
     const dirA = makeTmpDir();
     const dirB = makeTmpDir();
+    // Plant a .git dir so resolveProjectDir stops here instead of walking
+    // up to a shared /tmp/.zana that may exist in this environment.
+    fs.mkdirSync(path.join(dirA, ".git"));
+    fs.mkdirSync(path.join(dirB, ".git"));
 
     init(dirA);
     const cfgA = getProjectPaths().configPath;

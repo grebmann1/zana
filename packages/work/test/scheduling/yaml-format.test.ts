@@ -98,4 +98,24 @@ describe("YAML round-trip", () => {
     expect(() => serializeYaml(null as any)).toThrow();
     expect(() => serializeYaml("hi" as any)).toThrow();
   });
+
+  it("serializeYaml normalizes legacy flat intervalMs into the schedule block", () => {
+    // The legacy flat `intervalMs` field (used before the nested schedule block was
+    // introduced) must be lifted into `schedule.intervalMs` so that pickBackend()
+    // can read it from a single location. This mirrors the `cron` flat-field
+    // normalization already tested above.
+    const flat = {
+      id: "legacy-interval",
+      name: "Legacy interval schedule",
+      intervalMs: 300_000,
+      action: { type: "spawn-agent", profileId: "researcher", prompt: "go" },
+    };
+    const yaml = serializeYaml(flat);
+    const parsed = parseYaml(yaml);
+    // The flat intervalMs should appear inside the `schedule` block.
+    expect(parsed.schedule).toBeDefined();
+    expect(parsed.schedule.intervalMs).toBe(300_000);
+    // The top-level flat field should NOT be duplicated at the root.
+    expect(parsed.intervalMs).toBeUndefined();
+  });
 });

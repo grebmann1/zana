@@ -1,29 +1,36 @@
-// Tests for packages/intelligence/src/intelligence/vector-memory.ts
+// Integration test for packages/intelligence/src/intelligence/vector-memory.ts.
 //
 // The module holds module-level global state (entries, vocabulary, docFreqMap).
-// We mock @zana-ai/core to avoid real-FS writes (ZANA_DIR) and isolate event
-// bus calls. Fake timers suppress the 5-second save debounce so no actual
-// disk I/O occurs during tests.
+// We redirect HOME to a tmpdir before @zana-ai/core loads so its `ZANA_DIR`
+// resolves under the tmpdir; vector-memory writes are captured there. Fake
+// timers suppress the 5-second save debounce so no actual disk I/O races
+// with the assertions.
+//
+// No internal modules are mocked — we exercise the real vector-memory against
+// the real @zana-ai/core `config` and `events.service`.
 //
 // Tests are additive — each uses content unique enough not to collide with
 // others. The suite covers: store, search, get, stats, promote, and maintain
 // (TTL expiry path via fake Date.now).
 
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
-// ── Hoist mocks before module imports ─────────────────────────────────────────
+const { fakeHome, origHome } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _fs = require("node:fs") as typeof import("node:fs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _path = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _os = require("node:os") as typeof import("node:os");
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-vector-memory-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome };
+});
 
-vi.mock("@zana-ai/core", () => ({
-  config: { ZANA_DIR: "/tmp/zana-vector-memory-test" },
-  events: {
-    service: {
-      emit: vi.fn(),
-      subscribe: vi.fn(() => vi.fn()), // returns an unsubscribe fn
-    },
-  },
-}));
-
-// Import AFTER mocks are registered
 import * as vm from "@zana-ai/intelligence/src/intelligence/vector-memory.ts";
 
 // ── Suite setup ───────────────────────────────────────────────────────────────
@@ -34,6 +41,8 @@ beforeAll(() => {
 
 afterAll(() => {
   vi.useRealTimers();
+  process.env.HOME = origHome;
+  try { fs.rmSync(fakeHome, { recursive: true, force: true }); } catch {}
 });
 
 // ─── store() ─────────────────────────────────────────────────────────────────

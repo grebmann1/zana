@@ -93,7 +93,7 @@ where Claude Code isn't running.
 ```
 zana --help
 zana init wizard <path>            # bootstrap workspace + register MCP
-zana headless . --background       # start daemon (port 47402)
+zana headless . --background       # start daemon (port 47400)
 zana status                        # list running daemons
 zana ticket list                   # query tickets
 zana run list --limit 10           # recent agent runs
@@ -133,9 +133,24 @@ Bare-minimum cheat sheet (development, from a clone):
 - CLI: `node dist/bin/zana.js --help` (or after `npm install -g .`: `zana --help`)
 - MCP server entry: `packages/mcp/dist/bin/zana-mcp-server.js`
 
-## Master mode
+## Daemon-only tools and master mode
 
-For multi-daemon setups, set `ZANA_MASTER_MODE=true` to expose the additional `zana_swarm_*` coordination tools. For ordinary single-daemon orchestration, leave it off — the in-process agent tools are sufficient.
+The default MCP install (`npx -y @zana-ai/mcp` with no env) registers the lean
+chat-friendly tool surface (~64 tools) — tickets, sprints, memory, artifacts,
+profiles, schedules, plus the team-template / event / channel surfaces. Tools
+that exist only to drive a long-lived daemon (agent lifecycle, team start/stop,
+autopilot, deliberation, P2P inbox) are hidden behind two env flags:
+
+- `ZANA_DAEMON_TOOLS=1` — exposes 24 daemon-only tools: `zana_spawn_agent*`,
+  `zana_kill_agent`, `zana_agent_status`, `zana_agent_result`, `zana_list_agents`,
+  `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`,
+  `zana_list_running_teams`, `zana_ask_agent`, `zana_check_inbox`,
+  `zana_send_ack`, `zana_autopilot_goal_*` (4), `zana_deliberate*` (6).
+  Set this only for headless / CI / cron callers — inside a Claude Code chat
+  the slash commands (`/zana:autopilot`, `/zana:council`, `/zana:team`) and
+  native `Agent` + `SendMessage` cover the same flows.
+- `ZANA_MASTER_MODE=true` — exposes the 6 `zana_swarm_*` tools on top, for
+  multi-daemon setups where one daemon spawns and coordinates others.
 
 ## Architecture notes
 

@@ -2,8 +2,12 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as ticketStoreFallback from "./store";
 import * as migration from "./migration";
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
 function _core() { return require("@zana-ai/core"); }
-const workspaceContext: any = new Proxy({}, { get: (_t, p) => _core().project.workspaceContext[p] });
+type WorkspaceContextModule = typeof import("@zana-ai/core/dist/src/project/workspace-context");
+const workspaceContext = lazyRequire<WorkspaceContextModule>(
+  () => require("@zana-ai/core").project.workspaceContext
+);
 
 let Database: any;
 try { Database = require("better-sqlite3"); } catch { Database = null; }
@@ -16,9 +20,15 @@ function getDbPath() {
     fs.mkdirSync(projectDir, { recursive: true });
     return path.join(projectDir, "tickets.db");
   }
+  // Tenant isolation gate: refuse to fall back to ~/.zana/tickets.db. The
+  // global path is shared across every workspace on the host — landing
+  // tickets there would silently mix work across tenants.
   const ZANA_DIR = _core().config.ZANA_DIR;
-  fs.mkdirSync(ZANA_DIR, { recursive: true });
-  return path.join(ZANA_DIR, "tickets.db");
+  const ErrCtor = workspaceContext.WorkspaceNotInitializedError;
+  throw new ErrCtor({
+    operation: "open",
+    path: path.join(ZANA_DIR, "tickets.db"),
+  });
 }
 
 function getDb() {

@@ -1,9 +1,25 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
 function _core() { return require("@zana-ai/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
-const eventBus: any = new Proxy({}, { get: (_t, p) => _core().events.service[p] });
-const profileStore: any = new Proxy({}, { get: (_t, p) => _core().agents.profileStore[p] });
+
+// Tenant isolation gate. Task-router persists routing outcomes (ticket ids,
+// profile ids, success/duration) which are workspace-private. The legacy
+// implementation always wrote into ~/.zana/routing.{db,history.json},
+// silently mixing every workspace's routing history. Refuse the fallback
+// when the workspace context is not initialized.
+function _gateRouterWrite(operation, target) {
+  const ctx = _core().project.workspaceContext;
+  if (!ctx.isInitialized()) {
+    const ErrCtor = ctx.WorkspaceNotInitializedError;
+    throw new ErrCtor({ operation, path: target });
+  }
+}
+type EventBusService = typeof import("@zana-ai/core/dist/src/events/service");
+type ProfileStoreModule = typeof import("@zana-ai/core/dist/src/agents/profile-store");
+const eventBus = lazyRequire<EventBusService>(() => require("@zana-ai/core").events.service);
+const profileStore = lazyRequire<ProfileStoreModule>(() => require("@zana-ai/core").agents.profileStore);
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -32,6 +48,14 @@ function initSqlite() {
   try {
     const Database = require("better-sqlite3");
     const dbPath = path.join(ZANA_DIR(), "routing.db");
+    // Best-effort: only open the routing DB once a workspace context exists.
+    // Without it we'd write to ~/.zana/routing.db which is shared across
+    // every workspace on the host. Reading remains open via loadOutcomes().
+    const ctx = _core().project.workspaceContext;
+    if (!ctx.isInitialized()) {
+      db = null;
+      return;
+    }
     fs.mkdirSync(ZANA_DIR(), { recursive: true });
     db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
@@ -88,6 +112,7 @@ function persistOutcome(outcome) {
       outcome.createdAt
     );
   } else {
+    _gateRouterWrite("write", HISTORY_PATH());
     fs.mkdirSync(ZANA_DIR(), { recursive: true });
     fs.writeFileSync(HISTORY_PATH(), JSON.stringify(outcomes, null, 2), "utf8");
   }

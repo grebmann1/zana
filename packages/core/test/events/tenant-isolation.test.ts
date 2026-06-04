@@ -73,6 +73,12 @@ describe("event-bus tenant isolation (FU-T2e)", () => {
     tmpA = makeTmp("zana-evt-iso-A-");
     tmpB = makeTmp("zana-evt-iso-B-");
 
+    // Pre-create .zana/ inside each temp workspace so resolveProjectDir()
+    // stops here rather than walking up to any ambient /tmp/.zana that may
+    // exist on the host machine, which would silently mix tenant state.
+    fs.mkdirSync(path.join(tmpA, ".zana"), { recursive: true });
+    fs.mkdirSync(path.join(tmpB, ".zana"), { recursive: true });
+
     // Shim HOME so the global-fallback ZANA_DIR (~/.zana) lands in a temp
     // directory for this test rather than the user's real home. This lets
     // assertion #4 ("nothing in global") be enforced without polluting the
@@ -223,25 +229,46 @@ describe("event-bus tenant isolation (FU-T2e)", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Sanity: the config getter actually re-resolves
+  // Sanity: workspaceContext.getProjectPaths().eventsDir tracks the active
+  // workspace (events/store consumes it directly now that the deprecated
+  // config.EVENTS_DIR getter has been retired).
   // ──────────────────────────────────────────────────────────────────────────
 
-  it("config.EVENTS_DIR getter re-resolves on every access (not snapshotted)", () => {
-    const cfg = (core as any).config;
-    // Uninitialized → global fallback.
-    resetWorkspace();
-    const uninit = cfg.EVENTS_DIR;
-    expect(uninit.endsWith(path.join(".zana", "events"))).toBe(true);
-
+  it("workspaceContext.getProjectPaths().eventsDir tracks the active workspace", () => {
     bothInit(tmpA);
-    const afterA = cfg.EVENTS_DIR;
+    const afterA = wcDist.getProjectPaths().eventsDir;
     expect(afterA).toBe(path.join(tmpA, ".zana", "events"));
-    expect(afterA).not.toBe(uninit);
 
     resetWorkspace();
     bothInit(tmpB);
-    const afterB = cfg.EVENTS_DIR;
+    const afterB = wcDist.getProjectPaths().eventsDir;
     expect(afterB).toBe(path.join(tmpB, ".zana", "events"));
     expect(afterB).not.toBe(afterA);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Broadened gate (decision 2026-06-04): writes refuse the global fallback
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it("appendEvent throws WorkspaceNotInitializedError when workspace not initialized", () => {
+    resetWorkspace();
+    // events/store.ts imports workspaceContext from the TS source path, so
+    // the thrown error's class identity matches the TS instance — not the
+    // dist instance that `(core as any).project.workspaceContext` exposes.
+    const ErrCtor = (workspaceContextTs as any).WorkspaceNotInitializedError;
+    expect((workspaceContextTs as any).isInitialized()).toBe(false);
+
+    let caught: any = null;
+    try {
+      eventStore.appendEvent(makeDeliberationEvent("deliberation:proposed", "blocked"));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ErrCtor);
+    expect(caught.code).toBe("WORKSPACE_NOT_INITIALIZED");
+
+    // Nothing should have been written to the global fallback either.
+    const globalEventsFile = path.join(homeShim, ".zana", "events", "bus-events.ndjson");
+    expect(fs.existsSync(globalEventsFile)).toBe(false);
   });
 });

@@ -175,14 +175,26 @@ Given the user's task in `$ARGUMENTS`:
 
 $ARGUMENTS
 
+## Daemon-Only Tools — gated by default
+
+Daemon-only MCP tools that duplicate native Claude Code primitives are hidden by default to keep `tools/list` lean. Inside a chat, the slash commands and `Agent` + `SendMessage` cover everything; the daemon variants are only needed by headless / CI / cron callers.
+
+Affected tools (24 total): `zana_spawn_agent*`, `zana_kill_agent`, `zana_agent_status`, `zana_agent_result`, `zana_list_agents`, `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`, `zana_list_running_teams`, `zana_ask_agent`, `zana_check_inbox`, `zana_send_ack`, `zana_autopilot_goal_*` (4), `zana_deliberate*` (6).
+
+Re-enable for headless usage:
+
+```bash
+claude mcp add zana --env ZANA_DAEMON_TOOLS=1 -- npx -y @zana-ai/mcp
+```
+
 ## Master Mode — sub-daemon swarms (advanced, headless only)
 
 The six `zana_swarm_*` tools are gated behind `ZANA_MASTER_MODE=true` and are NOT registered by default. They cover the niche where one Zana daemon spawns and coordinates other Zana daemons across machines or workspaces. **Inside a Claude Code session, this is almost never the right tool** — `Agent({ run_in_background: true })` already isolates per-agent context and you don't need a process boundary.
 
-Enable only for headless multi-daemon setups:
+Enable only for headless multi-daemon setups (combine with `ZANA_DAEMON_TOOLS=1` if you also need agent/team lifecycle tools):
 
 ```bash
-claude mcp add zana --env ZANA_MASTER_MODE=true -- npx -y @zana-ai/mcp
+claude mcp add zana --env ZANA_MASTER_MODE=true --env ZANA_DAEMON_TOOLS=1 -- npx -y @zana-ai/mcp
 ```
 
 Full surface and usage notes: see the **Sub-daemon swarms appendix** in `plugins/zana/core/skills/orchestration/GUIDE.md`.

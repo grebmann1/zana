@@ -90,6 +90,20 @@ describe("validateSchedule", () => {
     const issues = validateSchedule(null);
     expect(issues[0]).toMatchObject({ level: "error", field: "(root)" });
   });
+
+  it("rejects history: null with an error on field 'history'", () => {
+    // The source explicitly guards `raw.history === null` in addition to the
+    // typeof check, because `typeof null === "object"`. Ensure that path fires.
+    const issues = validateSchedule({ ...valid(), history: null as any });
+    expect(issues.some((i) => i.level === "error" && i.field === "history")).toBe(true);
+  });
+
+  it("does not warn on _-prefixed internal marker fields", () => {
+    // Fields starting with '_' are treated as internal markers and must be
+    // silently ignored rather than surfaced as "unknown field" warnings.
+    const issues = validateSchedule({ ...valid(), _internalMarker: true });
+    expect(issues.some((i) => i.field === "_internalMarker")).toBe(false);
+  });
 });
 
 describe("resolveHistoryConfig", () => {

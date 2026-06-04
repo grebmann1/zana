@@ -1,14 +1,28 @@
-// Tests for the extras skill-store: save, get, delete, toggle, resolveSkillContent.
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// Integration test for the extras skill-store: save, get, delete, toggle,
+// resolveSkillContent.
+//
+// Strategy: redirect HOME before any @zana-ai/* module loads. config.ts in
+// @zana-ai/core captures `os.homedir()` at module load, so SKILLS_DIR
+// resolves to <fakeHome>/.zana/skills and the real skill-store reads/writes
+// there. No internal modules are mocked.
+
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-// vi.hoisted() runs in the hoisted zone so the returned object is available to
-// both the vi.mock factory (also hoisted) and the test code below.
-const configMock = vi.hoisted(() => ({ SKILLS_DIR: "" }));
-
-vi.mock("@zana-ai/core/dist/src/config", () => configMock);
+const { fakeHome, origHome } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _fs = require("node:fs") as typeof import("node:fs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _path = require("node:path") as typeof import("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _os = require("node:os") as typeof import("node:os");
+  const fakeHome = _fs.mkdtempSync(_path.join(_os.tmpdir(), "zana-skill-store-home-"));
+  const origHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  return { fakeHome, origHome };
+});
 
 import {
   saveSkill,
@@ -18,16 +32,20 @@ import {
   resolveSkillContent,
 } from "@zana-ai/extras/src/settings/skill-store.ts";
 
+const SKILLS_DIR = path.join(fakeHome, ".zana", "skills");
+
+afterAll(() => {
+  process.env.HOME = origHome;
+  try { fs.rmSync(fakeHome, { recursive: true, force: true }); } catch {}
+});
+
 describe("skill-store", () => {
-  let tmpDir: string;
-
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-skill-store-test-"));
-    configMock.SKILLS_DIR = tmpDir;
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    // Wipe SKILLS_DIR between tests for isolation; ensure it exists.
+    if (fs.existsSync(SKILLS_DIR)) {
+      fs.rmSync(SKILLS_DIR, { recursive: true, force: true });
+    }
+    fs.mkdirSync(SKILLS_DIR, { recursive: true });
   });
 
   // ── saveSkill ────────────────────────────────────────────────────────────
@@ -71,7 +89,7 @@ describe("skill-store", () => {
       content: "body",
       supportingFiles: [{ name: "readme.txt", content: "file content here" }],
     });
-    const dirPath = path.join(tmpDir, skill.id);
+    const dirPath = path.join(SKILLS_DIR, skill.id);
     expect(fs.existsSync(dirPath)).toBe(true);
     expect(fs.existsSync(path.join(dirPath, "skill.json"))).toBe(true);
     expect(fs.readFileSync(path.join(dirPath, "readme.txt"), "utf8")).toBe("file content here");
@@ -140,7 +158,7 @@ describe("skill-store", () => {
 
   it("resolveSkillContent: resolves {{file:filename}} template from skill directory", () => {
     const dirName = "file-template-skill";
-    const skillDir = path.join(tmpDir, dirName);
+    const skillDir = path.join(SKILLS_DIR, dirName);
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, "prompt.txt"), "injected file content");
 
@@ -148,20 +166,20 @@ describe("skill-store", () => {
       name: "with-template",
       content: "preamble\n{{file:prompt.txt}}\npostamble",
       _dirName: dirName,
-      _baseDir: tmpDir,
+      _baseDir: SKILLS_DIR,
     };
     expect(resolveSkillContent(skill)).toBe("preamble\ninjected file content\npostamble");
   });
 
   it("resolveSkillContent: substitutes [file not found] for a missing template file", () => {
     const dirName = "missing-files-skill";
-    fs.mkdirSync(path.join(tmpDir, dirName), { recursive: true });
+    fs.mkdirSync(path.join(SKILLS_DIR, dirName), { recursive: true });
 
     const skill = {
       name: "broken",
       content: "before {{file:nonexistent.txt}} after",
       _dirName: dirName,
-      _baseDir: tmpDir,
+      _baseDir: SKILLS_DIR,
     };
     expect(resolveSkillContent(skill)).toContain("[file not found: nonexistent.txt]");
   });

@@ -38,7 +38,7 @@ function readStdin(): Promise<string> {
   });
 }
 
-function getWorkspace(stdinRaw: string): string {
+export function getWorkspace(stdinRaw: string): string {
   try {
     const j = JSON.parse(stdinRaw);
     const dir = j?.workspace?.current_dir;
@@ -98,8 +98,9 @@ function readSchedules(workspace: string): ScheduleInfo {
 }
 
 type TicketCounts = { inProgress: number; review: number; backlog: number; blocked: number };
+type TicketReadout = { active: TicketCounts | null; backlog: number };
 
-function readTicketCounts(workspace: string): TicketCounts | null {
+function readTicketCounts(workspace: string): TicketReadout | null {
   const dbPath = path.join(workspace, ".zana", "tickets.db");
   if (!fs.existsSync(dbPath)) return null;
   let Database: any;
@@ -107,15 +108,37 @@ function readTicketCounts(workspace: string): TicketCounts | null {
   let db: any;
   try {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
-    const rows = db.prepare("SELECT status, COUNT(*) AS n FROM tickets GROUP BY status").all() as Array<{ status: string; n: number }>;
-    const counts: TicketCounts = { inProgress: 0, review: 0, backlog: 0, blocked: 0 };
-    for (const r of rows) {
-      if (r.status === "in-progress") counts.inProgress = r.n;
-      else if (r.status === "review") counts.review = r.n;
-      else if (r.status === "backlog") counts.backlog = r.n;
-      else if (r.status === "blocked") counts.blocked = r.n;
+
+    // Find the active sprint (if any). Earliest startedAt wins on ties.
+    let activeSprintId: string | null = null;
+    try {
+      const row = db.prepare("SELECT id FROM sprints WHERE status='active' ORDER BY startedAt ASC LIMIT 1").get() as { id?: string } | undefined;
+      if (row?.id) activeSprintId = row.id;
+    } catch { /* sprints table may not exist on legacy DBs */ }
+
+    const tally = (rows: Array<{ status: string; n: number }>): TicketCounts => {
+      const c: TicketCounts = { inProgress: 0, review: 0, backlog: 0, blocked: 0 };
+      for (const r of rows) {
+        if (r.status === "in-progress") c.inProgress = r.n;
+        else if (r.status === "review") c.review = r.n;
+        else if (r.status === "backlog") c.backlog = r.n;
+        else if (r.status === "blocked") c.blocked = r.n;
+      }
+      return c;
+    };
+
+    let active: TicketCounts | null = null;
+    if (activeSprintId) {
+      const sprintRows = db.prepare("SELECT status, COUNT(*) AS n FROM tickets WHERE sprintId=? GROUP BY status").all(activeSprintId) as Array<{ status: string; n: number }>;
+      active = tally(sprintRows);
     }
-    return counts;
+
+    const globalBacklog = (db.prepare("SELECT COUNT(*) AS n FROM tickets WHERE status='backlog'").get() as { n: number } | undefined)?.n || 0;
+    const backlogOutsideSprint = activeSprintId
+      ? globalBacklog - (active?.backlog || 0)
+      : globalBacklog;
+
+    return { active, backlog: backlogOutsideSprint };
   } catch {
     return null;
   } finally {
@@ -123,18 +146,25 @@ function readTicketCounts(workspace: string): TicketCounts | null {
   }
 }
 
-function ticketLabel(t: TicketCounts | null): string | null {
-  if (!t) return null;
+export function ticketLabel(r: TicketReadout | null): string | null {
+  if (!r) return null;
   const parts: string[] = [];
-  if (t.inProgress > 0) parts.push(`${t.inProgress} doing`);
-  if (t.review > 0) parts.push(`${t.review} review`);
-  if (t.blocked > 0) parts.push(`${t.blocked} blocked`);
-  if (t.backlog > 0) parts.push(`${t.backlog} todo`);
-  if (parts.length === 0) return null;
-  return `tickets: ${parts.join(" · ")}`;
+  if (r.active) {
+    if (r.active.inProgress > 0) parts.push(`${r.active.inProgress} doing`);
+    if (r.active.review > 0) parts.push(`${r.active.review} review`);
+    if (r.active.blocked > 0) parts.push(`${r.active.blocked} blocked`);
+    if (r.active.backlog > 0) parts.push(`${r.active.backlog} todo`);
+  }
+  let label: string | null = null;
+  if (parts.length > 0) label = `sprint: ${parts.join(" · ")}`;
+  if (r.backlog > 0) {
+    const bk = `${r.backlog} backlog`;
+    label = label ? `${label} (+${bk})` : `tickets: ${bk}`;
+  }
+  return label;
 }
 
-function relativeLabel(iso: string | null): string | null {
+export function relativeLabel(iso: string | null): string | null {
   if (!iso) return null;
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return null;

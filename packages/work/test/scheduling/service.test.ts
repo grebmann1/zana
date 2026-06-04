@@ -10,7 +10,7 @@ import {
   afterEach,
   vi,
 } from "vitest";
-import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -33,6 +33,9 @@ describe("scheduler service — CRUD and lifecycle", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-sched-"));
+    // Pre-create .zana/ so resolveProjectDir stops here instead of walking up
+    // to a parent that already has a .zana/ dir (e.g. /tmp/.zana/).
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     // Clean module-level trigger map between tests.
@@ -182,6 +185,7 @@ describe("scheduler service — loadFromDisk / stopAll", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-sched-load-"));
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     schedulerService.stopAll();
@@ -242,6 +246,7 @@ describe("scheduler service — triggerSchedule (manual fire)", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-sched-fire-"));
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     schedulerService.stopAll();
@@ -328,6 +333,7 @@ describe("scheduler service — inflight TTL sweep", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-sched-ttl-"));
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     // The inflight Map is module-level; drain leftovers from prior tests.
