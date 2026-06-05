@@ -79,4 +79,33 @@ describe("buildInteractiveCommand", () => {
       buildInteractiveCommand({ permissionMode: "god-mode" } as any)
     ).toThrow(/permissionMode/);
   });
+
+  it("worker profiles get the ticket-lifecycle preamble appended", () => {
+    const { args } = buildInteractiveCommand({ id: "backend-dev", systemPrompt: "be a backend dev" });
+    const idx = args.indexOf("--append-system-prompt");
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const block = args[idx + 1];
+    expect(block).toContain("--- TICKET LIFECYCLE ---");
+    expect(block).toContain("zana_ticket_claim");
+    expect(block).toContain("zana_ticket_complete");
+  });
+
+  it("orchestrator profiles do NOT get the lifecycle preamble (they own the workflow already)", () => {
+    const { args } = buildInteractiveCommand({ id: "orchestrator", systemPrompt: "orchestrate" });
+    const idx = args.indexOf("--append-system-prompt");
+    if (idx === -1) return; // no append at all is also fine
+    expect(args[idx + 1] || "").not.toContain("--- TICKET LIFECYCLE ---");
+  });
+
+  it("preserves a profile's existing appendSystemPrompt and concatenates the lifecycle block", () => {
+    const { args } = buildInteractiveCommand({
+      id: "backend-dev",
+      appendSystemPrompt: "Use TypeScript strict mode.",
+    });
+    const idx = args.indexOf("--append-system-prompt");
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const block = args[idx + 1];
+    expect(block).toContain("Use TypeScript strict mode.");
+    expect(block).toContain("--- TICKET LIFECYCLE ---");
+  });
 });

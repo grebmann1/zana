@@ -30,6 +30,22 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
   if (!title || typeof title !== "string" || title.trim().length === 0) {
     return { error: "title is required" };
   }
+
+  // Auto-attach to the active sprint when caller didn't pick one. Without this
+  // every untracked ticket becomes a permanent orphan with sprintId=null and
+  // no end-of-sprint reconciliation can ever reach it.
+  let resolvedSprintId = sprintId || null;
+  if (!resolvedSprintId) {
+    try {
+      const active = ticketStore.listSprints({ status: "active" });
+      if (active && active.length > 0) {
+        resolvedSprintId = active[0].id;
+      }
+    } catch {
+      // sprints dir may not exist yet — leave null and continue
+    }
+  }
+
   const now = new Date().toISOString();
   const ticket = {
     id: crypto.randomUUID(),
@@ -42,7 +58,7 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
     assigneeProfileId: null,
     reviewPhase: null,
     reworkCount: 0,
-    sprintId: sprintId || null,
+    sprintId: resolvedSprintId,
     labels: labels || [],
     blockedBy: blockedBy || [],
     comments: [],
@@ -58,8 +74,8 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:created", { ticketId: ticket.id, title: ticket.title, priority: ticket.priority });
 
-  if (sprintId) {
-    const sprint = ticketStore.getSprint(sprintId);
+  if (resolvedSprintId) {
+    const sprint = ticketStore.getSprint(resolvedSprintId);
     if (sprint) {
       if (!sprint.ticketIds) sprint.ticketIds = [];
       if (!sprint.ticketIds.includes(ticket.id)) {

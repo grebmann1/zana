@@ -44,6 +44,25 @@ function sanitizeArg(value) {
   return value.replace(/[\x00-\x1f\x7f]/g, "");
 }
 
+// Worker profiles need to know how to interact with the ticket lifecycle when
+// the orchestrator hands them a ticketId in their prompt. Without this, only
+// orchestrator profiles ever call zana_ticket_claim/complete, so when the
+// orchestrator dies mid-run the ticket is orphaned forever (every "0.1.3 doc"
+// ticket in the backlog as of 2026-06-04 was such an orphan). Skip
+// orchestrator-shaped profiles — they already document the full workflow.
+function ticketLifecyclePreamble(profile) {
+  const id = profile?.id || "";
+  if (id.includes("orchestrator") || id === "swarm-master") return "";
+  return [
+    "--- TICKET LIFECYCLE ---",
+    "If your prompt includes a ticketId, you are responsible for the ticket's status:",
+    "1. Claim it on start: call mcp__zana__zana_ticket_claim with { ticketId, agentName: <your name> }.",
+    "2. On success: call mcp__zana__zana_ticket_complete with { ticketId, resultSummary: <what you did> }.",
+    "3. On failure (cannot finish, blocked, validation broke): call mcp__zana__zana_ticket_update_status with { ticketId, status: \"blocked\" } and add a comment via mcp__zana__zana_ticket_comment explaining why.",
+    "Do NOT leave a claimed ticket open — orphaned tickets cannot be reconciled and waste backlog slots.",
+  ].join("\n");
+}
+
 function validateProfile(profile) {
   if (profile.permissionMode && !VALID_PERMISSION_MODES.includes(profile.permissionMode)) {
     throw new Error(`invalid permissionMode: ${profile.permissionMode}`);
@@ -88,19 +107,18 @@ export function buildClaudeArgs(profile, options = {}) {
     args.push("--system-prompt", sanitizeArg(profile.systemPrompt));
   }
 
-  if (profile.appendSystemPrompt) {
-    const instructions = skillStore.getInstructionsForProfile(profile.id);
-    if (instructions.length > 0) {
-      const skillsBlock = "\n\n--- ZANA SKILLS ---\n" + instructions.join("\n\n");
-      args.push("--append-system-prompt", profile.appendSystemPrompt + skillsBlock);
-    } else {
-      args.push("--append-system-prompt", profile.appendSystemPrompt);
-    }
-  } else {
-    const instructions = skillStore.getInstructionsForProfile(profile.id);
-    if (instructions.length > 0) {
-      args.push("--append-system-prompt", "--- ZANA SKILLS ---\n" + instructions.join("\n\n"));
-    }
+  const lifecycleBlock = ticketLifecyclePreamble(profile);
+  const skillInstructions = skillStore.getInstructionsForProfile(profile.id);
+  const skillsBlock = skillInstructions.length > 0
+    ? "--- ZANA SKILLS ---\n" + skillInstructions.join("\n\n")
+    : "";
+  const appendParts = [
+    profile.appendSystemPrompt || "",
+    lifecycleBlock,
+    skillsBlock,
+  ].filter((s) => s && s.length > 0);
+  if (appendParts.length > 0) {
+    args.push("--append-system-prompt", appendParts.join("\n\n"));
   }
 
   if (profile.model) {

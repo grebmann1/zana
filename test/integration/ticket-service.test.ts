@@ -165,5 +165,34 @@ describe("ticket-service", () => {
       expect(board.backlog.length).toBe(1);
       expect(board["in-progress"].length).toBe(1);
     });
+
+    it("auto-attaches a new ticket to the active sprint when sprintId is omitted", () => {
+      const sprint = ticketService.createSprint({ name: `${PREFIX}-auto`, ticketIds: [] });
+      ticketService.startSprint(sprint.id);
+
+      const t = ticketService.createTicket({ title: `${PREFIX}-auto-tk`, createdBy: "test" });
+      expect(t.sprintId).toBe(sprint.id);
+
+      const board = ticketService.getSprintBoard(sprint.id);
+      expect(board.backlog.some((bt: any) => bt.id === t.id)).toBe(true);
+
+      ticketService.endSprint(sprint.id);
+    });
+
+    it("explicit sprintId still wins over auto-attach", () => {
+      const active = ticketService.createSprint({ name: `${PREFIX}-active`, ticketIds: [] });
+      ticketService.startSprint(active.id);
+      const planning = ticketService.createSprint({ name: `${PREFIX}-planning`, ticketIds: [] });
+
+      const t = ticketService.createTicket({ title: `${PREFIX}-pinned`, sprintId: planning.id, createdBy: "test" });
+      expect(t.sprintId).toBe(planning.id);
+
+      ticketService.endSprint(active.id);
+    });
+
+    it("leaves sprintId null when no sprint is active", () => {
+      const t = ticketService.createTicket({ title: `${PREFIX}-orphan`, createdBy: "test" });
+      expect(t.sprintId).toBeNull();
+    });
   });
 });
