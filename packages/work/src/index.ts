@@ -5,6 +5,7 @@ module.exports = {
     db: require("./tickets/db"),
     migration: require("./tickets/migration"),
     watcher: require("./tickets/watcher"),
+    sweeper: require("./tickets/sweeper"),
   },
   scheduling: {
     service: require("./scheduling/service"),

@@ -185,6 +185,13 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   const zombieReaper = require("./agents/zombie-reaper");
   zombieReaper.start();
 
+  // Reconcile orphaned tickets — closes stale `in-progress`/`review`/`rework`
+  // tickets whose assignees are no longer alive, and any `blocked` tickets
+  // that have been idle past the stale threshold. See
+  // packages/work/src/tickets/sweeper.ts. Cross-package require so wrap defensively.
+  try { require("@zana-ai/work").tickets.sweeper.start(); }
+  catch (err: any) { console.warn("[core] ticket-sweeper.start failed:", err?.message || err); }
+
   // Start REST API server (headless/daemon mode)
   let apiServerHandle = null;
   const zanaModules = {
@@ -231,6 +238,7 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
     shuttingDown = true;
     await moduleLoader.shutdown();
     try { require("./agents/zombie-reaper").stop(); } catch {}
+    try { require("@zana-ai/work").tickets.sweeper.stop(); } catch {}
     backgroundWorkers.shutdown();
     vectorMemory.shutdown();
     ticketWatcher.stop();
