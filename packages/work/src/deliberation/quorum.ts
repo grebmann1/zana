@@ -84,6 +84,9 @@ export interface DroppedVoter {
   profileId: string;
   reason: ProbeFailureKind;
   detail: string;
+  // First failing probe leg, when known. null when the probe itself
+  // threw before any leg ran (no leg ever started).
+  leg?: "factual" | "instructionFollowing" | "toolUse" | null;
 }
 
 export type AssembleEscalationReason =
@@ -292,6 +295,7 @@ async function runProbes(
         profileId: c.profileId,
         reason: "spawn",
         detail: `probe threw: ${(s.reason && s.reason.message) || String(s.reason)}`,
+        leg: null,
       });
       continue;
     }
@@ -323,6 +327,7 @@ async function runProbes(
         profileId: c.profileId,
         reason: first?.kind ?? "validation",
         detail,
+        leg: first?.leg ?? null,
       });
     }
   }
@@ -536,6 +541,7 @@ async function assembleCore(
                 profileId: dv.profileId,
                 reason: dv.reason,
                 detail: dv.detail,
+                leg: dv.leg ?? null,
               })),
               ts: new Date().toISOString(),
             }
@@ -574,13 +580,52 @@ async function assembleCore(
         };
       }
 
-      // ESCALATED path.
+      // ESCALATED path. Persist the same degradation entry we'd write on
+      // a READY-with-drops outcome so audit consumers (and the
+      // _assemblyEscalation.voterFailures projection on the MCP side) can
+      // name the dropped voters and their typed probe-failure kind.
+      // Without this, an assembly that escalates on quorum_lost leaves
+      // degradation[] empty and the user sees only "probe quorum lost".
+      const escPatch: any = { escalationReason: decision.reason };
+      if (dropped.length > 0) {
+        const escDegradationEntry = {
+          round: ctx.incrementRound ? d.currentRound + 1 : d.currentRound,
+          dropped: dropped.map((dv) => ({
+            profileId: dv.profileId,
+            reason: dv.reason,
+            detail: dv.detail,
+            leg: dv.leg ?? null,
+          })),
+          ts: new Date().toISOString(),
+        };
+        escPatch.degradation = [
+          ...(Array.isArray(d.degradation) ? d.degradation : []),
+          escDegradationEntry,
+        ];
+      }
       transition(
         deliberationId,
         "ESCALATED",
-        { escalationReason: decision.reason },
+        escPatch,
         { expectedVersion },
       );
+      // Mirror the READY-path emission so DELIBERATION_DEGRADED is observable
+      // on this branch too. Best-effort — failure to emit must not roll back
+      // the persisted transition.
+      if (escPatch.degradation && dropped.length > 0) {
+        try {
+          const core = require("@zana-ai/core");
+          const bus = core.events.bus;
+          const EVENTS = core.events.EVENTS;
+          const last = escPatch.degradation[escPatch.degradation.length - 1];
+          bus.emit(EVENTS.DELIBERATION_DEGRADED, {
+            deliberationId,
+            round: last.round,
+            dropped: last.dropped,
+            ts: last.ts,
+          });
+        } catch {}
+      }
       return {
         kind: "ESCALATED",
         reason: decision.reason!,

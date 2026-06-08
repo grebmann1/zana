@@ -107,6 +107,9 @@ export interface DroppedVoterRecord {
   profileId: string;
   reason: ProbeFailureKind;
   detail?: string;
+  // First failing probe leg, when known. null when the probe itself
+  // threw before any leg ran. Strictly additive on the event payload.
+  leg?: "factual" | "instructionFollowing" | "toolUse" | null;
 }
 
 export interface DeliberationDegradedPayload {

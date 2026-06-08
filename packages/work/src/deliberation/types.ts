@@ -166,6 +166,9 @@ export interface DroppedVoterAudit {
     | "transport"
     | "spawn";
   detail?: string;
+  // First failing probe leg, when known. null when the probe itself
+  // threw before any leg ran. Strictly additive — older readers ignore.
+  leg?: "factual" | "instructionFollowing" | "toolUse" | null;
 }
 
 export interface DegradationEntry {

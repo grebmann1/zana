@@ -128,6 +128,9 @@ describe("zana_deliberate MCP tool family (T9)", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-mcp-delib-"));
+    // Pre-create .zana/ here so resolveProjectDir anchors at tmpRoot rather
+    // than walking up to a shared /tmp/.zana that may be quarantined on macOS.
+    require("node:fs").mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     checkpointStore.init(tmpRoot);
@@ -220,6 +223,67 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     expect(result.escalationReason).toBe("quorum_lost");
     expect(result._outcome).toBe("escalated_at_assembly");
     expect(result._assemblyEscalation?.reason).toBe("quorum_lost");
+  });
+
+  it("assembly escalation surfaces voterFailures[] with typed kind/leg", async () => {
+    const state = { round: 1 };
+    const deps = makeDeps(
+      {},
+      state,
+      { a: "ok", b: "timeout", c: "timeout" },
+    );
+
+    const result = await deliberateHandler({
+      wait: true,
+      question: "q",
+      voters: ["a", "b", "c"],
+      deps,
+    });
+
+    expect(result._outcome).toBe("escalated_at_assembly");
+    const esc = result._assemblyEscalation;
+    expect(esc?.reason).toBe("quorum_lost");
+    expect(Array.isArray(esc?.voterFailures)).toBe(true);
+    // Two voters dropped (b and c), order matches assembleCouncil's iteration.
+    const ids = esc.voterFailures.map((f: any) => f.profileId).sort();
+    expect(ids).toEqual(["b", "c"]);
+    for (const f of esc.voterFailures) {
+      expect(f.kind).toBe("timeout");
+      expect(f.leg).toBe("factual");           // fakeProbe writes leg: "factual"
+      expect(typeof f.reason).toBe("string");
+      expect(f.reason.length).toBeGreaterThan(0);
+    }
+    expect(typeof esc.nextSteps).toBe("string");
+    expect(esc.nextSteps).toContain("audit.ndjson");
+    // Backward compat: top-level deliberation fields still present.
+    expect(typeof result.version).toBe("number");
+    expect(result.version).toBeGreaterThan(0);
+    expect(Array.isArray(result.degradation)).toBe(true);
+  });
+
+  it("voterFailures[].kind reflects each ProbeFailureKind passed through unchanged", async () => {
+    // Three voters drop with distinct kinds; quorum=2 of 3 means we need
+    // 2 to PASS, so we pass 0 and drop all 3 → ESCALATED.
+    const kinds = ["timeout", "spawn"] as const; // ProbeOutcome union limits us to these two failure kinds via the fake; that's enough to prove pass-through.
+    for (const k of kinds) {
+      const state = { round: 1 };
+      const deps = makeDeps(
+        {},
+        state,
+        { a: k, b: k, c: k },
+      );
+      const result = await deliberateHandler({
+        wait: true,
+        question: `q-${k}`,
+        voters: ["a", "b", "c"],
+        deps,
+      });
+      expect(result._outcome).toBe("escalated_at_assembly");
+      const esc = result._assemblyEscalation;
+      for (const f of esc.voterFailures) {
+        expect(f.kind).toBe(k);
+      }
+    }
   });
 
   // ──────────────────────────────────────────────────────────────────────────

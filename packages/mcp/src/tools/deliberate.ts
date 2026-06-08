@@ -34,6 +34,55 @@ function _work(): any { return require("@zana-ai/work"); }
 function _core(): any { return require("@zana-ai/core"); }
 function _delib(): any { return _work().deliberation; }
 
+// Build the response when assembleCouncil/reassembleCouncil escalates.
+// The full deliberation record carries `degradation[]` with typed
+// per-voter probe failures, but the host LLM doesn't know to dig into
+// that array — it usually summarizes the failure as "probe quorum
+// lost" without naming voters. We project the most-recent
+// degradation entry into `voterFailures[]` (chat-friendly:
+// `{ profileId, leg, kind, reason }`) and add a `nextSteps` hint
+// directly inside `_assemblyEscalation` / `_reassemblyEscalation` so
+// the orchestrator surfaces the typed details verbatim.
+//
+// The full record is still spread at the top level for backward compat
+// (callers that read `state`, `escalationReason`, `version`, `votes`,
+// `degradation`, etc. continue to work). `verbose` is accepted for
+// future-proofing but currently has no effect on the shape — there's
+// no remaining reason to omit the slim helper fields.
+function buildEscalationResponse(opts: {
+  delib: any;
+  outcome: "escalated_at_assembly" | "escalated_during_reassembly";
+  reason: string;
+  details: string;
+  verbose: boolean;
+}): any {
+  const escKey = opts.outcome === "escalated_at_assembly"
+    ? "_assemblyEscalation"
+    : "_reassemblyEscalation";
+  const degradation = Array.isArray(opts.delib?.degradation) ? opts.delib.degradation : [];
+  const last = degradation[degradation.length - 1];
+  const voterFailures = Array.isArray(last?.dropped)
+    ? last.dropped.map((dv: any) => ({
+        profileId: dv.profileId,
+        leg: dv.leg ?? null,
+        kind: dv.reason,
+        reason: dv.detail ?? "",
+      }))
+    : [];
+  return {
+    ...opts.delib,
+    _outcome: opts.outcome,
+    [escKey]: {
+      reason: opts.reason,
+      details: opts.details,
+      voterFailures,
+      nextSteps:
+        "Inspect ~/.zana/audit/audit.ndjson for full per-leg detail; clear stale probe cache " +
+        "with `rm ~/.zana/probe-cache.json` if these failures look stale.",
+    },
+  };
+}
+
 // Hardcoded fallback when runtime-config doesn't carry default voter ids.
 // FU-config-3 will land defaultVoterProfileIds in module config; for now any
 // profile id may be passed through the args.voters array.
@@ -122,6 +171,11 @@ export interface DeliberateArgs {
   //                    Claude models for monoculture-resistance).
   voterModels?: Record<string, string>;
   modelDiversity?: "uniform" | "mixed";
+  // On assembly/reassembly escalation, return the full deliberation
+  // record (including `degradation[]`). Default false: the response is a
+  // slim shape with `voterFailures[]` and `nextSteps` so the host LLM
+  // can surface the typed probe failures to the user.
+  verbose?: boolean;
   deps?: DeliberateDeps;
 }
 
@@ -366,6 +420,7 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
     humanNudge: typeof args.humanNudge === "object" && args.humanNudge !== null && typeof args.humanNudge.afterRound === "number"
       ? { afterRound: Math.floor(args.humanNudge.afterRound), promptText: args.humanNudge.promptText ?? "Optional input for next round (skip leaves it as-is):" }
       : null,
+    verbose: args.verbose === true,
   };
 
   // 2. Default: detach the orchestration loop and return the proposed record.
@@ -418,6 +473,9 @@ interface RunDeliberationContext {
   // Slice C — when resuming after a nudge, the first iteration of the loop
   // must skip collect+synth (already done before the pause) and jump to decide.
   skipFirstCollectAndSynth?: boolean;
+  // Plumbed from DeliberateArgs.verbose. Controls escalation-response shape
+  // when assembleCouncil/reassembleCouncil escalates inside this loop.
+  verbose: boolean;
 }
 
 async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
@@ -560,14 +618,13 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
       });
   if ((assembleOutcome as any).kind === "ESCALATED") {
     const esc = assembleOutcome as any;
-    return {
-      ...delib.loadDeliberation(deliberationId),
-      _outcome: "escalated_at_assembly",
-      _assemblyEscalation: {
-        reason: esc.reason,
-        details: esc.details,
-      },
-    };
+    return buildEscalationResponse({
+      delib: delib.loadDeliberation(deliberationId),
+      outcome: "escalated_at_assembly",
+      reason: esc.reason,
+      details: esc.details,
+      verbose: ctx.verbose,
+    });
   }
 
   // 3. Per-round loop.
@@ -604,11 +661,13 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
           deps: assembleDeps,
         });
         if (reOutcome.kind === "ESCALATED") {
-          return {
-            ...delib.loadDeliberation(d.id),
-            _outcome: "escalated_during_reassembly",
-            _reassemblyEscalation: { reason: reOutcome.reason, details: reOutcome.details },
-          };
+          return buildEscalationResponse({
+            delib: delib.loadDeliberation(d.id),
+            outcome: "escalated_during_reassembly",
+            reason: reOutcome.reason,
+            details: reOutcome.details,
+            verbose: ctx.verbose,
+          });
         }
       } else {
         await delib.applyDecision(d.id, decision, { expectedVersion: d.version });
@@ -807,11 +866,13 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
         deps: assembleDeps,
       });
       if (reOutcome.kind === "ESCALATED") {
-        return {
-          ...delib.loadDeliberation(d.id),
-          _outcome: "escalated_during_reassembly",
-          _reassemblyEscalation: { reason: reOutcome.reason, details: reOutcome.details },
-        };
+        return buildEscalationResponse({
+          delib: delib.loadDeliberation(d.id),
+          outcome: "escalated_during_reassembly",
+          reason: reOutcome.reason,
+          details: reOutcome.details,
+          verbose: ctx.verbose,
+        });
       }
     } else {
       await delib.applyDecision(d.id, decision, { expectedVersion: d.version });
@@ -915,6 +976,7 @@ export async function deliberationNudgeHandler(args: DeliberationNudgeArgs): Pro
     escalationStrategy,
     humanNudge: null, // already-resumed run; nudge already recorded
     skipFirstCollectAndSynth: true,
+    verbose: (args as any)?.verbose === true,
   };
 
   try {
@@ -1095,8 +1157,8 @@ export const deliberateTool = {
     "`_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' | 'judged'. " +
     "`_judge` — present only on 'judged'; { verdict, humanId } describing how the auto-judge resolved an escalation. " +
     "`_judgeError` — present only when the configured strategy was judge/hybrid but adjudication failed; deliberation stays ESCALATED for manual override. " +
-    "`_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). " +
-    "`_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).",
+    "`_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details, voterFailures, nextSteps } naming each dropped voter and the typed probe-failure kind (timeout/auth/validation/misconfig/rate_limit/quota/transport/spawn). Surface voterFailures[] and nextSteps verbatim to the user. " +
+    "`_reassemblyEscalation` — present only on 'escalated_during_reassembly'; same shape as _assemblyEscalation, describing why a subsequent round's council failed.",
   inputSchema: {
     type: "object",
     required: ["question"],
@@ -1189,6 +1251,11 @@ export const deliberateTool = {
         description:
           "Pause the loop after synthesizing the named round and exit with _outcome='awaiting_nudge'. " +
           "Resume via zana_deliberation_nudge with either a free-text response (injected into next round) or null/empty (skip).",
+      },
+      verbose: {
+        type: "boolean",
+        description:
+          "Reserved for future use. The escalation response always includes the full deliberation record plus voterFailures[]/nextSteps in _assemblyEscalation / _reassemblyEscalation; this flag is currently a no-op.",
       },
     },
   },

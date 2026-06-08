@@ -171,6 +171,10 @@ Given the user's task in `$ARGUMENTS`:
 - Give agents FULL context in their initial prompt — Claude Code subagents share the host filesystem, so reference file paths instead of pasting code.
 - If an agent fails, spawn a replacement with a corrective prompt — do NOT do the work yourself.
 
+### Deliberation failures — surface the cause, do not collapse
+
+When `mcp__zana__zana_deliberate` (or `zana_deliberation_status`) returns `_outcome: "escalated_at_assembly"` or `"escalated_during_reassembly"`, do NOT summarize as "deliberation failed (probe quorum lost)" alone. The response carries `_assemblyEscalation.voterFailures[]` (or `_reassemblyEscalation.voterFailures[]`) — an array of `{ profileId, leg, kind, reason }` entries naming each dropped voter, the failing probe leg, the typed failure kind (`timeout` / `auth` / `validation` / `misconfig` / `rate_limit` / `quota` / `transport` / `spawn`), and the human reason. Surface this list verbatim to the user before deciding on a fallback, and quote `nextSteps` verbatim. The user needs the per-voter detail to debug a stale probe cache, an unrouted model, an auth failure, etc.
+
 ## Now execute the following task:
 
 $ARGUMENTS
