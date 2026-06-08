@@ -55,7 +55,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   defaultMode: "synthesis",
   checkpointTTLDays: 7,
   occMaxRetries: 3,
-  probeTimeoutMs: 30000,
+  probeTimeoutMs: 90000,
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,

@@ -21,7 +21,7 @@
     "defaultMode": { "type": "string", "default": "synthesis", "description": "Default reduction mode: 'synthesis' | 'tally'" },
     "checkpointTTLDays": { "type": "number", "default": 7, "description": "Days before a deliberation checkpoint is eligible for sweep" },
     "occMaxRetries": { "type": "number", "default": 3, "description": "Max stale-retry attempts on StaleDeliberationError in assembleCouncil and applyDecision" },
-    "probeTimeoutMs": { "type": "number", "default": 30000, "description": "Default per-leg timeout for probeAgent" },
+    "probeTimeoutMs": { "type": "number", "default": 90000, "description": "Default per-leg timeout for probeAgent. 30s was too tight for cold-start Claude calls — single slow leg dropped a voter and council escalated with quorum_lost. Mirror in @zana-ai/core/probe-config.ts." },
     "probeRawMaxBytes": { "type": "number", "default": 1024, "description": "Max bytes of raw probe response captured in ProbeFailure.raw" },
     "probeCacheTtlMs": { "type": "number", "default": 300000, "description": "TTL (ms) on probeAgent result cache, keyed by profileId+modelId. 0 disables." },
     "synthesisSimilarityThreshold": { "type": "number", "default": 0.45, "description": "Dice coefficient threshold for cross-voter finding grouping" },

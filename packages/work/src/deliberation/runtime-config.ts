@@ -47,7 +47,14 @@ const DEFAULTS: DeliberationRuntimeConfig = {
   defaultMode: "synthesis",
   checkpointTTLDays: 7,
   occMaxRetries: 3,
-  probeTimeoutMs: 30000,
+  // 90s gives cold-start Claude calls enough time to return on slow days.
+  // 30s was too tight: a single slow leg dropped a voter and the council
+  // escalated with "probe quorum lost" repeatedly. Per-leg, not total.
+  // Mirror packages/core/src/agents/probe-config.ts default. The
+  // deliberation module publishes this snapshot to BOTH bridges at boot
+  // (see modules/deliberation/index.js), so this default must match —
+  // otherwise the module clobbers the core probe-config bump back to 30s.
+  probeTimeoutMs: 90000,
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
