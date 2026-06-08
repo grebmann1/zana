@@ -10,11 +10,15 @@
 // Scope: process-lifetime, in-memory. Cross-process caching is YAGNI — daemon
 // restart is a natural cache flush which is fine for v1.
 //
-// Caching policy (lives in manager.ts; see probeAgent integration):
-//   ok=true                                                  → CACHE
-//   ok=false / kind in {auth, misconfig}                     → CACHE  (structural; won't fix on retry)
-//   ok=false / kind in {timeout, rate_limit, transport, quota} → SKIP cache (transient)
-//   ok=false / kind in {validation, spawn}                   → CACHE  (legacy/ambiguous; safer to cache than spawn 9x in one round)
+// Caching policy (lives in probe-agent.ts; see probeAgent integration):
+//   ok=true                                                  → CACHE @ regular TTL
+//   ok=false / kind in {auth, misconfig, validation, spawn}  → CACHE @ regular TTL (structural / ambiguous)
+//   ok=false / kind in {timeout, rate_limit, transport, quota} → CACHE @ transient TTL (short, dampens bursts)
+//
+// Per-kind TTL is enforced at lookup time: callers pass
+// { regularTtlMs, transientTtlMs } and lookupProbeResult picks the right
+// budget based on the cached result's failure kind. Stale-by-this-budget
+// entries are returned as null (no eviction; the next record overwrites).
 
 import type { ProbeResult } from "./manager";
 
@@ -32,17 +36,44 @@ export function recordProbeResult(key: string, result: ProbeResult): void {
   cache.set(key, { result, cachedAt: Date.now() });
 }
 
+// Transient failure kinds get a separate (shorter) TTL when looking up.
+// Keep in sync with the caching-policy comment at the top of this file.
+const TRANSIENT_KINDS = new Set(["timeout", "rate_limit", "transport", "quota"]);
+
+function effectiveTtl(
+  result: ProbeResult,
+  ttl: number | { regularTtlMs: number; transientTtlMs: number },
+): number {
+  if (typeof ttl === "number") return ttl;
+  if (result.ok) return ttl.regularTtlMs;
+  // For mixed-kind failures, the most permissive choice wins — but we only
+  // downgrade to transient when EVERY failure is transient. A single
+  // structural failure keeps the entry on the regular budget (it's
+  // structural; won't self-heal). This mirrors _shouldCacheProbeResult's
+  // "all-or-nothing" predicate semantics.
+  const allTransient = result.failures.length > 0
+    && result.failures.every((f) => TRANSIENT_KINDS.has(f.kind));
+  return allTransient ? ttl.transientTtlMs : ttl.regularTtlMs;
+}
+
 /**
- * Returns the cached ProbeResult if present AND younger than ttlMs.
+ * Returns the cached ProbeResult if present AND younger than the resolved TTL.
  * Stale entries are NOT evicted on lookup — they are simply ignored. The next
  * recordProbeResult() with the same key will overwrite. Bounded staleness is
- * acceptable: ttlMs caps how long a stale entry can mislead a consumer.
+ * acceptable: TTL caps how long a stale entry can mislead a consumer.
+ *
+ * `ttl` is either a single ms value (legacy / kind-agnostic) or
+ * { regularTtlMs, transientTtlMs } so callers can apply a shorter budget to
+ * transient failures (timeout/rate_limit/transport/quota).
  *
  * Increments `misses` when null is returned, `hits` otherwise. Both counters
  * are surfaced via getProbeCacheStats() for observability.
  */
-export function lookupProbeResult(key: string, ttlMs: number): ProbeResult | null {
-  if (!ttlMs || ttlMs <= 0) {
+export function lookupProbeResult(
+  key: string,
+  ttl: number | { regularTtlMs: number; transientTtlMs: number },
+): ProbeResult | null {
+  if (typeof ttl === "number" ? (!ttl || ttl <= 0) : (ttl.regularTtlMs <= 0 && ttl.transientTtlMs <= 0)) {
     misses++;
     return null;
   }
@@ -51,7 +82,8 @@ export function lookupProbeResult(key: string, ttlMs: number): ProbeResult | nul
     misses++;
     return null;
   }
-  if (Date.now() - entry.cachedAt > ttlMs) {
+  const effective = effectiveTtl(entry.result, ttl);
+  if (effective <= 0 || Date.now() - entry.cachedAt > effective) {
     misses++;
     return null;
   }

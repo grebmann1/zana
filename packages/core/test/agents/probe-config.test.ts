@@ -15,6 +15,7 @@ describe("probe-config", () => {
     expect(cfg.probeTimeoutMs).toBe(90000);
     expect(cfg.probeRawMaxBytes).toBe(1024);
     expect(cfg.probeCacheTtlMs).toBe(300000);
+    expect(cfg.transientProbeCacheTtlMs).toBe(30000);
   });
 
   it("setProbeConfig merges over active config (partial update)", () => {

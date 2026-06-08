@@ -10,6 +10,14 @@ export interface ProbeRuntimeConfig {
   // Default 5 min: probe outcomes (auth, model availability, instruction-
   // following capability) change slowly compared to a deliberation's lifetime.
   probeCacheTtlMs: number;
+  // Short TTL for transient probe failures (timeout/transport/quota/rate_limit).
+  // Without this, a flaky run re-pays the full 9-spawn probe cost on every
+  // retry. With it, a single slow probe is remembered just long enough that
+  // the next deliberation in the same minute doesn't re-trigger the same
+  // failure mode. 0 disables (caller falls back to "skip cache for transient"
+  // — the original FU-T2 behavior). Default 30s: long enough to dampen a
+  // burst, short enough that real recovery surfaces quickly.
+  transientProbeCacheTtlMs: number;
 }
 
 const DEFAULTS: ProbeRuntimeConfig = {
@@ -19,6 +27,7 @@ const DEFAULTS: ProbeRuntimeConfig = {
   probeTimeoutMs: 90000,
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
+  transientProbeCacheTtlMs: 30000,
 };
 
 let active: ProbeRuntimeConfig = { ...DEFAULTS };

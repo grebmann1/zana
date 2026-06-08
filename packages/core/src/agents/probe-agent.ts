@@ -283,12 +283,22 @@ export async function probeAgent(
     const v = getProbeConfig().probeCacheTtlMs;
     return typeof v === "number" && v >= 0 ? v : 0;
   })();
+  const transientTtlMs: number = (() => {
+    const v = getProbeConfig().transientProbeCacheTtlMs;
+    return typeof v === "number" && v >= 0 ? v : 0;
+  })();
   const profileId: string | null =
     typeof profile?.id === "string" && profile.id.length > 0 ? profile.id : null;
   const cacheKey = profileId ? `${profileId}:${declaredModel}` : null;
 
   if (ttlMs > 0 && cacheKey) {
-    const cached = lookupProbeResult(cacheKey, ttlMs);
+    // Pass per-kind TTLs so the cache applies the short transient budget to
+    // timeout/rate_limit/transport/quota entries, and the regular budget to
+    // structural / ambiguous failures and successes.
+    const cached = lookupProbeResult(cacheKey, {
+      regularTtlMs: ttlMs,
+      transientTtlMs,
+    });
     if (cached) {
       // Mint a fresh probeId so audit can distinguish lookups from real
       // probes. Re-emit AGENT_PROBED so the audit chain still records the
@@ -379,22 +389,22 @@ export async function probeAgent(
   return result;
 }
 
-// Per FU-T2 caching rules. Returns true when this result is safe to memoize.
-// Successful probes always cache. Failures cache only when EVERY kind is a
-// known-stable bucket: auth | misconfig | validation. Transient kinds
-// (timeout | rate_limit | transport | quota) explicitly skip cache so the next
-// call can retry. The legacy "spawn" bucket is ALSO skipped: classifySpawnError
-// falls through to "spawn" for anything it can't classify, and the
-// agent.lastAction read in _runProbeLeg's errored branch is truncated to 80
-// chars (FU-S26-b) — a clipped 429/ECONNRESET would be misclassified "spawn"
-// and poison the cache for 5 min. Once FU-S26-b plumbs structured errors,
-// "spawn" can be re-added to the cache-eligible set.
+// Per FU-T2 caching rules with the FU-T-transient-cache extension:
+//
+//   ok=true                                                  → CACHE @ regular TTL
+//   ok=false / kind in {auth, misconfig, validation}         → CACHE @ regular TTL (structural / instruction-violation; won't fix on retry)
+//   ok=false / kind in {timeout, rate_limit, transport, quota} → CACHE @ short transient TTL (dampens bursts; the cache lookup applies the short budget)
+//   ok=false / kind = "spawn"                                → SKIP cache (legacy / ambiguous bucket; classifySpawnError can't yet distinguish a clipped 429 from a real spawn failure, so caching would risk pinning a transient error at the regular TTL once FU-S26-b clips message length)
+//
+// The "all-or-nothing" semantics are preserved: a failure mix that contains
+// any spawn-bucket entry is uncacheable. Transient + structural mixes ARE
+// cacheable, and the cache lookup applies the regular TTL (the more
+// permissive choice) since at least one kind is structural — see
+// effectiveTtl() in probe-cache.ts for the predicate.
 function _shouldCacheProbeResult(result: ProbeResult): boolean {
   if (result.ok) return true;
   for (const f of result.failures) {
-    if (f.kind !== "auth" && f.kind !== "misconfig" && f.kind !== "validation") {
-      return false;
-    }
+    if (f.kind === "spawn") return false;
   }
   return true;
 }

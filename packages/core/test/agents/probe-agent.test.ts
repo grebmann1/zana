@@ -481,26 +481,34 @@ describe("probeAgent", () => {
       expect(second.probeId).not.toBe(first.probeId);
     });
 
-    it("does NOT cache transient failures (timeout)", async () => {
+    it("DOES cache transient failures (timeout) at the short transient TTL", async () => {
+      // Policy change (FU-T-transient-cache, post-2026-06-08): transient
+      // failures (timeout/rate_limit/transport/quota) now cache with a
+      // SHORT TTL so a flaky run doesn't re-pay the full 9-spawn probe
+      // cost on every retry. The cache enforces the short budget at lookup
+      // time; once it expires the next probe re-spawns.
       const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
         if (prompt.includes("42")) return { neverResolve: true };
         if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
         return { result: "PROBE_REFUSAL_OK" };
       });
 
+      // Pin the active probe config so the test isn't flaky on default changes.
+      probeConfig.setProbeConfig({ transientProbeCacheTtlMs: 60_000 });
+
       const profile = makeProfile();
-      const first = await manager.probeAgent(profile, { timeoutMs: 60 }, { ...deps, probeCacheTtlMs: 60_000 });
+      const first = await manager.probeAgent(profile, { timeoutMs: 60 }, { ...deps, probeCacheTtlMs: 5 * 60 * 1000 });
       expect(first.ok).toBe(false);
       expect(first.failures.some((f) => f.kind === "timeout")).toBe(true);
       const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
 
-      const second = await manager.probeAgent(profile, { timeoutMs: 60 }, { ...deps, probeCacheTtlMs: 60_000 });
-      // Transient → not cached → re-spawn happens.
-      expect(spawnHeadlessAgent.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
-      expect(second.cached).toBe(false);
+      // Second call within transient TTL → cache hit, no re-spawn.
+      const second = await manager.probeAgent(profile, { timeoutMs: 60 }, { ...deps, probeCacheTtlMs: 5 * 60 * 1000 });
+      expect(spawnHeadlessAgent.mock.calls.length).toBe(spawnsAfterFirst);
+      expect(second.cached).toBe(true);
     });
 
-    it("does NOT cache transient failures (rate_limit)", async () => {
+    it("DOES cache transient failures (rate_limit) at the short transient TTL", async () => {
       const { deps, spawnHeadlessAgent } = makeFakeDeps((prompt) => {
         if (prompt.includes("42")) return { result: "42" };
         if (prompt.includes("PROBE_OK")) return { result: "PROBE_OK" };
@@ -516,15 +524,17 @@ describe("probeAgent", () => {
         return realSpawn(profile, options);
       };
 
+      probeConfig.setProbeConfig({ transientProbeCacheTtlMs: 60_000 });
+
       const profile = makeProfile();
-      const first = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
+      const first = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 5 * 60 * 1000 });
       expect(first.failures.some((f) => f.kind === "rate_limit")).toBe(true);
       const spawnsAfterFirst = spawnHeadlessAgent.mock.calls.length;
 
-      const second = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 60_000 });
-      // rate_limit is transient → not cached → second call re-spawns.
-      expect(spawnHeadlessAgent.mock.calls.length).toBeGreaterThan(spawnsAfterFirst);
-      expect(second.cached).toBe(false);
+      // Second call within transient TTL → cache hit, no re-spawn.
+      const second = await manager.probeAgent(profile, undefined, { ...deps, probeCacheTtlMs: 5 * 60 * 1000 });
+      expect(spawnHeadlessAgent.mock.calls.length).toBe(spawnsAfterFirst);
+      expect(second.cached).toBe(true);
     });
 
     it("DOES cache structural failures (auth) — second call hits cache, no re-spawn", async () => {

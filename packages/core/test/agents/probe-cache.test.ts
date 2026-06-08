@@ -109,4 +109,81 @@ describe("probe-cache (T6-FU-2)", () => {
     const found = lookupProbeResult("profA:modX", 60_000);
     expect(found!.probeId).toBe("v2");
   });
+
+  // ── Per-kind TTL (transient cache) ────────────────────────────────────────
+  describe("per-kind TTL", () => {
+    it("transient-failure cache uses transientTtlMs, expires earlier than regular", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const transientResult = fakeResult({
+        ok: false,
+        failures: [{ leg: "factual", kind: "timeout", reason: "x" } as any],
+      });
+      recordProbeResult("profA:modX", transientResult);
+
+      // Within transientTtl (30s) → hit.
+      vi.setSystemTime(new Date("2026-01-01T00:00:20Z"));
+      let found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+
+      // Past transientTtl but well within regularTtl → miss for transient kinds.
+      vi.setSystemTime(new Date("2026-01-01T00:00:35Z"));
+      found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).toBeNull();
+    });
+
+    it("structural-failure cache uses regularTtlMs even when transientTtl is short", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const structResult = fakeResult({
+        ok: false,
+        failures: [{ leg: null, kind: "auth", reason: "401" } as any],
+      });
+      recordProbeResult("profA:modX", structResult);
+
+      // 1m past transient TTL — but kind=auth uses regularTtlMs.
+      vi.setSystemTime(new Date("2026-01-01T00:01:00Z"));
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+    });
+
+    it("ok=true entry uses regularTtlMs", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      recordProbeResult("profA:modX", fakeResult({ ok: true }));
+      vi.setSystemTime(new Date("2026-01-01T00:01:00Z"));
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+    });
+
+    it("mixed transient + structural failures use regularTtl (structural pins it)", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const mixed = fakeResult({
+        ok: false,
+        failures: [
+          { leg: "factual", kind: "timeout", reason: "x" } as any,
+          { leg: "instructionFollowing", kind: "auth", reason: "y" } as any,
+        ],
+      });
+      recordProbeResult("profA:modX", mixed);
+      // Past transient budget, well within regular — should hit.
+      vi.setSystemTime(new Date("2026-01-01T00:01:00Z"));
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+    });
+
+    it("transientTtlMs=0 disables transient caching while keeping structural cache live", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const transientResult = fakeResult({
+        ok: false,
+        failures: [{ leg: "factual", kind: "timeout", reason: "x" } as any],
+      });
+      recordProbeResult("profA:modX", transientResult);
+      // Even at t=0 — transient cache disabled means lookup returns null.
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 0 });
+      expect(found).toBeNull();
+    });
+  });
 });
