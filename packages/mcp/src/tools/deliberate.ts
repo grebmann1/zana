@@ -922,6 +922,14 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
 export interface DeliberationNudgeArgs {
   deliberationId: string;
   response: string | null;
+  // Inherits the same semantics as DeliberateArgs.skipProbe — when true,
+  // the resume run skips the capability-probe gate on subsequent
+  // (re)assemblies. If you started the deliberation with skipProbe:true,
+  // pass it again on resume or the next reassembly will re-introduce
+  // probe latency.
+  skipProbe?: boolean;
+  // See DeliberateArgs.verbose. Reserved; currently a no-op.
+  verbose?: boolean;
   deps?: DeliberateDeps;
 }
 
@@ -1309,6 +1317,16 @@ export const deliberationNudgeTool = {
       response: {
         anyOf: [{ type: "string" }, { type: "null" }],
         description: "Free-text human note. null or empty string = skip.",
+      },
+      skipProbe: {
+        type: "boolean",
+        description:
+          "Inherits the same semantics as zana_deliberate's skipProbe. Pass true on resume to keep the original brainstorm-shaped flow probe-free; otherwise the next (re)assembly will re-introduce probe latency.",
+      },
+      verbose: {
+        type: "boolean",
+        description:
+          "Reserved for future use; currently a no-op (escalation responses always include the full record + voterFailures[]).",
       },
     },
   },
