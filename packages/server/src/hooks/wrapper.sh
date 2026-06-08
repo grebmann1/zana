@@ -1,9 +1,19 @@
 #!/bin/bash
-# Zana hook relay (broadcast mode).
+# Zana hook relay (broadcast mode + daemonless fallback).
 #
 # Claude Code hooks invoke this script with the event's JSON payload on
-# stdin. We forward that payload to ALL running daemon instances discovered
-# from the registry at ~/.zana/daemons/*.json (legacy ~/.zana/hives also scanned).
+# stdin. We:
+#   1. Forward to ALL running daemon instances (registry at
+#      ~/.zana/daemons/*.json; legacy ~/.zana/hives also scanned).
+#   2. ALWAYS append the payload to a daemonless fallback file at
+#      ~/.zana/events/wrapper-fallback.ndjson so events are observable
+#      even when no daemon is running. Without this, the user sees
+#      empty session events.ndjson files (the daemon creates them on
+#      init but never appends if no daemon is alive when hooks fire).
+#
+# Fallback file is rotated by `wc -l` heuristic at 100k lines (rough
+# 50MB ceiling for typical payload sizes); older content goes to
+# wrapper-fallback.ndjson.<ts> and is pruned beyond 5 rolled files.
 
 set -u
 
@@ -50,6 +60,35 @@ done
 
 if [ "$CAPPED" = "1" ]; then
   echo "[zana-hook-wrapper] WARNING: $TOTAL_FOUND daemons in registry, capping fan-out at $MAX_DAEMONS. Run 'zana stop --all' to clean up." >&2
+fi
+
+# Daemonless fallback: append the timestamped payload so observability
+# survives the no-daemon-running case (which is the common case during
+# native Claude Code chat sessions). Use a single global file keyed by
+# zana_terminal_id (already injected above) so a future `zana ingest`
+# can drain it into the appropriate session record.
+FALLBACK_DIR="$HOME/.zana/events"
+FALLBACK_FILE="$FALLBACK_DIR/wrapper-fallback.ndjson"
+mkdir -p "$FALLBACK_DIR" 2>/dev/null
+if [ -d "$FALLBACK_DIR" ]; then
+  TS_MS=$(($(date +%s%N 2>/dev/null || echo $(date +%s)000000000) / 1000000))
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$INPUT" | jq -c --argjson ts "$TS_MS" '. + {ts: $ts}' >> "$FALLBACK_FILE" 2>/dev/null
+  else
+    # Fallback when jq is unavailable: write raw payload + ts on a separate
+    # line. Loses strict NDJSON-per-event but preserves the data.
+    printf '%s\n' "$INPUT" >> "$FALLBACK_FILE" 2>/dev/null
+  fi
+
+  # Rough size-based rotation: when fallback exceeds 100k lines, rename to
+  # a timestamped roll and start fresh. Keep at most 5 rolled files.
+  if [ -f "$FALLBACK_FILE" ]; then
+    LINES=$(wc -l < "$FALLBACK_FILE" 2>/dev/null || echo 0)
+    if [ "$LINES" -gt 100000 ]; then
+      mv "$FALLBACK_FILE" "$FALLBACK_FILE.$(date +%s)" 2>/dev/null
+      ls -1t "$FALLBACK_DIR"/wrapper-fallback.ndjson.* 2>/dev/null | tail -n +6 | xargs -r rm -f 2>/dev/null
+    fi
+  fi
 fi
 
 exit 0
