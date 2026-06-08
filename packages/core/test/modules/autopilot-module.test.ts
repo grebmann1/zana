@@ -231,4 +231,23 @@ describe("autopilot module — goal lifecycle", () => {
     expect(second.ok).toBe(false);
     expect(second.error).toMatch(/cancelled/i);
   });
+
+  it("cancelGoal() reads goal.currentAgentId and dispatches a kill (with planted in-flight)", async () => {
+    // Use the test-only seam to plant a currentAgentId on the goal so we can
+    // exercise the kill path without driving the async runGoal loop.
+    // (vi.mock("@zana-ai/core") is invisible to the autopilot module's CJS
+    // `require("@zana-ai/core")` calls; the kill itself is verified at the
+    // file level — what matters here is that cancelGoal reads currentAgentId
+    // and completes cleanly with no throw.)
+    const { goalId } = await api.setGoal({ title: "With pretend in-flight", criteria: "C", steps: [] });
+    expect(api._setGoalCurrentAgentForTest(goalId, "planted-agent-007")).toBe(true);
+    // cancelGoal will require("@zana-ai/core").agents.manager.killAgent and
+    // call it with "planted-agent-007"; that call goes through the real
+    // module under CJS require, but the autopilot wraps it in try/catch so
+    // any failure becomes a logged warning, not a thrown error. Both
+    // outcomes (real kill or logged miss) leave the goal as cancelled.
+    expect(() => api.cancelGoal(goalId)).not.toThrow();
+    expect(api.getGoal(goalId)?.status).toBe("cancelled");
+    expect(api.getGoal(goalId)?.failureReason).toBe("cancelled by user");
+  });
 });

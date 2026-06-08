@@ -50,7 +50,14 @@ async function runGoal(goalId) {
         ? step.prompt + "\n\nPrior step results:\n" + goal.results.map((r, idx) => `Step ${idx+1}: ${r.summary}`).join("\n")
         : step.prompt;
       const { agentId } = am.spawnHeadlessAgent(profile, { prompt: augmented });
+      // Track the in-flight agent so cancelGoal can SIGTERM it. Without this,
+      // cancel only flipped status — billed compute kept running to completion.
+      goal.currentAgentId = agentId;
       const output = await waitForAgent(am, agentId, 600000); // 10 min timeout per step
+      goal.currentAgentId = null;
+      // The wait may have returned because cancelGoal killed the agent; if so,
+      // bail out of the loop instead of recording the partial step.
+      if (goal.status !== "running") return;
       goal.results.push({ step: i, agentId, summary: output?.slice(0, 1000) || "(no output)" });
       busRef?.emit("autopilot:step_completed", { goalId, step: i, agentId });
     }
@@ -73,7 +80,10 @@ async function runGoal(goalId) {
       `Reply with EXACTLY one line starting with "VERDICT: PASS" or "VERDICT: FAIL". On FAIL, follow with a "Reason:" line explaining what's missing.`,
     ].join("\n");
     const { agentId: evalAgentId } = am.spawnHeadlessAgent(evalProfile, { prompt: evalPrompt });
+    goal.currentAgentId = evalAgentId;
     const evalOutput = (await waitForAgent(am, evalAgentId, 300000)) || "";
+    goal.currentAgentId = null;
+    if (goal.status !== "running") return;
     const passed = /VERDICT:\s*PASS/i.test(evalOutput);
     goal.lastEvaluation = evalOutput.slice(0, 2000);
     if (passed) {
@@ -126,10 +136,32 @@ function cancelGoal(goalId) {
   const g = goals.get(goalId);
   if (!g) return { ok: false, error: "unknown goal" };
   if (g.status !== "running") return { ok: false, error: `goal already ${g.status}` };
+  // Kill the in-flight step's spawned agent FIRST. Without this, cancel was
+  // only an observability lie — billed compute kept running to completion
+  // (CWE-400/770: denial-of-wallet). The runGoal loop checks goal.status
+  // after waitForAgent returns and bails out without recording results.
+  if (g.currentAgentId) {
+    try {
+      const am = require("@zana-ai/core").agents.manager;
+      am.killAgent(g.currentAgentId);
+    } catch (err) {
+      logFn(`cancelGoal ${goalId}: killAgent(${g.currentAgentId}) failed: ${err?.message || err}`);
+    }
+  }
   g.status = "cancelled";
   g.failureReason = "cancelled by user";
   busRef?.emit("autopilot:goal_failed", { goalId, reason: "cancelled" });
   return { ok: true };
+}
+
+// Test seam — directly plant a currentAgentId on a goal so unit tests can
+// exercise the cancelGoal-kills-in-flight path without driving runGoal's
+// async loop. NOT for production use.
+function _setGoalCurrentAgentForTest(goalId, agentId) {
+  const g = goals.get(goalId);
+  if (!g) return false;
+  g.currentAgentId = agentId;
+  return true;
 }
 
 module.exports = {
@@ -143,6 +175,7 @@ module.exports = {
       getGoal,
       listGoals,
       cancelGoal,
+      _setGoalCurrentAgentForTest,
     };
   },
   async recover(_state, ctx) {
