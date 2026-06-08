@@ -286,6 +286,45 @@ describe("zana_deliberate MCP tool family (T9)", () => {
     }
   });
 
+  it("skipProbe:true bypasses probes and proceeds to review even when probes would fail", async () => {
+    // Plan calls for two voters to time out — would normally drop quorum.
+    const state = { round: 1 };
+    const script = {
+      1: {
+        a: { bit: "APPROVE" as const, rationale: "ok" },
+        b: { bit: "APPROVE" as const, rationale: "ok" },
+        c: { bit: "APPROVE" as const, rationale: "ok" },
+      },
+    };
+    // makeDeps wires fakeProbe based on the third arg; we also override
+    // probeAgent to assert it's NOT called when skipProbe is set.
+    const deps = makeDeps(
+      script,
+      state,
+      { a: "ok", b: "timeout", c: "timeout" },
+    );
+    let probeCalls = 0;
+    const origProbe = deps.probeAgent!;
+    deps.probeAgent = async (...args: any[]) => {
+      probeCalls++;
+      return origProbe(...(args as [any, any?, any?]));
+    };
+
+    const result = await deliberateHandler({
+      wait: true,
+      question: "q",
+      voters: ["a", "b", "c"],
+      quorum: 2,
+      skipProbe: true,
+      deps,
+    });
+
+    expect(probeCalls).toBe(0); // probeAgent never invoked
+    expect(result._outcome).not.toBe("escalated_at_assembly");
+    // All three voters survived → council reached SETTLED unanimously.
+    expect(result.state).toBe("SETTLED");
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   // 4. ADVANCE_ROUND triggers reassembleCouncil
   // ──────────────────────────────────────────────────────────────────────────

@@ -176,6 +176,12 @@ export interface DeliberateArgs {
   // slim shape with `voterFailures[]` and `nextSteps` so the host LLM
   // can surface the typed probe failures to the user.
   verbose?: boolean;
+  // Bypass the capability-probe gate. Use for low-stakes / chat-driven
+  // brainstorms where probe latency outweighs the value of catching a
+  // broken voter early. If a voter is genuinely broken, the failure
+  // surfaces in the collect-reviews round instead of probe time.
+  // Default false (probes run as today).
+  skipProbe?: boolean;
   deps?: DeliberateDeps;
 }
 
@@ -421,6 +427,7 @@ export async function deliberateHandler(args: DeliberateArgs): Promise<any> {
       ? { afterRound: Math.floor(args.humanNudge.afterRound), promptText: args.humanNudge.promptText ?? "Optional input for next round (skip leaves it as-is):" }
       : null,
     verbose: args.verbose === true,
+    skipProbe: args.skipProbe === true,
   };
 
   // 2. Default: detach the orchestration loop and return the proposed record.
@@ -476,6 +483,9 @@ interface RunDeliberationContext {
   // Plumbed from DeliberateArgs.verbose. Controls escalation-response shape
   // when assembleCouncil/reassembleCouncil escalates inside this loop.
   verbose: boolean;
+  // Plumbed from DeliberateArgs.skipProbe. When true, bypass the capability
+  // probe and treat every candidate as a healthy voter.
+  skipProbe?: boolean;
 }
 
 async function runDeliberation(ctx: RunDeliberationContext): Promise<any> {
@@ -594,7 +604,24 @@ async function runDeliberationUnsafe(ctx: RunDeliberationContext): Promise<any> 
 
   // 2. Assemble the initial council. assembleCouncil probes each candidate and
   //    transitions PROPOSED → REVIEWING (or PROPOSED → ESCALATED on quorum loss).
-  const probeAgent = deps.probeAgent ?? core.agents.manager.probeAgent;
+  // When the caller opts out of probing (low-stakes / brainstorm flows), swap
+  // in a stub that reports every candidate as healthy. The rest of
+  // assembleCouncil's READY-path machinery still runs, so degradation, audit,
+  // and quorum bookkeeping all stay consistent — the probe is just bypassed.
+  // If a voter is actually broken, the failure surfaces at review time
+  // (one collect-reviews round-trip later) instead of at probe time.
+  const stubProbeForSkip = async (profile: any) => ({
+    ok: true,
+    latencyMs: 0,
+    failures: [],
+    modelId: profile?.model || "unknown",
+    probeId: `skipped-${profile?.id ?? "anonymous"}`,
+    legs: [],
+    cached: false,
+  });
+  const probeAgent = ctx.skipProbe
+    ? stubProbeForSkip
+    : (deps.probeAgent ?? core.agents.manager.probeAgent);
   const assembleDeps: any = {
     probeAgent,
     spawnHeadlessAgent: trackedSpawn,
@@ -977,6 +1004,7 @@ export async function deliberationNudgeHandler(args: DeliberationNudgeArgs): Pro
     humanNudge: null, // already-resumed run; nudge already recorded
     skipFirstCollectAndSynth: true,
     verbose: (args as any)?.verbose === true,
+    skipProbe: (args as any)?.skipProbe === true,
   };
 
   try {
@@ -1256,6 +1284,11 @@ export const deliberateTool = {
         type: "boolean",
         description:
           "Reserved for future use. The escalation response always includes the full deliberation record plus voterFailures[]/nextSteps in _assemblyEscalation / _reassemblyEscalation; this flag is currently a no-op.",
+      },
+      skipProbe: {
+        type: "boolean",
+        description:
+          "Bypass the capability-probe gate. Use for low-stakes / brainstorm flows where probe latency (3 spawns × N voters) outweighs the value of catching a broken voter early. If a voter is genuinely broken, the failure surfaces during the collect-reviews round instead of at probe time. Default false (probes run as today).",
       },
     },
   },
