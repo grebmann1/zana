@@ -171,9 +171,19 @@ Given the user's task in `$ARGUMENTS`:
 - Give agents FULL context in their initial prompt — Claude Code subagents share the host filesystem, so reference file paths instead of pasting code.
 - If an agent fails, spawn a replacement with a corrective prompt — do NOT do the work yourself.
 
+### Deliberation: pick the right path
+
+**For chat brainstorms, design opinions, "what do you think?" — invoke the native `/zana:council` slash command.** That fan-out spawns voter subagents directly via `Agent` + `SendMessage`, with NO probe gate, NO quorum failure on cold-start latency, and a synthesizer that returns the verdict in this same conversation. This is the right tool for ~95% of in-chat usage.
+
+**Reserve `mcp__zana__zana_deliberate` for governance-grade decisions** that need a content-addressed audit trail, a replayable state machine, multi-round convergence, or human-override on escalation. Anything you'd want to review later from the deliberation history.
+
+If you do call `zana_deliberate` for a brainstorm-shaped task, pass `skipProbe: true` to bypass the capability-probe gate (probes are 3 spawns × N voters of cold-start latency that frequently produce "probe quorum lost" on transient timeouts; skipping them surfaces real voter failures one round later in the collect-reviews step instead).
+
 ### Deliberation failures — surface the cause, do not collapse
 
 When `mcp__zana__zana_deliberate` (or `zana_deliberation_status`) returns `_outcome: "escalated_at_assembly"` or `"escalated_during_reassembly"`, do NOT summarize as "deliberation failed (probe quorum lost)" alone. The response carries `_assemblyEscalation.voterFailures[]` (or `_reassemblyEscalation.voterFailures[]`) — an array of `{ profileId, leg, kind, reason }` entries naming each dropped voter, the failing probe leg, the typed failure kind (`timeout` / `auth` / `validation` / `misconfig` / `rate_limit` / `quota` / `transport` / `spawn`), and the human reason. Surface this list verbatim to the user before deciding on a fallback, and quote `nextSteps` verbatim. The user needs the per-voter detail to debug a stale probe cache, an unrouted model, an auth failure, etc.
+
+If you hit a probe failure on what's clearly a brainstorm, switch to `/zana:council` and re-run instead of falling back to a single-shot query — the user wanted multiple perspectives.
 
 ## Now execute the following task:
 
