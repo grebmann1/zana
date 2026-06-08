@@ -364,7 +364,12 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
         if (msg.type === "assistant" && msg.message?.content) {
           const textBlocks = msg.message.content.filter((b: any) => b.type === "text");
           if (textBlocks.length > 0) {
-            agent.result = textBlocks.map((b: any) => b.text).join("\n");
+            // Streaming chunks land on lastAssistantText so callers reading
+            // `agent.result` see the FINAL result emitted on type:"result"
+            // (or null if the stream tore before that). Prior code overwrote
+            // agent.result here too, which made `result` mean "most recent
+            // narration" — misled team_status during dogfooding.
+            agent.lastAssistantText = textBlocks.map((b: any) => b.text).join("\n");
           }
         }
         if (msg.type === "result") {

@@ -227,13 +227,14 @@ export function parseVoterOutput(raw: string | null | undefined): { bit: VoteBit
 /**
  * Extract every assistant text block from a stream-json transcript.
  *
- * The headless runner overwrites `agent.result` on each assistant turn
- * (manager.ts handles only the latest message). When a voter writes the JSON
- * vote in turn 1 and then continues speaking after a background tool call
- * resolves, `agent.result` ends up holding the post-vote narration only — the
- * vote JSON is gone. The raw stream-json transcript lives in `outputBuffer`,
- * and this helper reconstructs the full assistant-side conversation so the
- * parser can find the vote regardless of which turn carried it.
+ * Even after the lifecycle.ts fix that reserves `agent.result` for the final
+ * type:"result" message, multi-turn voters can write the vote JSON in turn 1
+ * and continue speaking after a background tool call. The terminal `result`
+ * field carries only the LAST assistant payload, so the early-turn vote JSON
+ * may not be in `agent.result` at all. The raw stream-json transcript lives
+ * in `outputBuffer`, and this helper reconstructs the full assistant-side
+ * conversation so the parser can find the vote regardless of which turn
+ * carried it.
  *
  * Returns null when the buffer doesn't look like stream-json (so the caller
  * can fall back to the raw buffer as plain prose).
@@ -379,12 +380,14 @@ export async function collectReviews(
     }
 
     // Voters who narrate after their vote (e.g. acknowledging a background
-    // tool-call result) overwrite `agent.result` in manager.ts, clobbering the
-    // turn that carried the JSON contract. Reconstruct the full assistant-side
-    // transcript from the raw stream-json buffer first; that exposes every
-    // turn so parseVoterOutput can find the contract block regardless of when
-    // it was emitted. Fall back to `result`, then the raw buffer, when the
-    // buffer doesn't look like stream-json.
+    // tool-call result) leave `agent.result` carrying only the FINAL turn's
+    // payload (lifecycle.ts pins it to type:"result" content), so the turn
+    // that carried the JSON contract may not be in `result` at all.
+    // Reconstruct the full assistant-side transcript from the raw stream-json
+    // buffer first; that exposes every turn so parseVoterOutput can find the
+    // contract block regardless of when it was emitted. Fall back to
+    // `result`, then the raw buffer, when the buffer doesn't look like
+    // stream-json.
     const transcript = extractAssistantTextFromStreamJson(outcome.outputBuffer);
     const candidate = transcript && transcript.length > 0
       ? transcript
