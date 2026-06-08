@@ -128,7 +128,7 @@ const DEFAULT_PROBE_INSTRUCTION_FOLLOWING =
 const DEFAULT_PROBE_TOOL_USE = "Use Bash to run `echo PROBE_OK` and reply with the stdout literally.";
 // Fallback if probe-config is unreachable. probe-config.getProbeConfig() defaults
 // to this same value — keeping the const documents the wire-in target.
-const DEFAULT_PROBE_TIMEOUT_MS_FALLBACK = 30000;
+const DEFAULT_PROBE_TIMEOUT_MS_FALLBACK = 90000;
 
 function _probePollResult(
   agentId: string,

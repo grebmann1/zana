@@ -12,7 +12,7 @@ describe("probe-config", () => {
 
   it("getProbeConfig returns the built-in defaults after reset", () => {
     const cfg = getProbeConfig();
-    expect(cfg.probeTimeoutMs).toBe(30000);
+    expect(cfg.probeTimeoutMs).toBe(90000);
     expect(cfg.probeRawMaxBytes).toBe(1024);
     expect(cfg.probeCacheTtlMs).toBe(300000);
   });
@@ -39,7 +39,7 @@ describe("probe-config", () => {
     setProbeConfig({ probeTimeoutMs: 1, probeRawMaxBytes: 1, probeCacheTtlMs: 1 });
     resetProbeConfig();
     const cfg = getProbeConfig();
-    expect(cfg.probeTimeoutMs).toBe(30000);
+    expect(cfg.probeTimeoutMs).toBe(90000);
     expect(cfg.probeRawMaxBytes).toBe(1024);
     expect(cfg.probeCacheTtlMs).toBe(300000);
   });

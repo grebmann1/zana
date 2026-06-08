@@ -13,7 +13,10 @@ export interface ProbeRuntimeConfig {
 }
 
 const DEFAULTS: ProbeRuntimeConfig = {
-  probeTimeoutMs: 30000,
+  // 90s gives cold-start Claude calls enough time to return on slow days.
+  // 30s was too tight: a single slow leg dropped a voter and the whole
+  // council escalated with "probe quorum lost" repeatedly. Per-leg, not total.
+  probeTimeoutMs: 90000,
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
 };

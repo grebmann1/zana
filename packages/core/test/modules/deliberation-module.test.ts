@@ -187,7 +187,7 @@ describe("deliberation core module (FU-config)", () => {
     expect(probeConfigDirect.getProbeConfig().probeTimeoutMs).toBe(500);
     expect(probeConfigDirect.getProbeConfig().probeRawMaxBytes).toBe(64);
     probeConfigDirect.resetProbeConfig();
-    expect(probeConfigDirect.getProbeConfig().probeTimeoutMs).toBe(30000);
+    expect(probeConfigDirect.getProbeConfig().probeTimeoutMs).toBe(90000);
     expect(probeConfigDirect.getProbeConfig().probeRawMaxBytes).toBe(1024);
   });
 
