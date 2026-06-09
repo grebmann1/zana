@@ -1,0 +1,31 @@
+[2026-06-09T09:03:22.543Z] starting real-Claude deliberation (async-by-default)...
+
+[stub] state=PROPOSED _outcome=running
+[stub] deliberationId=efd9c3e9-4d59-4e02-8d34-c15e0962e8d9
+  [2026-06-09T09:03:42.592Z] state → REVIEWING (round 0/2, votes 0)
+  [2026-06-09T09:07:15.843Z] state → SETTLED (round 1/2, votes 3)
+
+[2026-06-09T09:07:15.843Z] complete in 233.3s
+──────────────────────────────────────────────────────────────────────
+state:        SETTLED
+verdict:      approve
+escalation:   —
+rounds run:   currentRound=1 / cap=2
+quorum:       2
+voters:       architect@claude-sonnet-4-6, security-reviewer@claude-sonnet-4-6, researcher@claude-sonnet-4-6
+
+votes (3):
+  r1 architect            APPROVE  sha256:216b047706c5031…
+  r1 security-reviewer    APPROVE  sha256:b4f5d0ae0b84020…
+  r1 researcher           APPROVE  sha256:f01fe3f77302107…
+
+dissent (0):
+
+rationale samples (first 240 chars each):
+  r1 architect → Keep rule-based. The governance invariant (dissent verbatim) is a hard architectural constraint that LLM synthesis structurally cannot satisfy — models paraphrase, and no prompt instruction overrides that behavior reliably. Replay-safety an…
+  r1 security-reviewer → From a security lens, keeping rule-based is the correct call. LLM-based synthesis introduces: (1) prompt injection surface (CWE-74) — any council member output fed into an LLM prompt is an injection vector; (2) probabilistic dissent preserv…
+  r1 researcher → All four governance dimensions favor keeping rule-based: (1) Dice+keyword is a pure function — full replay-safety, LLM is not; (2) zero marginal token cost vs. unbounded LLM spend across multi-round councils; (3) grouping decisions are full…
+
+synthesisHash: sha256:a900a2de2f9735dd4cf4bf970f58a8d76083f8893ece7ba02950dee4754f7462
+
+full record: /Users/grebmann/Documents/claude-workspace/zana/.zana/last-deliberation.json
