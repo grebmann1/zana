@@ -349,11 +349,11 @@ describe("probeAgent", () => {
       expect(factualFailure!.reason).toContain("200ms");
     });
 
-    it("resetProbeConfig restores the 90000ms default", () => {
+    it("resetProbeConfig restores the 120000ms default", () => {
       probeConfig.setProbeConfig({ probeTimeoutMs: 12345 });
       expect(probeConfig.getProbeConfig().probeTimeoutMs).toBe(12345);
       probeConfig.resetProbeConfig();
-      expect(probeConfig.getProbeConfig().probeTimeoutMs).toBe(90000);
+      expect(probeConfig.getProbeConfig().probeTimeoutMs).toBe(120000);
       expect(probeConfig.getProbeConfig().probeRawMaxBytes).toBe(1024);
     });
 

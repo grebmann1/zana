@@ -13,7 +13,7 @@ describe("deliberation runtime-config", () => {
     expect(cfg.defaultMode).toBe("synthesis");
     expect(cfg.checkpointTTLDays).toBe(7);
     expect(cfg.occMaxRetries).toBe(3);
-    expect(cfg.probeTimeoutMs).toBe(90000);
+    expect(cfg.probeTimeoutMs).toBe(120000);
     expect(cfg.probeRawMaxBytes).toBe(1024);
     expect(cfg.probeCacheTtlMs).toBe(300000);
     expect(cfg.synthesisSimilarityThreshold).toBe(0.45);

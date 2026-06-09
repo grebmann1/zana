@@ -21,10 +21,16 @@ export interface ProbeRuntimeConfig {
 }
 
 const DEFAULTS: ProbeRuntimeConfig = {
-  // 90s gives cold-start Claude calls enough time to return on slow days.
-  // 30s was too tight: a single slow leg dropped a voter and the whole
-  // council escalated with "probe quorum lost" repeatedly. Per-leg, not total.
-  probeTimeoutMs: 90000,
+  // 120s per-leg ceiling. NOT a latency cost — a healthy voter clears all
+  // three probe legs in ~10-20s (measured: full 3-voter probe phase took
+  // ~20s wall-clock in the 2026-06-09 real-Claude run). The budget only
+  // pays out when a probe is genuinely stuck; it exists to distinguish
+  // "slow cold-start / rate-limit backoff" from "dead voter". 30s was too
+  // tight (false drops → "probe quorum lost"); 90s fixed that; 120s adds
+  // headroom for a rate-limit backoff or two. Going higher trades
+  // dead-voter-detection speed for slowness-tolerance we don't need —
+  // a truly wedged voter is caught by drop+escalate, not a bigger timeout.
+  probeTimeoutMs: 120000,
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
   transientProbeCacheTtlMs: 30000,

@@ -55,7 +55,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   defaultMode: "synthesis",
   checkpointTTLDays: 7,
   occMaxRetries: 3,
-  probeTimeoutMs: 90000,
+  probeTimeoutMs: 120000,
   probeRawMaxBytes: 1024,
   probeCacheTtlMs: 300000,
   synthesisSimilarityThreshold: 0.45,
@@ -187,7 +187,7 @@ describe("deliberation core module (FU-config)", () => {
     expect(probeConfigDirect.getProbeConfig().probeTimeoutMs).toBe(500);
     expect(probeConfigDirect.getProbeConfig().probeRawMaxBytes).toBe(64);
     probeConfigDirect.resetProbeConfig();
-    expect(probeConfigDirect.getProbeConfig().probeTimeoutMs).toBe(90000);
+    expect(probeConfigDirect.getProbeConfig().probeTimeoutMs).toBe(120000);
     expect(probeConfigDirect.getProbeConfig().probeRawMaxBytes).toBe(1024);
   });
 
