@@ -3,6 +3,17 @@ const goals = new Map(); // goalId -> { id, title, criteria, steps, iteration, s
 let logFn = (msg) => console.error("[autopilot]", msg);
 let busRef = null;
 let configRef = {};
+// Captured at init() from ctx — the canonical agent kill seam. Falls back to
+// requiring @zana-ai/core when ctx didn't provide one (older module-loader
+// versions). Tests inject via ctx.swarm.agents.kill so the call is observable.
+let killAgentFn = (agentId) => {
+  try {
+    const am = require("@zana-ai/core").agents.manager;
+    am.killAgent(agentId);
+  } catch (err) {
+    logFn(`killAgent(${agentId}) fallback failed: ${err?.message || err}`);
+  }
+};
 
 async function setGoal(payload) {
   const goalId = require("node:crypto").randomUUID();
@@ -142,8 +153,7 @@ function cancelGoal(goalId) {
   // after waitForAgent returns and bails out without recording results.
   if (g.currentAgentId) {
     try {
-      const am = require("@zana-ai/core").agents.manager;
-      am.killAgent(g.currentAgentId);
+      killAgentFn(g.currentAgentId);
     } catch (err) {
       logFn(`cancelGoal ${goalId}: killAgent(${g.currentAgentId}) failed: ${err?.message || err}`);
     }
@@ -169,6 +179,11 @@ module.exports = {
     logFn = (msg) => ctx.logger.info(msg);
     busRef = ctx.bus;
     configRef = ctx.config || {};
+    // Prefer the loader-injected kill seam so cancelGoal's invocation is
+    // observable from tests (vi.mock can't intercept CJS require chains).
+    if (ctx?.swarm?.agents?.kill && typeof ctx.swarm.agents.kill === "function") {
+      killAgentFn = ctx.swarm.agents.kill;
+    }
     ctx.logger.info("autopilot module ready");
     return {
       setGoal,

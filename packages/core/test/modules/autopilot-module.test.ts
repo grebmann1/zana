@@ -49,6 +49,7 @@ function freshModule() {
 function makeCtx(cfg: Record<string, unknown> = {}) {
   const busEmits: { event: string; payload: unknown }[] = [];
   const logLines: string[] = [];
+  const killAgentSpy = vi.fn();
   const ctx = {
     moduleId: "autopilot",
     bus: {
@@ -63,8 +64,12 @@ function makeCtx(cfg: Record<string, unknown> = {}) {
       error: () => {},
       debug: () => {},
     },
+    // Mirrors the loader-injected ctx.swarm.agents.kill seam from
+    // packages/core/src/modules/loader.ts:180. cancelGoal calls this on the
+    // in-flight agent.
+    swarm: { agents: { kill: killAgentSpy } },
   };
-  return { ctx, busEmits, logLines };
+  return { ctx, busEmits, logLines, killAgentSpy };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -95,11 +100,13 @@ describe("autopilot module — init()", () => {
 describe("autopilot module — goal lifecycle", () => {
   let api: any;
   let busEmits: { event: string; payload: any }[];
+  let killAgentSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     const mod = freshModule();
     const built = makeCtx();
     busEmits = built.busEmits;
+    killAgentSpy = built.killAgentSpy;
     api = await mod.init(built.ctx);
   });
 
@@ -232,22 +239,31 @@ describe("autopilot module — goal lifecycle", () => {
     expect(second.error).toMatch(/cancelled/i);
   });
 
-  it("cancelGoal() reads goal.currentAgentId and dispatches a kill (with planted in-flight)", async () => {
-    // Use the test-only seam to plant a currentAgentId on the goal so we can
-    // exercise the kill path without driving the async runGoal loop.
-    // (vi.mock("@zana-ai/core") is invisible to the autopilot module's CJS
-    // `require("@zana-ai/core")` calls; the kill itself is verified at the
-    // file level — what matters here is that cancelGoal reads currentAgentId
-    // and completes cleanly with no throw.)
+  it("cancelGoal() with an in-flight agent calls killAgent on goal.currentAgentId", async () => {
+    // Plant a currentAgentId via the test seam (avoids fighting runGoal's
+    // async timing) and verify cancelGoal actually invokes the
+    // ctx-injected killAgent. The module captures ctx.swarm.agents.kill at
+    // init() so the spy below is the real call target.
+    killAgentSpy.mockClear();
     const { goalId } = await api.setGoal({ title: "With pretend in-flight", criteria: "C", steps: [] });
     expect(api._setGoalCurrentAgentForTest(goalId, "planted-agent-007")).toBe(true);
-    // cancelGoal will require("@zana-ai/core").agents.manager.killAgent and
-    // call it with "planted-agent-007"; that call goes through the real
-    // module under CJS require, but the autopilot wraps it in try/catch so
-    // any failure becomes a logged warning, not a thrown error. Both
-    // outcomes (real kill or logged miss) leave the goal as cancelled.
-    expect(() => api.cancelGoal(goalId)).not.toThrow();
+
+    api.cancelGoal(goalId);
+
+    expect(killAgentSpy).toHaveBeenCalledWith("planted-agent-007");
+    expect(killAgentSpy).toHaveBeenCalledTimes(1);
     expect(api.getGoal(goalId)?.status).toBe("cancelled");
     expect(api.getGoal(goalId)?.failureReason).toBe("cancelled by user");
+  });
+
+  it("cancelGoal() with no in-flight agent skips killAgent (guard works)", async () => {
+    killAgentSpy.mockClear();
+    const { goalId } = await api.setGoal({ title: "No in-flight", criteria: "C", steps: [] });
+    // Don't plant a currentAgentId — runGoal hasn't reached spawn yet, so
+    // goal.currentAgentId is unset.
+    api.cancelGoal(goalId);
+
+    expect(killAgentSpy).not.toHaveBeenCalled();
+    expect(api.getGoal(goalId)?.status).toBe("cancelled");
   });
 });
