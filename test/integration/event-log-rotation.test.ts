@@ -4,7 +4,7 @@
 // retainCount are pruned.
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -66,6 +66,9 @@ describe("events/log rotation", () => {
   it("append() rotates when ZANA_EVENT_LOG_MAX_BYTES is small", async () => {
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     const tmpWs = mkdtempSync(join(tmpdir(), "elog-ws-"));
+    // Pre-create .zana so resolveProjectDir() stops here and does not walk
+    // up the tree to a pre-existing /tmp/.zana or ~/.zana directory.
+    mkdirSync(join(tmpWs, ".zana"), { recursive: true });
     ws.init(tmpWs);
     const coreFacade = await import("@zana-ai/core");
     coreFacade.project.workspaceContext.init(tmpWs);

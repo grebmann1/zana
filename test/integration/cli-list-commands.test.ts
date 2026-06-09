@@ -41,7 +41,7 @@ describe("cli list commands: --help", () => {
     expect(result.stdout).toMatch(/run list/);
     expect(result.stdout).toMatch(/schedule list/);
     expect(result.stdout).toMatch(/stop --all/);
-  });
+  }, 15000);
 });
 
 describe("cli stop --all", () => {

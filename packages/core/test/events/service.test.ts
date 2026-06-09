@@ -39,6 +39,9 @@ let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-svc-test-"));
+  // Pre-create .zana/ so resolveProjectDir anchors here instead of walking
+  // up to any ancestor .zana/ directory (e.g. /tmp/.zana on macOS/CI).
+  fs.mkdirSync(path.join(tmpDir, ".zana"), { recursive: true });
   initWorkspace(tmpDir);
   // init() is idempotent: only the first call per process monkey-patches
   // bus.emit. Subsequent beforeEach calls are no-ops, which is fine —

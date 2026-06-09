@@ -2,7 +2,7 @@
 // (zana_X → orchestrator action X). Previously stubbed as `{status:"skipped"}`.
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,9 @@ describe("scheduler mcp_tool action", () => {
 
   beforeEach(async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-mcp-"));
+    // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
+    // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
+    mkdirSync(join(tmpDir, ".zana"), { recursive: true });
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
     // Dual-init the dist instance — store.ts requires @zana-ai/core → dist.

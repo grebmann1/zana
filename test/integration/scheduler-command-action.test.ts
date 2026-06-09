@@ -2,7 +2,7 @@
 // (which would route through /bin/sh -c) is rejected as a safety measure.
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,9 @@ describe("scheduler command action — shell injection guard", () => {
 
   beforeEach(async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "sched-cmd-"));
+    // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
+    // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
+    mkdirSync(join(tmpDir, ".zana"), { recursive: true });
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
     // The store.ts file resolves @zana-ai/core via require → dist. Dual-init

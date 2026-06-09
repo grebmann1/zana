@@ -4,7 +4,7 @@
 // spawning a real Claude CLI.
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,6 +16,9 @@ describe("scheduler result-summary capture", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "sched-summary-"));
+    // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
+    // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
+    mkdirSync(join(tmpDir, ".zana"), { recursive: true });
     const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
     ws.init(tmpDir);
     // Dual-init the dist instance — store.ts requires @zana-ai/core → dist.

@@ -43,4 +43,27 @@ describe("buildTeamLeadDisallowedTools", () => {
     const profile = { id: "swarm-master", allowedTools: [], disallowedTools: [] };
     expect(buildTeamLeadDisallowedTools(team, profile)).toEqual([]);
   });
+
+  it("preserves pre-existing disallowed tools on swarm-master without adding Write/Edit/Bash", () => {
+    // swarm-master returns early, so Write/Edit/Bash must NOT be appended even
+    // though they are not in allowedTools. Any pre-existing disallowed tools
+    // (e.g. a site-policy restriction) must be preserved unchanged.
+    const team = { name: "Swarm", rules: {} };
+    const profile = { id: "swarm-master", allowedTools: [], disallowedTools: ["MultiEdit", "NotebookEdit"] };
+    const result = buildTeamLeadDisallowedTools(team, profile);
+    expect(result).toContain("MultiEdit");
+    expect(result).toContain("NotebookEdit");
+    expect(result).not.toContain("Write");
+    expect(result).not.toContain("Edit");
+    expect(result).not.toContain("Bash");
+  });
+
+  it("handles team with no rules property (Write/Edit/Bash added when not in allowedTools)", () => {
+    // team.rules is undefined — optional chaining team.rules?.orchestratorAllowedTools
+    // must not throw, and the function must fall back to adding Write/Edit/Bash.
+    const team = { name: "T" }; // no rules key at all
+    const profile = { id: "orchestrator", allowedTools: ["Read"], disallowedTools: [] };
+    const result = buildTeamLeadDisallowedTools(team as any, profile);
+    expect(result).toEqual(expect.arrayContaining(["Write", "Edit", "Bash"]));
+  });
 });

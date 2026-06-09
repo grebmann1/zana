@@ -55,6 +55,7 @@ describe("tenant-isolation gate (FU-T2d / FU-T4c / FU-config-5)", () => {
   beforeEach(() => {
     resetWorkspace();
     tmpRoot = makeTmp("zana-tenant-iso-");
+    fs.mkdirSync(path.join(tmpRoot, ".zana"), { recursive: true });
   });
 
   afterEach(() => {

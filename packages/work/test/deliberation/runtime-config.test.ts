@@ -71,4 +71,29 @@ describe("deliberation runtime-config", () => {
     expect(() => rc.setRuntimeConfig(null as any)).not.toThrow();
     expect(rc.getRuntimeConfig().defaultRounds).toBe(2);
   });
+
+  // Slice B — generalist-seat invariant (added after original defaults test was written)
+  it("generalistSeat defaults to enabled=true with profileId='researcher' and threshold=3", () => {
+    const cfg = rc.getRuntimeConfig();
+    expect(cfg.generalistSeat).toEqual({ enabled: true, profileId: "researcher" });
+    expect(cfg.generalistSeatThreshold).toBe(3);
+  });
+
+  it("setRuntimeConfig can override generalistSeat as a nested object", () => {
+    rc.setRuntimeConfig({ generalistSeat: { enabled: false, profileId: "researcher" } });
+    expect(rc.getRuntimeConfig().generalistSeat).toEqual({ enabled: false, profileId: "researcher" });
+    // unrelated fields are unaffected
+    expect(rc.getRuntimeConfig().generalistSeatThreshold).toBe(3);
+    rc.setRuntimeConfig({ generalistSeatThreshold: 5 });
+    expect(rc.getRuntimeConfig().generalistSeatThreshold).toBe(5);
+    expect(rc.getRuntimeConfig().generalistSeat.enabled).toBe(false);
+  });
+
+  it("resetRuntimeConfig restores generalistSeat defaults after override", () => {
+    rc.setRuntimeConfig({ generalistSeat: { enabled: false, profileId: "custom" }, generalistSeatThreshold: 99 });
+    rc.resetRuntimeConfig();
+    const cfg = rc.getRuntimeConfig();
+    expect(cfg.generalistSeat).toEqual({ enabled: true, profileId: "researcher" });
+    expect(cfg.generalistSeatThreshold).toBe(3);
+  });
 });

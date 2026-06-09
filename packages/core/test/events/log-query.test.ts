@@ -34,6 +34,9 @@ let tmpDir: string;
 
 beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-log-query-test-"));
+  // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
+  // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
+  fs.mkdirSync(path.join(tmpDir, ".zana"), { recursive: true });
   // Wire workspace so init() / getSessionsDir() resolves into tmpDir.
   workspaceContextTs.init(tmpDir);
   wcDist.init(tmpDir);

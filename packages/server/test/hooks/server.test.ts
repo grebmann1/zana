@@ -8,7 +8,7 @@
 // Covers: registerRoute dispatch (GET + POST), 404 for unknown routes,
 // 400 for malformed JSON body, and handler error → 500 response.
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import http from "node:http";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -126,7 +126,13 @@ beforeAll(async () => {
   // Use a port unlikely to conflict with integration tests (47900) or other
   // suite ports; the server will auto-increment on EADDRINUSE.
   server = await startHookServer(() => {}, async () => ({ ok: true }), 48050);
+  if (!server) return; // server couldn't bind (e.g. sandbox EPERM) — tests will be skipped
   port = server.port;
+});
+
+// Skip individual tests when the server failed to start (e.g. network not available).
+beforeEach((ctx) => {
+  if (!server) ctx.skip();
 });
 
 afterAll(() => {

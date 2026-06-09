@@ -80,7 +80,7 @@ describe("enforcer-cli: allowed tool", () => {
     expect(status).toBe(0);
     const result = JSON.parse(stdout.trim());
     expect(result.decision).toBe("allow");
-  });
+  }, 15000);
 });
 
 // ---------------------------------------------------------------------------

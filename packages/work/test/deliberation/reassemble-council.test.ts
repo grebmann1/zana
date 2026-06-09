@@ -12,7 +12,7 @@
 // Uses an injected fakeProbe per the existing pattern.
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -93,6 +93,7 @@ describe("reassembleCouncil (T6-FU-1)", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-reassemble-"));
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     checkpointStore.init(tmpRoot);

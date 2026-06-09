@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -48,6 +48,7 @@ describe("deliberation state machine (T5)", () => {
 
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-delib-"));
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     // Use a deliberation-specific checkpoints dir to avoid colliding with
@@ -722,6 +723,7 @@ describe("propose() honors runtime config (FU-config)", () => {
   let tmpRoot: string;
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "zana-delib-rcfg-"));
+    mkdirSync(join(tmpRoot, ".zana"), { recursive: true });
     workspaceContext.init(tmpRoot);
     try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}
     checkpointStore.init(tmpRoot);

@@ -23,6 +23,10 @@ let tmpRoot: string;
 
 beforeAll(() => {
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zana-db-test-"));
+  // Pre-create tmpRoot/.zana so resolveProjectDir() stops here instead of
+  // walking up the filesystem and finding a shared /tmp/.zana directory that
+  // may already have WAL-locked SQLite files from a running daemon.
+  fs.mkdirSync(path.join(tmpRoot, ".zana"), { recursive: true });
   // Initialize workspace context so db.ts resolves paths inside tmpRoot.
   workspaceContext.init(tmpRoot);
   try { (core as any).project.workspaceContext.init(tmpRoot); } catch {}

@@ -1,0 +1,111 @@
+{
+  "id": "e1e34b9a-8a08-43b2-b154-38c93cee687a",
+  "name": "QA Agent",
+  "description": "Hourly health check: runs tests, surfaces type errors, flags regressions.",
+  "enabled": false,
+  "projectId": "9aefe66f-b440-4f6c-ad8e-61d071137376",
+  "profile": "claude-yolo",
+  "prompt": "Run the project test suite and the type-checker. If anything fails, summarize the failure and the suspected root cause. If everything passes, reply with a one-line \"all green\" status.",
+  "notifyInbox": false,
+  "schedule": {
+    "every": "2m"
+  },
+  "overlap": "skip",
+  "history": {
+    "retain": 10
+  },
+  "status": {
+    "runCount": 11,
+    "runs": [
+      {
+        "id": "a7e43c1e-7784-4d9b-8050-e40418d0d659",
+        "at": "2026-06-09T07:09:36.029Z",
+        "result": "error",
+        "sessionId": "6c952dba-848f-40c8-8a4e-d89c683e5641",
+        "message": "exit 129",
+        "durationMs": 324379
+      },
+      {
+        "id": "13214194-4246-4b10-be4a-8c8cb2cb6684",
+        "at": "2026-06-09T07:07:36.021Z",
+        "result": "error",
+        "sessionId": "d9bc2f41-6a4f-4f38-9f83-1c8584162d1a",
+        "durationMs": 88416,
+        "message": "exit 129"
+      },
+      {
+        "id": "120c0809-868e-474f-b5c9-3ecfb05f2e0e",
+        "at": "2026-06-09T07:05:55.935Z",
+        "result": "error",
+        "sessionId": "cad92af3-3496-4c3e-a0c5-367ec87818e2",
+        "durationMs": 545926,
+        "message": "exit 129"
+      },
+      {
+        "id": "d459596c-d639-4084-9fc3-134570fea609",
+        "at": "2026-06-08T22:43:26.218Z",
+        "result": "success",
+        "sessionId": "ee77ebd1-b790-4ff9-b92e-40d4cbcb9916",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/d459596c-d639-4084-9fc3-134570fea609.log"
+      },
+      {
+        "id": "8f5d3589-973d-4ab2-8d7c-bcf23eea32c0",
+        "at": "2026-06-08T22:41:26.210Z",
+        "result": "success",
+        "sessionId": "edabda59-b6f7-4d91-bcab-6846c84a6498",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/8f5d3589-973d-4ab2-8d7c-bcf23eea32c0.log",
+        "durationMs": 10169,
+        "claudeSessionId": "a37244ec-06e2-4640-875f-8bb8d8211cea"
+      },
+      {
+        "id": "1bc061f0-afbf-47e7-9ad0-9543dd3907a2",
+        "at": "2026-06-08T22:37:26.194Z",
+        "result": "error",
+        "sessionId": "ca37ca37-95bd-4bd3-a31b-b92cc2c27c62",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/1bc061f0-afbf-47e7-9ad0-9543dd3907a2.log",
+        "message": "exit 129",
+        "durationMs": 143993,
+        "claudeSessionId": "2ad56780-66a8-433a-a9c4-6772504ad784"
+      },
+      {
+        "id": "63d4baa4-a156-4216-97b1-62c0e1bdf45a",
+        "at": "2026-06-08T22:35:26.186Z",
+        "result": "success",
+        "sessionId": "1fcfab52-f834-4a78-801f-9cec7d0f1ce9",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/63d4baa4-a156-4216-97b1-62c0e1bdf45a.log"
+      },
+      {
+        "id": "91bbf7e1-644f-45ff-8fd7-3ec82cb85ddd",
+        "at": "2026-06-08T22:31:26.175Z",
+        "result": "success",
+        "sessionId": "e3fde516-dc0b-4c15-99e8-78002e4a8455",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/91bbf7e1-644f-45ff-8fd7-3ec82cb85ddd.log",
+        "durationMs": 184224,
+        "claudeSessionId": "cb792d7c-dbe6-4041-a395-4a9261198909"
+      },
+      {
+        "id": "940cda09-9ac0-4751-bd91-0e06e9b0f085",
+        "at": "2026-06-08T22:27:26.161Z",
+        "result": "success",
+        "sessionId": "4bfa1e22-0ebf-496e-a9ef-aca55dd1da7f",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/940cda09-9ac0-4751-bd91-0e06e9b0f085.log",
+        "durationMs": 189939,
+        "claudeSessionId": "1462e80d-5566-43bb-ae24-e23a229cbd03"
+      },
+      {
+        "id": "e79cfc36-da6c-44b5-b905-69368b35305d",
+        "at": "2026-06-08T22:25:26.154Z",
+        "result": "skipped",
+        "sessionId": "d5d05714-ca78-40a6-ac2d-5ae0223b53c1",
+        "logPath": "/Users/grebmann/.cc-center/schedules/e1e34b9a-8a08-43b2-b154-38c93cee687a/runs/4a971f1d-7b6d-4496-9a34-c1640ceb0c0a.log",
+        "message": "previous run still active"
+      }
+    ],
+    "lastRunAt": "2026-06-09T07:05:55.935Z",
+    "lastRunResult": "error",
+    "lastRunSessionId": "cad92af3-3496-4c3e-a0c5-367ec87818e2",
+    "nextRunAt": "2026-06-09T07:15:36.041Z"
+  },
+  "createdAt": "2026-06-08T22:13:26.084Z",
+  "updatedAt": "2026-06-09T07:15:08.956Z"
+}

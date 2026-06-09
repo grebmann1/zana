@@ -15,6 +15,9 @@ const TEST_WORKSPACE = path.join(
 describe("artifact-store id sanitization (path-traversal hardening)", () => {
   beforeEach(() => {
     fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+    // Pre-create .zana/ so resolveProjectDir stops here instead of walking up
+    // to a parent dir that already has .zana/ (e.g. /tmp/.zana/).
+    fs.mkdirSync(path.join(TEST_WORKSPACE, ".zana"), { recursive: true });
     workspaceContext.init(TEST_WORKSPACE);
     try { (core as any).project.workspaceContext.init(TEST_WORKSPACE); } catch {}
   });

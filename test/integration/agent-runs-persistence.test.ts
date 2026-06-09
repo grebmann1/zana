@@ -17,6 +17,9 @@ const MANAGER_SRC_PATH = path.resolve(
 describe("agent-runs-persistence", () => {
   beforeEach(() => {
     fs.mkdirSync(TEST_WORKSPACE, { recursive: true });
+    // Pre-create .zana so resolveProjectDir() stops here and does not walk
+    // up the tree to a pre-existing /tmp/.zana or ~/.zana directory.
+    fs.mkdirSync(path.join(TEST_WORKSPACE, ".zana"), { recursive: true });
     workspaceContext.init(TEST_WORKSPACE);
   });
 

@@ -47,6 +47,11 @@ describe("msToEvery", () => {
     expect(() => msToEvery("abc" as any)).toThrow();
   });
 
+  it("rejects Infinity", () => {
+    // !Number.isFinite(Infinity) is true, so the guard on line 139 should throw.
+    expect(() => msToEvery(Infinity)).toThrow(/invalid ms value/);
+  });
+
   it("round-trips with everShorthandToMs for clean units", () => {
     for (const s of ["1d", "2h", "5m", "30s", "500ms"]) {
       expect(msToEvery(everShorthandToMs(s))).toBe(s);
@@ -117,5 +122,80 @@ describe("YAML round-trip", () => {
     expect(parsed.schedule.intervalMs).toBe(300_000);
     // The top-level flat field should NOT be duplicated at the root.
     expect(parsed.intervalMs).toBeUndefined();
+  });
+
+  it("serializeYaml preserves the history block when provided", () => {
+    // Lines 59-62 of yaml-format.ts pass the `history` object through to the
+    // serialised representation unchanged. This path was previously untested.
+    const sched = {
+      id: "hist-sched",
+      name: "History schedule",
+      schedule: { every: "1h", intervalMs: 3_600_000 },
+      action: { type: "spawn-agent", profileId: "worker", prompt: "run" },
+      history: { maxEntries: 20, includeOutput: true },
+    };
+    const yaml = serializeYaml(sched);
+    const parsed = parseYaml(yaml);
+    expect(parsed.history).toBeDefined();
+    expect(parsed.history.maxEntries).toBe(20);
+    expect(parsed.history.includeOutput).toBe(true);
+  });
+
+  it("serializeYaml lifts legacy flat status fields into the status block", () => {
+    // Lines 75-81 of yaml-format.ts pull legacy flat status fields (lastRunAt,
+    // lastRunResult, nextRunAt, runCount) up from the root into the nested status
+    // block — mirroring how cron/intervalMs are lifted into the schedule block.
+    // This path was untested; the previous round-trip test only exercises the
+    // already-nested form.
+    const flat = {
+      id: "legacy-status",
+      name: "Legacy status schedule",
+      lastRunAt: "2026-01-01T12:00:00.000Z",
+      lastRunResult: "ok",
+      nextRunAt: "2026-01-01T13:00:00.000Z",
+      runCount: 7,
+      action: { type: "spawn-agent", profileId: "researcher", prompt: "go" },
+    };
+    const yaml = serializeYaml(flat);
+    const parsed = parseYaml(yaml);
+    // All four legacy fields must be nested under status.
+    expect(parsed.status).toBeDefined();
+    expect(parsed.status.lastRunAt).toBe("2026-01-01T12:00:00.000Z");
+    expect(parsed.status.lastRunResult).toBe("ok");
+    expect(parsed.status.nextRunAt).toBe("2026-01-01T13:00:00.000Z");
+    expect(parsed.status.runCount).toBe(7);
+    // The flat fields must NOT appear at the document root.
+    expect(parsed.lastRunAt).toBeUndefined();
+    expect(parsed.lastRunResult).toBeUndefined();
+    expect(parsed.nextRunAt).toBeUndefined();
+    expect(parsed.runCount).toBeUndefined();
+  });
+
+  it("serializeYaml preserves every shorthand alone (no intervalMs) in schedule block", () => {
+    // User-authored YAML files commonly use `every: 15m` without explicitly
+    // specifying `intervalMs` — the daemon resolves it at runtime via
+    // readScheduleBlock / everShorthandToMs.  serializeYaml must preserve
+    // `every` verbatim and must NOT silently inject a null/undefined
+    // `intervalMs` key that would confuse downstream readers.
+    const sched = {
+      id: "every-only",
+      name: "Every-only schedule",
+      enabled: true,
+      schedule: { every: "15m" },
+      action: { type: "spawn-agent", profileId: "researcher", prompt: "run" },
+    };
+    const yaml = serializeYaml(sched);
+    const parsed = parseYaml(yaml);
+
+    // schedule block must exist and carry exactly `every`
+    expect(parsed.schedule).toBeDefined();
+    expect(parsed.schedule.every).toBe("15m");
+    // intervalMs must NOT appear — it was never set on the input
+    expect(parsed.schedule.intervalMs).toBeUndefined();
+    // `every` must NOT leak to the document root
+    expect(parsed.every).toBeUndefined();
+    // top-level shape is preserved
+    expect(parsed.id).toBe("every-only");
+    expect(parsed.enabled).toBe(true);
   });
 });

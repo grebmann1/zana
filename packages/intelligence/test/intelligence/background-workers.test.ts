@@ -122,6 +122,59 @@ describe("history()", () => {
   });
 });
 
+// ─── enable() / disable() ────────────────────────────────────────────────────
+
+describe("enable()", () => {
+  it("returns false for an unknown worker id", () => {
+    expect(bw.enable("no-such-worker-xyzzy")).toBe(false);
+  });
+
+  it("returns true and sets enabled=true for a registered worker", () => {
+    const id = `${TEST_PREFIX}enable-me`;
+    bw.register({
+      id,
+      profileId: "code-reviewer",
+      trigger: { type: "schedule", interval: 3600000 },
+    });
+    // workers default to enabled=false
+    expect(bw.list().find((w) => w.id === id)!.enabled).toBe(false);
+    expect(bw.enable(id)).toBe(true);
+    expect(bw.list().find((w) => w.id === id)!.enabled).toBe(true);
+  });
+});
+
+describe("disable()", () => {
+  it("returns false for an unknown worker id", () => {
+    expect(bw.disable("no-such-worker-xyzzy")).toBe(false);
+  });
+
+  it("returns true and sets enabled=false for a previously-enabled worker", () => {
+    const id = `${TEST_PREFIX}disable-me`;
+    bw.register({
+      id,
+      profileId: "code-reviewer",
+      trigger: { type: "schedule", interval: 3600000 },
+    });
+    bw.enable(id);
+    expect(bw.list().find((w) => w.id === id)!.enabled).toBe(true);
+    expect(bw.disable(id)).toBe(true);
+    expect(bw.list().find((w) => w.id === id)!.enabled).toBe(false);
+  });
+
+  it("enable then disable then enable toggles the flag correctly", () => {
+    const id = `${TEST_PREFIX}toggle`;
+    bw.register({
+      id,
+      profileId: "code-reviewer",
+      trigger: { type: "schedule", interval: 3600000 },
+    });
+    bw.enable(id);
+    bw.disable(id);
+    bw.enable(id);
+    expect(bw.list().find((w) => w.id === id)!.enabled).toBe(true);
+  });
+});
+
 // ─── list() shape ────────────────────────────────────────────────────────────
 
 describe("list()", () => {

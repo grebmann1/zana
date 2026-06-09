@@ -130,4 +130,12 @@ describe("renderTemplate", () => {
   it("handles unicode values in context", () => {
     expect(renderTemplate("{{title}}", { title: "Ünïcödé 🎉" })).toBe("Ünïcödé 🎉");
   });
+
+  it("replaces non-serializable object values (circular refs) with empty string", () => {
+    // Exercises the catch { return ""; } branch in the JSON.stringify path
+    // (yaml-format.ts line 41 analogue — src line ~41 of template-context.ts).
+    const circular: any = {};
+    circular.self = circular;
+    expect(renderTemplate("value={{circ}}", { circ: circular })).toBe("value=");
+  });
 });
