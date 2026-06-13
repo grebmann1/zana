@@ -68,13 +68,17 @@ describe("/zana:council slash command", () => {
     expect(found).toBe(true);
   });
 
-  it("body has Defaults / Workflow / Rules / daemon-path sections", () => {
+  it("body has Choosing-the-roster / Workflow / Rules / daemon-path sections", () => {
     const { body } = readCommand("council.md");
-    expect(body).toMatch(/##\s+Defaults/i);
+    expect(body).toMatch(/##\s+Choosing the roster/i);
     expect(body).toMatch(/##\s+Workflow/i);
     expect(body).toMatch(/##\s+Rules/i);
     expect(body).toMatch(/##\s+When to prefer/i);
-    // Defaults must mention the three friendly voters.
+    // Roster section must document the auto-roster default + explicit overrides.
+    expect(body).toMatch(/auto-roster/i);
+    expect(body).toMatch(/--voters/);
+    expect(body).toMatch(/--pack/);
+    // The selectable profiles are still referenced by id.
     expect(body).toMatch(/architect/);
     expect(body).toMatch(/security-reviewer/);
     expect(body).toMatch(/researcher/);
