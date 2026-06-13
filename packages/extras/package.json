@@ -1,6 +1,6 @@
 {
   "name": "@zana-ai/extras",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "User-facing customization \u2014 settings store, skill store, plugin loader.",
   "main": "dist/src/index.js",
   "scripts": {
@@ -11,10 +11,10 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/core": "0.1.5"
+    "@zana-ai/core": "0.2.0"
   },
   "peerDependencies": {
-    "@zana-ai/work": "0.1.5"
+    "@zana-ai/work": "0.2.0"
   },
   "peerDependenciesMeta": {
     "@zana-ai/work": {
