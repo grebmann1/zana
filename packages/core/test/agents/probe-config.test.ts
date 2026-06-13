@@ -55,4 +55,17 @@ describe("probe-config", () => {
     setProbeConfig({ probeCacheTtlMs: 0 });
     expect(getProbeConfig().probeCacheTtlMs).toBe(0);
   });
+
+  // transientProbeCacheTtlMs of 0 means "skip cache for transient failures"
+  // (the original FU-T2 behavior, per probe-config.ts). Mirrors the
+  // probeCacheTtlMs "0 disables" guard above for the cost-sensitive transient
+  // path, and pins that the partial merge leaves the other TTLs untouched.
+  it("transientProbeCacheTtlMs of 0 is accepted (disables transient cache) and preserves other fields", () => {
+    setProbeConfig({ transientProbeCacheTtlMs: 0 });
+    const cfg = getProbeConfig();
+    expect(cfg.transientProbeCacheTtlMs).toBe(0);
+    // Sibling TTLs must remain at their defaults — 0 must not bleed across fields.
+    expect(cfg.probeCacheTtlMs).toBe(300000);
+    expect(cfg.probeTimeoutMs).toBe(120000);
+  });
 });

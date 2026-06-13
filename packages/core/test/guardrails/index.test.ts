@@ -2,6 +2,8 @@
 // Covers resolveGuardrails, waitForAgent, and spawnValidatedAgent — no real agents, no network.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as os from "node:os";
+import * as path from "node:path";
 import { resolveGuardrails, waitForAgent, spawnValidatedAgent } from "../../src/guardrails/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -86,6 +88,22 @@ describe("resolveGuardrails", () => {
     expect(typeof result[0].validate).toBe("function");
     expect(result[0].validate("hello world").pass).toBe(true);
     expect(result[0].validate("goodbye world").pass).toBe(false);
+  });
+
+  it("resolves file-exists type and passes config.path through to the guardrail", () => {
+    // file-exists is the one builtin type the rest of this suite never exercises.
+    // Verify resolveGuardrails maps it to the builtin (id + path-aware name) and
+    // that the resolved guardrail validates against config.path relative to ctx.cwd.
+    const result = resolveGuardrails([{ type: "file-exists", path: "report.md" }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("file-exists");
+    expect(result[0].name).toContain("report.md");
+
+    // Deterministic, no real network: resolve against a cwd where the file is absent.
+    const absentDir = path.join(os.tmpdir(), "zana-guardrail-fileexists-absent");
+    const check = result[0].validate("ignored output", { cwd: absentDir });
+    expect(check.pass).toBe(false);
+    expect(check.feedback).toContain("report.md");
   });
 
   it("filters out unknown guardrail types (returns empty array)", () => {
@@ -200,5 +218,45 @@ describe("spawnValidatedAgent — failing guardrail", () => {
     expect(res.guardrailsPassed).toBe(false);
     expect((res as any).error).toMatch(/errored before guardrail/i);
     expect(mgr.spawnHeadlessAgent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("spawnValidatedAgent — retry recovery", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // The core self-correction loop the existing suite leaves untested: a guard
+  // that FAILS on attempt 0 then PASSES on attempt 1. Pins (a) the retry does
+  // happen (two spawns), (b) the second spawn's prompt is augmented with the
+  // validation feedback via buildRetryPrompt, (c) the final result reports the
+  // recovered success with attempts=2, and (d) parsedOutput from the passing
+  // check is surfaced on the result.
+  it("recovers on a later attempt, augments the retry prompt, and surfaces parsedOutput", async () => {
+    let calls = 0;
+    const flaky = {
+      id: "flaky",
+      maxRetries: 2,
+      validate: () => {
+        calls++;
+        return calls === 1
+          ? { pass: false, feedback: "needs valid JSON" }
+          : { pass: true, parsedOutput: { ok: true } };
+      },
+    };
+    const mgr = makeAgentManager(["terminated", "terminated"], "agent output");
+    const p = spawnValidatedAgent(mgr, { id: "p5" }, { prompt: "go" }, [flaky]);
+    await vi.runAllTimersAsync();
+    const res = await p;
+
+    expect(res.guardrailsPassed).toBe(true);
+    expect(res.attempts).toBe(2);
+    expect((res as any).parsedOutput).toEqual({ ok: true });
+
+    // Two spawns total; the retry prompt carries the failure feedback.
+    expect(mgr.spawnHeadlessAgent).toHaveBeenCalledTimes(2);
+    const retryPrompt = mgr.spawnHeadlessAgent.mock.calls[1][1].prompt as string;
+    expect(retryPrompt).toContain("go");
+    expect(retryPrompt).toContain("VALIDATION FAILED (attempt 1)");
+    expect(retryPrompt).toContain("needs valid JSON");
   });
 });

@@ -99,6 +99,16 @@ describe("ensureMcpServer", () => {
     expect(JSON.parse(fs.readFileSync(p, "utf8")).mcpServers.zana.command).toBe("bun");
   });
 
+  it("overwrites an existing entry and returns status=updated when overwrite=true, even if config matches", () => {
+    const p = tmpSettings();
+    const cfg = { command: "node" };
+    ensureMcpServer({ serverConfig: cfg, settingsPath: p });
+    // Identical config would normally yield "unchanged"; overwrite forces a write.
+    const result = ensureMcpServer({ serverConfig: cfg, settingsPath: p, overwrite: true });
+    expect(result.status).toBe("updated");
+    expect(JSON.parse(fs.readFileSync(p, "utf8")).mcpServers.zana).toEqual(cfg);
+  });
+
   it("removes legacy keys listed in migrateFrom", () => {
     const p = tmpSettings();
     // Seed with old "hive" key

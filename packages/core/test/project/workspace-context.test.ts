@@ -190,6 +190,29 @@ describe("resolveProjectDir", () => {
     // Either it hits a .git or root — in either case the fallback is startPath/.zana
     expect(path.basename(result)).toBe(".zana");
   });
+
+  // Tenant-isolation invariant: the .git project boundary (workspace-context.ts
+  // lines 59-62) must stop the upward walk BEFORE it can reach a .zana living in
+  // an ancestor directory above the project root. Without this, a nested project
+  // checked out under another workspace would silently resolve to the parent's
+  // .zana and share its tenant state. The existing walk-up test has no .git
+  // boundary and the .git test has no ancestor .zana, so this interaction is
+  // currently unpinned.
+  it("does NOT escape past a .git boundary to a .zana in an ancestor dir", () => {
+    const ancestor = makeTmpDir();
+    const ancestorZana = path.join(ancestor, ".zana");
+    fs.mkdirSync(ancestorZana); // an ancestor workspace's state dir
+    const projectRoot = path.join(ancestor, "project");
+    fs.mkdirSync(projectRoot);
+    fs.mkdirSync(path.join(projectRoot, ".git")); // marks the project boundary
+    const nested = path.join(projectRoot, "src", "deep");
+    fs.mkdirSync(nested, { recursive: true });
+
+    const result = resolveProjectDir(nested);
+
+    expect(result).not.toBe(ancestorZana);
+    expect(result).toBe(path.join(nested, ".zana"));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -222,6 +245,28 @@ describe("createForWorkspace()", () => {
     const ctx = createForWorkspace(dir);
     const paths = ctx.getProjectPaths();
     expect(paths.ticketsDir.startsWith(paths.projectDir)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Branch-parity regression — the singleton getProjectPaths() and the
+// createForWorkspace() factory each independently hardcode the project-local
+// path keys. CLAUDE.md's tenant-isolation invariant requires a new dir be
+// added to BOTH branches; if it lands in only one, every other test still
+// passes. This pins the two branches to the SAME key set so drift fails loudly.
+// ---------------------------------------------------------------------------
+describe("getProjectPaths() branch parity (singleton vs factory)", () => {
+  it("singleton and createForWorkspace expose identical path-key sets", () => {
+    const dir = makeTmpDir();
+    // Plant .git so resolveProjectDir stops here for both branches, making the
+    // projectDir (and thus the derived layout) identical and comparable.
+    fs.mkdirSync(path.join(dir, ".git"));
+
+    init(dir);
+    const singletonKeys = Object.keys(getProjectPaths()).sort();
+    const factoryKeys = Object.keys(createForWorkspace(dir).getProjectPaths()).sort();
+
+    expect(factoryKeys).toEqual(singletonKeys);
   });
 });
 

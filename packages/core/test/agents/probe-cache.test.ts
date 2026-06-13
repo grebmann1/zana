@@ -173,6 +173,22 @@ describe("probe-cache (T6-FU-2)", () => {
       expect(found).not.toBeNull();
     });
 
+    it("ok=false with empty failures falls back to regularTtlMs (length>0 guard)", () => {
+      // Guards the `result.failures.length > 0` predicate in effectiveTtl:
+      // `[].every(...)` is vacuously true, so dropping the guard would
+      // misclassify an empty-failures result as all-transient and apply the
+      // short TTL. With the guard, it must use the regular budget.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const emptyFailures = fakeResult({ ok: false, failures: [] });
+      recordProbeResult("profA:modX", emptyFailures);
+
+      // 1m in: past the transient budget (30s), well within regular (5m).
+      vi.setSystemTime(new Date("2026-01-01T00:01:00Z"));
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+    });
+
     it("transientTtlMs=0 disables transient caching while keeping structural cache live", () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
