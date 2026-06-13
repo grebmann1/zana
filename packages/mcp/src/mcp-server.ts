@@ -55,7 +55,16 @@ async function ensureDaemonRunning(): Promise<void> {
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
-    const workspace = process.env.ZANA_WORKSPACE || require("path").resolve(__dirname, "..", "..", "..", "..");
+    // Workspace resolution — tenant isolation depends on this. Prefer an
+    // explicit ZANA_WORKSPACE (what an MCP registration SHOULD set per
+    // project); otherwise fall back to the launching process's cwd, which
+    // Claude Code sets to the active project directory. We deliberately do
+    // NOT fall back to __dirname: for a global `npx @zana-ai/mcp` install
+    // that resolves into the npm cache, and for any install it points at
+    // wherever the package lives rather than the user's project — silently
+    // funneling every project's tickets/runs into one shared store. cwd is
+    // the project; the package install dir is not.
+    const workspace = process.env.ZANA_WORKSPACE || process.cwd();
     process.stderr.write(`[zana-mcp] booting core in-process for: ${workspace}\n`);
 
     const autoInitDisabled = process.env.ZANA_AUTO_INIT === "0";
