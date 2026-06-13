@@ -150,15 +150,17 @@ function ensureDist(): boolean {
 
 describe("mcp-server: ZANA_DAEMON_TOOLS / ZANA_MASTER_MODE gating", () => {
   it(
-    "default install hides daemon-only tools and swarm tools",
+    "default install EXPOSES daemon-only tools (daemon path is first-class), swarm still gated",
     async () => {
       if (!ensureDist()) return;
       const names = await listTools({});
       const present = new Set(names);
 
+      // Daemon tools are surfaced by default now — ADR 0005.
       for (const n of DAEMON_GATED) {
-        expect(present.has(n), `expected '${n}' to be HIDDEN when ZANA_DAEMON_TOOLS is unset`).toBe(false);
+        expect(present.has(n), `expected '${n}' to be VISIBLE by default (ZANA_DAEMON_TOOLS on)`).toBe(true);
       }
+      // Swarm stays opt-in (ZANA_MASTER_MODE), even with the daemon surface on.
       for (const n of SWARM_GATED) {
         expect(present.has(n), `expected '${n}' to be HIDDEN when ZANA_MASTER_MODE is unset`).toBe(false);
       }
@@ -167,35 +169,36 @@ describe("mcp-server: ZANA_DAEMON_TOOLS / ZANA_MASTER_MODE gating", () => {
       expect(present.has("zana_ticket_create")).toBe(true);
       expect(present.has("zana_memory_store")).toBe(true);
 
-      // Tool count should land in the leaner range — gives us an early
-      // warning if a future commit accidentally re-exposes one of these
-      // surfaces. Using a band rather than an exact number so unrelated
-      // tool additions don't break this test.
-      expect(names.length).toBeGreaterThanOrEqual(60);
-      expect(names.length).toBeLessThan(80);
+      // Full daemon surface (no swarm) — gives early warning if a future
+      // commit accidentally drops one of these. Band, not exact, so unrelated
+      // tool additions don't break it.
+      expect(names.length).toBeGreaterThanOrEqual(84);
+      expect(names.length).toBeLessThan(100);
     },
     20000,
   );
 
   it(
-    "ZANA_DAEMON_TOOLS=1 exposes all daemon-only tools (swarm still gated)",
+    "ZANA_DAEMON_TOOLS=0 opts out to the lean native-only surface",
     async () => {
       if (!ensureDist()) return;
-      const names = await listTools({ ZANA_DAEMON_TOOLS: "1" });
+      const names = await listTools({ ZANA_DAEMON_TOOLS: "0" });
       const present = new Set(names);
 
       for (const n of DAEMON_GATED) {
-        expect(present.has(n), `expected '${n}' to be VISIBLE under ZANA_DAEMON_TOOLS=1`).toBe(true);
+        expect(present.has(n), `expected '${n}' to be HIDDEN under ZANA_DAEMON_TOOLS=0`).toBe(false);
       }
       for (const n of SWARM_GATED) {
-        expect(present.has(n), `expected '${n}' to remain hidden when ZANA_MASTER_MODE is unset`).toBe(false);
+        expect(present.has(n), `expected '${n}' to be HIDDEN when ZANA_MASTER_MODE is unset`).toBe(false);
       }
 
-      // Spot-check a few specific names from the ticket AC.
-      expect(present.has("zana_deliberate")).toBe(true);
-      expect(present.has("zana_autopilot_goal_driven")).toBe(true);
-      expect(present.has("zana_spawn_agent")).toBe(true);
-      expect(present.has("zana_start_team")).toBe(true);
+      // Ungated tools remain.
+      expect(present.has("zana_ticket_create")).toBe(true);
+      expect(present.has("zana_memory_store")).toBe(true);
+
+      // Leaner band when opted out.
+      expect(names.length).toBeGreaterThanOrEqual(60);
+      expect(names.length).toBeLessThan(80);
     },
     20000,
   );

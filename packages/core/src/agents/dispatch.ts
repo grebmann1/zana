@@ -146,6 +146,10 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
         category: p.category,
         description: p.description,
         model: p.model,
+        // `lens` lets callers pick voters by concern (e.g. the council
+        // auto-roster maps a question to relevant lenses). Coordination/util
+        // profiles have no lens — that's how the council filters them out.
+        lens: p.lens || null,
       }));
     }
     case "get_profile": {

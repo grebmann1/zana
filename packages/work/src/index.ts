@@ -22,6 +22,7 @@ module.exports = {
     tracker: require("./runs/tracker"),
     artifacts: require("./runs/artifact-store"),
     plans: require("./runs/plans-store"),
+    anomaly: require("./runs/anomaly"),
     checkpoint: {
       store: require("./runs/checkpoint/store"),
       resume: require("./runs/checkpoint/resume"),

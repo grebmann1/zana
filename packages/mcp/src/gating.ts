@@ -2,10 +2,14 @@
 //
 // Two flags filter the public tool surface independently:
 //
-//   ZANA_DAEMON_TOOLS=1   — re-expose tools that duplicate native Claude Code
-//                            primitives. Default Claude Code installs run
-//                            without it; headless / CI / cron callers opt back
-//                            in. See DAEMON_GATED_TOOL_NAMES below.
+//   ZANA_DAEMON_TOOLS     — expose the daemon-path orchestration tools
+//                            (agent/team lifecycle, autopilot, deliberation,
+//                            P2P). ON by default — the daemon path is
+//                            first-class. Set ZANA_DAEMON_TOOLS=0 (or =false)
+//                            for the lean native-only surface, where these
+//                            flows are covered by Agent + SendMessage and the
+//                            slash commands. See DAEMON_GATED_TOOL_NAMES below
+//                            and ADR docs/decisions/0005.
 //   ZANA_MASTER_MODE=true — expose `zana_swarm_*` (multi-daemon control).
 //                            Off by default; see registrations/swarm.ts.
 //
@@ -13,7 +17,7 @@
 
 export const ZANA_MASTER_MODE = process.env.ZANA_MASTER_MODE === "true";
 export const ZANA_DAEMON_TOOLS =
-  process.env.ZANA_DAEMON_TOOLS === "1" || process.env.ZANA_DAEMON_TOOLS === "true";
+  process.env.ZANA_DAEMON_TOOLS !== "0" && process.env.ZANA_DAEMON_TOOLS !== "false";
 
 // Tool names that are only useful from a long-lived daemon process. Inside a
 // Claude Code chat the same flows are covered by `Agent({ run_in_background })`

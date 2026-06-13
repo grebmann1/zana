@@ -89,10 +89,14 @@ describe("DAEMON_GATED_TOOL_NAMES", () => {
 });
 
 describe("ZANA_DAEMON_TOOLS flag", () => {
-  it("is false when ZANA_DAEMON_TOOLS env var is not set to '1' or 'true'", () => {
-    // In the test runner the env var is absent or empty, so the flag is false.
+  it("is true by default (daemon path is first-class; opt out with =0)", () => {
+    // Daemon tools are surfaced by default — the flag is only false when the
+    // env var is explicitly "0" or "false". In the test runner the var is
+    // absent, so the flag is true.
     const val = process.env.ZANA_DAEMON_TOOLS;
-    if (val !== "1" && val !== "true") {
+    if (val !== "0" && val !== "false") {
+      expect(ZANA_DAEMON_TOOLS).toBe(true);
+    } else {
       expect(ZANA_DAEMON_TOOLS).toBe(false);
     }
   });
