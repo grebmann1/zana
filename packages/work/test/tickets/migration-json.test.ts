@@ -108,6 +108,35 @@ describe("migrateIfNeeded — JSON-to-SQLite migration", () => {
     expect(row.id).toBe("T-good");
   });
 
+  it("skips a directory-format ticket whose ticket.json is malformed or missing", () => {
+    // Exercises the directory branch's `catch { continue }` (src line 42) and the
+    // "no ticket.json in the dir" path — distinct from the flat-file corrupt case.
+    const db = createDatabase();
+
+    // A valid directory-format ticket that SHOULD migrate.
+    const goodDir = path.join(ticketsDir, "T-dir-good");
+    fs.mkdirSync(goodDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(goodDir, "ticket.json"),
+      JSON.stringify({ id: "T-dir-good", title: "Valid dir ticket", createdAt: NOW, updatedAt: NOW }),
+    );
+
+    // A directory whose ticket.json is corrupt — must be silently skipped.
+    const corruptDir = path.join(ticketsDir, "T-dir-corrupt");
+    fs.mkdirSync(corruptDir, { recursive: true });
+    fs.writeFileSync(path.join(corruptDir, "ticket.json"), "{ broken json ::");
+
+    // A directory with no ticket.json at all — readFileSync throws, caught, skipped.
+    fs.mkdirSync(path.join(ticketsDir, "T-dir-empty"), { recursive: true });
+
+    migrateIfNeeded(db);
+
+    const cnt: any = db.prepare("SELECT COUNT(*) as c FROM tickets").get();
+    expect(cnt.c).toBe(1);
+    const row: any = db.prepare("SELECT id FROM tickets").get();
+    expect(row.id).toBe("T-dir-good");
+  });
+
   it("is a no-op when the tickets dir is empty (avoids double-migration)", () => {
     const db = createDatabase();
     // ticketsDir exists but contains no usable files

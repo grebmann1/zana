@@ -27,6 +27,7 @@ List tickets on the Zana work board. Read-only.
    - `title` (truncated to 60 chars)
    - `labels` (comma-joined, or `—` when empty)
 4. If the list is empty, say so and (when no filter was given) suggest `/zana:ticket "<title>"` to create one.
+5. When tickets are in `in-progress` or `review`, mention `/zana:ticket:review <ticketId>` runs the native two-phase review gate (code-reviewer → architect) before they're closed.
 
 ## Rules
 

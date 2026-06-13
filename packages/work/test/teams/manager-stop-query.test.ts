@@ -287,3 +287,41 @@ describe("manager — listCheckpoints / getCheckpoint", () => {
     expect(manager.getCheckpoint("no-such-cp")).toBeNull();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("manager — startTeam duplicate guard", () => {
+  // The `runningTeams` Map is module-level and never cleared between tests, so
+  // we use unique teamIds (team-dup-*) that no other suite touches.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns { ok: false, error: 'team already running' } when startTeam is called twice with the same teamId", () => {
+    // First call succeeds and registers the team in runningTeams.
+    bootTeam("team-dup-guard");
+
+    // Second call with the same id must hit the runningTeams.has() guard and
+    // short-circuit before touching the agent manager or event bus.
+    const second = manager.startTeam("team-dup-guard", { headless: true });
+
+    expect(second).toEqual({ ok: false, error: "team already running" });
+  });
+
+  it("does not spawn a second orchestrator agent when the duplicate guard fires", () => {
+    bootTeam("team-dup-no-spawn");
+
+    // Clear spy history so we can assert on the second call in isolation.
+    agentManagerSpy.mockClear();
+
+    manager.startTeam("team-dup-no-spawn", { headless: true });
+
+    // The duplicate-guard path returns before reaching spawnHeadlessAgent.
+    expect(agentManagerSpy).not.toHaveBeenCalled();
+  });
+});
