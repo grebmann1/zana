@@ -96,6 +96,44 @@ describe("recoverInboxes", () => {
   });
 });
 
+// ── compactInboxFile ──────────────────────────────────────────────────────────
+// Compaction is the file-shrinking invariant: the NDJSON inbox grows by one
+// append per message + per drain, and compaction rewrites it from scratch so it
+// holds ONLY the current in-memory state — one line per surviving message, with
+// no historical drain markers or superseded lines.
+
+describe("compactInboxFile", () => {
+  it("overwrites the inbox file with only the supplied state, dropping stale history", async () => {
+    const p = await loadPersistence();
+    const inboxFile = path.join(persistDir, "inboxes.ndjson");
+
+    // Pollute the on-disk file with history: messages, then a drain marker.
+    // Pre-compaction the file has 4 lines (3 appends + 1 drain record).
+    p.persistInboxMessage("agent-A", { type: "old1" });
+    p.persistInboxMessage("agent-A", { type: "old2" });
+    p.persistInboxMessage("agent-B", { type: "stale" });
+    p.persistInboxDrain("agent-A");
+    expect(fs.readFileSync(inboxFile, "utf8").split("\n").filter(Boolean)).toHaveLength(4);
+
+    // Compact to a brand-new, smaller state unrelated to the history above.
+    const inboxes = new Map<string, unknown[]>([
+      ["agent-A", [{ type: "current" }]],
+      ["agent-B", []], // empty inbox contributes no lines
+    ]);
+    p.compactInboxFile(inboxes);
+
+    // File now holds exactly one line (agent-A's single message); no drain markers.
+    const lines = fs.readFileSync(inboxFile, "utf8").split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(lines.some((l) => l.includes('"drained"'))).toBe(false);
+
+    // And it round-trips back to the compacted state.
+    const recovered = p.recoverInboxes();
+    expect(recovered.get("agent-A")).toEqual([{ type: "current" }]);
+    expect(recovered.has("agent-B")).toBe(false); // no lines ⇒ not present
+  });
+});
+
 // ── snapshotAgents / recoverAgentSnapshots ────────────────────────────────────
 
 describe("snapshotAgents + recoverAgentSnapshots", () => {
@@ -180,5 +218,102 @@ describe("persistChannelMessage + recoverChannels", () => {
     const channels = p.recoverChannels();
     expect(channels).toBeInstanceOf(Map);
     expect(channels.size).toBe(0);
+  });
+});
+
+// ── recoverOrphanedAgents ─────────────────────────────────────────────────────
+// Crash-recovery on daemon restart: snapshots whose process is still alive are
+// re-adopted; those whose process is gone are marked lost+terminated; already
+// terminated snapshots are ignored entirely. recoverOrphanedAgents reads the
+// raw agents.json array (via recoverAgentSnapshots), so we write that file
+// directly — it is the on-disk recovery format and lets us inject a `pid`.
+
+const DEAD_PID = 0x7fffffff; // 2147483647 — no process owns this, kill(0) → ESRCH
+
+function writeSnapshotFile(dir: string, agents: unknown[]): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "agents.json"), JSON.stringify(agents, null, 2), "utf8");
+}
+
+describe("recoverOrphanedAgents", () => {
+  it("returns empty adopted/lost arrays when no snapshot file exists", async () => {
+    const p = await loadPersistence();
+    expect(p.recoverOrphanedAgents()).toEqual({ adopted: [], lost: [] });
+  });
+
+  it("re-adopts a snapshot whose process is still alive", async () => {
+    // process.pid is guaranteed alive — this very test process owns it.
+    writeSnapshotFile(persistDir, [{ id: "live", state: "running", pid: process.pid }]);
+    const p = await loadPersistence();
+
+    const { adopted, lost } = p.recoverOrphanedAgents();
+    expect(lost).toHaveLength(0);
+    expect(adopted).toHaveLength(1);
+    expect(adopted[0]).toMatchObject({ id: "live", recoveredState: "re-adopted" });
+  });
+
+  it("marks a snapshot whose process is gone as lost + terminated", async () => {
+    writeSnapshotFile(persistDir, [{ id: "gone", state: "running", pid: DEAD_PID }]);
+    const p = await loadPersistence();
+
+    const { adopted, lost } = p.recoverOrphanedAgents();
+    expect(adopted).toHaveLength(0);
+    expect(lost).toHaveLength(1);
+    expect(lost[0]).toMatchObject({ id: "gone", state: "terminated", result: "Lost (daemon restart)" });
+    expect(typeof lost[0].terminatedAt).toBe("string");
+  });
+
+  it("ignores snapshots already in the terminated state", async () => {
+    writeSnapshotFile(persistDir, [{ id: "old", state: "terminated", pid: process.pid }]);
+    const p = await loadPersistence();
+
+    const { adopted, lost } = p.recoverOrphanedAgents();
+    expect(adopted).toHaveLength(0);
+    expect(lost).toHaveLength(0);
+  });
+});
+
+// ── startPeriodicCompaction / stopPeriodicCompaction ──────────────────────────
+// The periodic task wakes every 60s and only rewrites the inbox file when it has
+// grown past the size threshold (MAX_INBOX_FILE_LINES * 200 = 1_000_000 bytes),
+// pulling current state from the supplied getInboxesFn. stop() must clear the
+// interval so no further ticks fire. Fake timers keep this fully deterministic.
+
+const COMPACTION_THRESHOLD = 1_000_000;
+
+describe("startPeriodicCompaction / stopPeriodicCompaction", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("compacts only when the inbox exceeds the threshold, and stop() halts further ticks", async () => {
+    const p = await loadPersistence();
+    const inboxFile = path.join(persistDir, "inboxes.ndjson");
+    fs.mkdirSync(persistDir, { recursive: true });
+    // Oversized file (> 1 MB) so the first tick triggers a compaction.
+    fs.writeFileSync(inboxFile, "x".repeat(COMPACTION_THRESHOLD + 1), "utf8");
+
+    const getInboxes = vi.fn(() => new Map([["agent-A", [{ type: "keep" }]]]));
+    p.startPeriodicCompaction(getInboxes);
+
+    // First tick: oversized → rewrite from getInboxes(), shrinking the file.
+    vi.advanceTimersByTime(60_000);
+    expect(getInboxes).toHaveBeenCalledTimes(1);
+    expect(fs.statSync(inboxFile).size).toBeLessThan(COMPACTION_THRESHOLD);
+
+    // Second tick: file is now small → no further compaction.
+    vi.advanceTimersByTime(60_000);
+    expect(getInboxes).toHaveBeenCalledTimes(1);
+
+    // After stop(), even a freshly oversized file is left untouched.
+    fs.writeFileSync(inboxFile, "y".repeat(COMPACTION_THRESHOLD + 1), "utf8");
+    p.stopPeriodicCompaction();
+    vi.advanceTimersByTime(180_000);
+    expect(getInboxes).toHaveBeenCalledTimes(1);
+    expect(fs.statSync(inboxFile).size).toBeGreaterThan(COMPACTION_THRESHOLD);
   });
 });

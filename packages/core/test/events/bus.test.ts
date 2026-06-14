@@ -37,6 +37,42 @@ describe("EVENTS constants", () => {
     const unique = new Set(values);
     expect(unique.size).toBe(values.length);
   });
+
+  // AGENT_ANOMALY is emitted by spawnHeadlessAgent's post-run anomaly detector
+  // (lifecycle.ts). Downstream consumers key off this exact string, so pin it.
+  it("defines AGENT_ANOMALY as 'agent:anomaly'", () => {
+    expect(EVENTS.AGENT_ANOMALY).toBe("agent:anomaly");
+  });
+
+  // The deliberation-extension events are the newest additions to the map and
+  // were not pinned by the bulk assertion above. Downstream council/escalation
+  // consumers subscribe by these exact strings, so a silent rename would break
+  // them without tripping the duplicate-value guard. Pin them explicitly.
+  it("defines the deliberation-extension event names", () => {
+    expect(EVENTS.DELIBERATION_GENERALIST_ADDED).toBe(
+      "deliberation:generalistAdded",
+    );
+    expect(EVENTS.DELIBERATION_HUMAN_NUDGE).toBe("deliberation:humanNudge");
+  });
+});
+
+// ─── AGENT_ANOMALY round-trip ────────────────────────────────────────────────
+
+describe("bus — AGENT_ANOMALY event", () => {
+  it("delivers the anomaly payload shape to a listener", () => {
+    const handler = vi.fn();
+    const payload = {
+      agentId: "a1",
+      profileId: "p1",
+      severity: "high",
+      anomalies: ["nonzero-exit", "near-cost-ceiling"],
+    };
+    bus.on(EVENTS.AGENT_ANOMALY, handler);
+    bus.emit(EVENTS.AGENT_ANOMALY, payload);
+    expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledWith(payload);
+    bus.off(EVENTS.AGENT_ANOMALY, handler);
+  });
 });
 
 // ─── bus (EventEmitter) ──────────────────────────────────────────────────────

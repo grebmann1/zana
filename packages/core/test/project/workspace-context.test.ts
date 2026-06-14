@@ -167,6 +167,22 @@ describe("resolveProjectDir", () => {
     expect(resolveProjectDir(dir)).toBe(zanaDir);
   });
 
+  // The match guard (workspace-context.ts line 58) is
+  // `fs.existsSync(candidateZana) && fs.statSync(candidateZana).isDirectory()`.
+  // A `.zana` that is a regular FILE (not a directory) must therefore NOT be
+  // treated as a project state dir — the walk must skip it and continue
+  // upward, ultimately falling back to startPath/.zana. The existing happy
+  // paths only ever create a `.zana` directory, so the isDirectory() half of
+  // the guard is currently unpinned: drop it and a stray `.zana` file would be
+  // silently adopted as the tenant state dir.
+  it("ignores a .zana that is a regular file (not a directory)", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".zana"), "not a directory");
+    // No real .zana directory anywhere → falls back to startPath/.zana.
+    const result = resolveProjectDir(dir);
+    expect(result).toBe(path.join(dir, ".zana"));
+  });
+
   it("walks UP to find .zana in a parent directory", () => {
     const dir = makeTmpDir();
     const zanaDir = path.join(dir, ".zana");
@@ -189,6 +205,29 @@ describe("resolveProjectDir", () => {
     const result = resolveProjectDir(dir);
     // Either it hits a .git or root — in either case the fallback is startPath/.zana
     expect(path.basename(result)).toBe(".zana");
+  });
+
+  // Tenant-isolation invariant: the .git project boundary (workspace-context.ts
+  // lines 59-62) must stop the upward walk BEFORE it can reach a .zana living in
+  // an ancestor directory above the project root. Without this, a nested project
+  // checked out under another workspace would silently resolve to the parent's
+  // .zana and share its tenant state. The existing walk-up test has no .git
+  // boundary and the .git test has no ancestor .zana, so this interaction is
+  // currently unpinned.
+  it("does NOT escape past a .git boundary to a .zana in an ancestor dir", () => {
+    const ancestor = makeTmpDir();
+    const ancestorZana = path.join(ancestor, ".zana");
+    fs.mkdirSync(ancestorZana); // an ancestor workspace's state dir
+    const projectRoot = path.join(ancestor, "project");
+    fs.mkdirSync(projectRoot);
+    fs.mkdirSync(path.join(projectRoot, ".git")); // marks the project boundary
+    const nested = path.join(projectRoot, "src", "deep");
+    fs.mkdirSync(nested, { recursive: true });
+
+    const result = resolveProjectDir(nested);
+
+    expect(result).not.toBe(ancestorZana);
+    expect(result).toBe(path.join(nested, ".zana"));
   });
 });
 
@@ -222,6 +261,51 @@ describe("createForWorkspace()", () => {
     const ctx = createForWorkspace(dir);
     const paths = ctx.getProjectPaths();
     expect(paths.ticketsDir.startsWith(paths.projectDir)).toBe(true);
+  });
+
+  // The factory's isInitialized() (workspace-context.ts line 163) reports
+  // fs.existsSync(projectDir) — distinct from the singleton's
+  // `_workspaceRoot !== null` semantics. The factory therefore reports an
+  // un-bootstrapped workspace as NOT initialized even after createForWorkspace()
+  // returns, and flips to true only once the .zana dir physically exists. This
+  // fs-existence behavior is exercised by no existing test, so per-window
+  // contexts could silently report the wrong readiness on a bug. Planting .git
+  // pins resolveProjectDir to the tmp dir so the result is deterministic
+  // regardless of any .zana that may exist above /tmp.
+  it("isInitialized() reflects on-disk existence of the project dir", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".git")); // project boundary → projectDir = dir/.zana
+
+    const ctx = createForWorkspace(dir);
+    // .zana not yet created → factory reports not initialized.
+    expect(ctx.getProjectDir()).toBe(path.join(dir, ".zana"));
+    expect(ctx.isInitialized()).toBe(false);
+
+    // Bootstrap the project state dir → factory now reports initialized.
+    fs.mkdirSync(ctx.getProjectDir());
+    expect(ctx.isInitialized()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Branch-parity regression — the singleton getProjectPaths() and the
+// createForWorkspace() factory each independently hardcode the project-local
+// path keys. CLAUDE.md's tenant-isolation invariant requires a new dir be
+// added to BOTH branches; if it lands in only one, every other test still
+// passes. This pins the two branches to the SAME key set so drift fails loudly.
+// ---------------------------------------------------------------------------
+describe("getProjectPaths() branch parity (singleton vs factory)", () => {
+  it("singleton and createForWorkspace expose identical path-key sets", () => {
+    const dir = makeTmpDir();
+    // Plant .git so resolveProjectDir stops here for both branches, making the
+    // projectDir (and thus the derived layout) identical and comparable.
+    fs.mkdirSync(path.join(dir, ".git"));
+
+    init(dir);
+    const singletonKeys = Object.keys(getProjectPaths()).sort();
+    const factoryKeys = Object.keys(createForWorkspace(dir).getProjectPaths()).sort();
+
+    expect(factoryKeys).toEqual(singletonKeys);
   });
 });
 

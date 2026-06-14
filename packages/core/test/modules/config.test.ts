@@ -7,7 +7,7 @@
 //   - applySchemaDefaults() fills missing keys, keeps existing values
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -58,6 +58,32 @@ describe("save() + load()", () => {
     const raw = readFileSync(join(tmpDir, "config.json"), "utf8");
     expect(() => JSON.parse(raw)).not.toThrow();
     expect(JSON.parse(raw).modules.x.enabled).toBe(false);
+  });
+});
+
+// ── partial system-override merge ───────────────────────────────────────────
+// mergeDefaults() (run by load()) spreads the on-disk `system` block over the
+// built-in DEFAULTS.system. A config file that overrides ONE system field must
+// therefore keep every other default intact — overriding `maxConcurrentAgents`
+// must not silently drop `initTimeout`/`agentTimeoutMinutes` to undefined.
+// The existing suite only covers the all-defaults (no file) and module
+// round-trip cases, leaving this merge invariant untested.
+
+describe("load() — partial system override", () => {
+  it("applies the overridden field but preserves the other system defaults", () => {
+    writeFileSync(
+      join(tmpDir, "config.json"),
+      JSON.stringify({ system: { maxConcurrentAgents: 2 } }),
+      "utf8",
+    );
+    cfg.load();
+    const c = cfg.get();
+
+    expect(c.system.maxConcurrentAgents).toBe(2); // explicit override wins
+    expect(c.system.initTimeout).toBe(10000); // untouched default preserved
+    expect(c.system.agentTimeoutMinutes).toBe(10); // untouched default preserved
+    expect(c.system.zombieReaperEnabled).toBe(true); // untouched default preserved
+    expect(c.modules).toEqual({}); // absent modules block -> empty map
   });
 });
 

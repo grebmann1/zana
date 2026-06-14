@@ -17,6 +17,7 @@ import * as os from "node:os";
 import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
 import * as core from "@zana-ai/core";
 import * as service from "@zana-ai/core/src/events/service.ts";
+import * as store from "@zana-ai/core/src/events/store.ts";
 
 // Reset both the .ts source singleton and the compiled-dist singleton to avoid
 // cross-test workspace bleed (mirrors the pattern in store.test.ts).
@@ -179,5 +180,41 @@ describe("events/service — subscriber error isolation", () => {
 
     expect(() => service.emit("test:event", {}, [])).not.toThrow();
     expect(received).toHaveLength(1);
+  });
+});
+
+// ─── getConfig / setConfig ───────────────────────────────────────────────────
+
+describe("events/service — getConfig() / setConfig()", () => {
+  // config is a process-level singleton in service.ts; snapshot and restore it
+  // so these mutations don't bleed into other tests in this file.
+  let original: any;
+
+  beforeEach(() => {
+    original = service.getConfig();
+  });
+
+  afterEach(() => {
+    service.setConfig(original);
+  });
+
+  it("setConfig merges into existing config and getConfig reflects the change", () => {
+    // persistToDisk defaults to true (DEFAULT_CONFIG); changing one field must
+    // not clobber the others.
+    expect(service.getConfig().persistToDisk).toBe(true);
+
+    service.setConfig({ retentionCount: 99 });
+
+    const cfg = service.getConfig();
+    expect(cfg.retentionCount).toBe(99);
+    // unrelated keys are preserved by the merge
+    expect(cfg.persistToDisk).toBe(true);
+  });
+
+  it("setConfig persists the merged config to disk in the workspace", () => {
+    service.setConfig({ retentionCount: 1234 });
+
+    // A fresh load from the store must observe the persisted value.
+    expect(store.loadConfig().retentionCount).toBe(1234);
   });
 });

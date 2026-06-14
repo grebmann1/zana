@@ -66,6 +66,17 @@ describe("@zana-ai/work entry-point barrel", () => {
       expect(runs.checkpoint).toHaveProperty("resume");
     });
 
+    it("exposes the anomaly module on the runs namespace", () => {
+      // Guards the `anomaly: require("./runs/anomaly")` line in the barrel.
+      // The broader runs-namespace test above omits this key, so without this
+      // assertion a dropped anomaly export would slip through unnoticed.
+      const { runs } = workIndex as any;
+      expect(runs).toHaveProperty("anomaly");
+      expect(runs.anomaly).toBeTruthy();
+      // detectAnomalies is the module's public surface — confirm it's wired live.
+      expect(typeof runs.anomaly.detectAnomalies).toBe("function");
+    });
+
     it("exports a deliberation namespace", () => {
       expect(workIndex).toHaveProperty("deliberation");
       expect((workIndex as any).deliberation).toBeTruthy();

@@ -167,11 +167,12 @@ chat; **both** = path-agnostic, works the same either way. Cells that read
 "daemon — use `/zana:foo` natively" mean the slash command rewrites the work
 into native `Agent`+`SendMessage` calls (no daemon round-trip).
 
-Rows tagged **daemon-only (gated)** are hidden from `tools/list` by default.
-Set `ZANA_DAEMON_TOOLS=1` in the MCP server env (alongside `ZANA_MASTER_MODE`
-for the swarm tools) to expose them. The default `npx -y @zana-ai/mcp` install
-registers ~64 tools; `ZANA_DAEMON_TOOLS=1` adds 24 more, `ZANA_MASTER_MODE=true`
-adds 6 swarm tools on top.
+Rows tagged **daemon-only** are surfaced by default — the daemon path is
+first-class (see ADR `docs/decisions/0005`). The default `npx -y @zana-ai/mcp`
+install registers all ~88 tools. Set `ZANA_DAEMON_TOOLS=0` in the MCP server
+env for the lean native-only surface (~64 tools), where these flows are covered
+by `Agent`+`SendMessage` and the slash commands. `ZANA_MASTER_MODE=true` adds
+the 6 swarm tools on top (still opt-in — multi-daemon / headless only).
 
 | Domain | Representative tools | Path |
 |---|---|---|
@@ -213,3 +214,7 @@ Schema doc: `plugins/zana/loop/skills/scheduler/SKILL.md`.
   it for tenant-isolated state
 - `scripts/diagnostics/run-real-deliberation*.js` calls real Claude and costs
   real money — don't run unless explicitly asked
+- Consequential design decisions and their rationale live as ADRs in
+  `docs/decisions/` (require-cycle, tenant isolation, MCP workspace resolution,
+  deliberation convergence). Read them before changing an invariant; add a new
+  ADR when you make a decision a future reader would question.

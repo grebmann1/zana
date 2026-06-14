@@ -36,9 +36,9 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
    - `4` → `[security-reviewer, performance-engineer, researcher, api-designer]`
    - `5` → `[security-reviewer, performance-engineer, researcher, api-designer, architect]`
 
-3. **Pre-flight** — for each resolved voter, call `mcp__zana__zana_get_profile` with `{ "profileId": "<id>" }` to fetch `systemPrompt` and `displayName`. Batch all calls in a single tool-use block.
+3. **Pre-flight** — for each resolved voter AND the `judge` profile (used by the synthesizer in step 9), call `mcp__zana__zana_get_profile` with `{ "profileId": "<id>" }` to fetch `systemPrompt` and `displayName`. Batch all calls in a single tool-use block.
 
-4. **Announce intent** in one line, e.g. `Convening arch council (3): security-reviewer + performance-engineer + researcher → synthesizer.`
+4. **Announce intent** in one line, e.g. `Convening arch council (3): security-reviewer + performance-engineer + researcher → judge synthesizer.`
 
 5. **Build the voter spawn plan** — N voter agents, spawned in ONE tool-use block:
 
@@ -71,9 +71,10 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
    - `name`: `synthesizer`.
    - `subagent_type`: `general-purpose`.
    - `prompt`: concatenate
-     1. `You are the synthesizer for an architecture-review council deliberation on: "{{question}}".`
-     2. `The {{N}} voters have already reported. Their stances and rationales are pasted verbatim below — do NOT spawn anything, do NOT poll an inbox, synthesize from the text below and return your final report.`
-     3. Build a section per voter, in order, formatted as:
+     1. The `judge` profile's `systemPrompt` (fetched in pre-flight) — purpose-built for adjudication ("pick the position most consistent with the goal, NOT the most popular; weigh dissent seriously"), matching the daemon path which also adjudicates with `judge`.
+     2. `You are the synthesizer for an architecture-review council deliberation on: "{{question}}".`
+     3. `The {{N}} voters have already reported. Their stances and rationales are pasted verbatim below — do NOT spawn anything, do NOT poll an inbox, synthesize from the text below and return your final report.`
+     4. Build a section per voter, in order, formatted as:
         ```
         ==========================================================================
         VOTER <i>: <voterName> — Stance: <APPROVE|CHANGES>
@@ -81,16 +82,17 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
         <verbatim final message from the voter>
         ```
         (Parse the voter's stance from the first `Stance: ...` line of their final message; if absent, infer from the rationale and flag it in the synthesis.)
-     4. `Build a synthesis report:`
+     5. `Build a synthesis report:`
         - `[CONSENSUS] — points where all voters agree`
         - `[MAJORITY] — points where most voters agree`
         - `[DISSENT] — points raised by a minority, quoted VERBATIM (never paraphrase, never collapse)`
-     5. `Compute the verdict from the stance tally:`
+     6. `Compute the verdict from the stance tally:`
         - `All APPROVE → VERDICT: APPROVE`
         - `Majority APPROVE with dissent → VERDICT: APPROVE WITH CONDITIONS`
         - `Majority CHANGES → VERDICT: REJECT`
         - `Tie or no majority → VERDICT: ESCALATED (human required)`
-     6. `Return a single message with the synthesis report + verdict + verbatim per-voter rationales as your final output.`
+        (As the judge, apply these as guidance, not a mechanical tally — a single well-argued CHANGES the others didn't engage can warrant CONDITIONS or ESCALATED even at a numeric majority.)
+     7. `Return a single message with the synthesis report + verdict + verbatim per-voter rationales as your final output.`
 
 10. **Stop.** The synthesizer's return value is the verdict.
 
@@ -109,7 +111,7 @@ The native path is right for "I want a fast architectural sanity check from thre
 - ALWAYS spawn all voters in ONE tool-use block with `run_in_background: true`.
 - ALWAYS wait for all voter notifications before spawning the synthesizer.
 - The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — voters do NOT call `SendMessage` (it isn't reliably reachable from nested `general-purpose` subagents in this harness; final-message capture is the contract).
-- The synthesizer MUST preserve dissent verbatim.
+- The synthesizer carries the `judge` profile's systemPrompt and MUST preserve dissent verbatim.
 - The researcher seat at quantity≥3 is the **generalist seat** — voters above index 2 are specialist additions; do not drop the researcher to fit a smaller council.
 - Do NOT call `mcp__zana__zana_deliberate` from this command — that's the daemon path.
 - Do NOT pick a verdict at the host level — only the synthesizer emits the verdict.

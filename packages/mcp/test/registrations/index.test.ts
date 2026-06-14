@@ -66,6 +66,35 @@ describe("collectStaticTools()", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it("preserves the documented ALL_DOMAINS order in the flattened output", () => {
+    // index.ts documents that domain order is preserved in `tools/list` so any
+    // out-of-band consumer relying on positional ordering keeps working. Assert
+    // that representative always-present tools appear in their ALL_DOMAINS order:
+    // profiles → skills → tickets → sprints → teams → artifacts → schedules → deliberation.
+    const names = collectStaticTools().map((t) => t.name);
+    const orderedRepresentatives = [
+      "zana_list_profiles",     // profiles
+      "zana_list_skills",       // skills
+      "zana_ticket_create",     // tickets
+      "zana_sprint_create",     // sprints
+      "zana_list_teams",        // teams
+      "zana_artifact_create",   // artifacts
+      "zana_schedule_list",     // schedules
+      "zana_deliberation_stub", // deliberation (stub, last)
+    ];
+    const indices = orderedRepresentatives.map((n) => {
+      const idx = names.indexOf(n);
+      expect(idx, `representative tool "${n}" must be present`).toBeGreaterThanOrEqual(0);
+      return idx;
+    });
+    for (let i = 1; i < indices.length; i++) {
+      expect(
+        indices[i],
+        `"${orderedRepresentatives[i]}" must come after "${orderedRepresentatives[i - 1]}"`,
+      ).toBeGreaterThan(indices[i - 1]);
+    }
+  });
+
   it("includes one representative always-present tool from each key domain", () => {
     const names = new Set(collectStaticTools().map((t) => t.name));
     // These tools are non-gated (present regardless of ZANA_DAEMON_TOOLS / ZANA_MASTER_MODE).

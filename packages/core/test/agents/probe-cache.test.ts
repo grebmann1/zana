@@ -173,6 +173,22 @@ describe("probe-cache (T6-FU-2)", () => {
       expect(found).not.toBeNull();
     });
 
+    it("ok=false with empty failures falls back to regularTtlMs (length>0 guard)", () => {
+      // Guards the `result.failures.length > 0` predicate in effectiveTtl:
+      // `[].every(...)` is vacuously true, so dropping the guard would
+      // misclassify an empty-failures result as all-transient and apply the
+      // short TTL. With the guard, it must use the regular budget.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const emptyFailures = fakeResult({ ok: false, failures: [] });
+      recordProbeResult("profA:modX", emptyFailures);
+
+      // 1m in: past the transient budget (30s), well within regular (5m).
+      vi.setSystemTime(new Date("2026-01-01T00:01:00Z"));
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+    });
+
     it("transientTtlMs=0 disables transient caching while keeping structural cache live", () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
@@ -184,6 +200,21 @@ describe("probe-cache (T6-FU-2)", () => {
       // Even at t=0 — transient cache disabled means lookup returns null.
       const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 0 });
       expect(found).toBeNull();
+    });
+
+    it("object-form ttl with BOTH budgets <= 0 disables the cache (early-return miss)", () => {
+      // Guards the object-form arm of the top-level disabled-cache check in
+      // lookupProbeResult: `ttl.regularTtlMs <= 0 && ttl.transientTtlMs <= 0`.
+      // When BOTH budgets are non-positive the cache is fully off, so lookup
+      // must short-circuit to null and count a miss — even for a just-recorded
+      // fresh ok=true entry (no timers needed). The existing transientTtlMs=0
+      // test keeps regularTtlMs live, so this both-zero arm is otherwise
+      // unexercised.
+      recordProbeResult("profA:modX", fakeResult({ probeId: "fresh" }));
+      const before = getProbeCacheStats().misses;
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 0, transientTtlMs: 0 });
+      expect(found).toBeNull();
+      expect(getProbeCacheStats().misses).toBe(before + 1);
     });
   });
 });

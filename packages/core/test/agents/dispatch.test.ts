@@ -216,6 +216,48 @@ describe("handleOrchestratorCommand — get_profile", () => {
   });
 });
 
+describe("handleOrchestratorCommand — list_profiles", () => {
+  it("maps each profile to the public shape and drops internal fields", async () => {
+    mockListProfiles.mockReturnValue([
+      {
+        id: "p1",
+        displayName: "Coder",
+        icon: "🤖",
+        category: "engineering",
+        description: "writes code",
+        model: "sonnet",
+        lens: "code-quality",
+        systemPrompt: "secret internal prompt",
+        mcpConfig: { should: "not appear" },
+      },
+    ]);
+    const result = (await call("list_profiles")) as any[];
+    expect(result).toEqual([
+      {
+        id: "p1",
+        name: "Coder",
+        icon: "🤖",
+        category: "engineering",
+        description: "writes code",
+        model: "sonnet",
+        // `lens` is exposed so callers can pick voters by concern (council auto-roster).
+        lens: "code-quality",
+      },
+    ]);
+    // Internal/sensitive fields must not leak through the public mapping.
+    expect(result[0]).not.toHaveProperty("systemPrompt");
+    expect(result[0]).not.toHaveProperty("mcpConfig");
+  });
+
+  it("exposes lens: null for a profile without a lens (coordination/util profiles)", async () => {
+    mockListProfiles.mockReturnValue([
+      { id: "orchestrator", displayName: "Orchestrator", model: "opus" },
+    ]);
+    const result = (await call("list_profiles")) as any[];
+    expect(result[0].lens).toBeNull();
+  });
+});
+
 // spawn_agent_validated shares the same max-workers and profile-not-found
 // guards as spawn_agent, but without the resilience-module dynamic require
 // that runs first in spawn_agent. We test those guard conditions here.
@@ -255,5 +297,27 @@ describe("handleOrchestratorCommand — spawn_agent_validated guard conditions",
     // Should NOT hit max-workers error — should hit profile-not-found instead
     expect((result as any).error).toMatch(/profile not found/);
     expect((result as any).error).not.toMatch(/max concurrent/);
+  });
+});
+
+describe("handleOrchestratorCommand — resolve_agent_name", () => {
+  // These two branches resolve entirely from the local agent registry and
+  // return BEFORE any cross-daemon (swarm) lookup, so they stay deterministic
+  // without driving the swarm router.
+  it("returns null when no name is provided", async () => {
+    const result = await call("resolve_agent_name", {});
+    expect(result).toBeNull();
+    // No name => must not even consult the local registry.
+    expect(mockListAgents).not.toHaveBeenCalled();
+  });
+
+  it("returns the local agent id on an exact name match", async () => {
+    mockListAgents.mockReturnValue([
+      { id: "agent-a", name: "Alice" },
+      { id: "agent-b", name: "Bob" },
+    ]);
+    // An exact local-name hit short-circuits and returns the matching id.
+    const result = await call("resolve_agent_name", { name: "Bob" });
+    expect(result).toBe("agent-b");
   });
 });

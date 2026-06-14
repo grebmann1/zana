@@ -108,6 +108,19 @@ describe("format — meta serialisation", () => {
     expect(lines[0]).toContain("null");
   });
 
+  it("falls back to String(m) when object meta is not JSON-serialisable", () => {
+    // A circular reference makes JSON.stringify throw; format() must catch
+    // that and degrade to String(m) rather than letting the logger blow up.
+    const circular: any = { a: 1 };
+    circular.self = circular;
+    const { lines, restore } = captureStderr();
+    getLogger("m").info("circ", circular);
+    restore();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("[object Object]");
+    expect(lines[0]).not.toContain('"self"');
+  });
+
   it("includes ISO timestamp at start of line", () => {
     const { lines, restore } = captureStderr();
     getLogger("m").info("ts-test");

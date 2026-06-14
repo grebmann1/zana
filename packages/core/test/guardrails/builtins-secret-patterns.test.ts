@@ -67,6 +67,42 @@ describe("noSecrets — GitHub OAuth tokens (gho_)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// noSecrets — sk- pattern false-positive avoidance
+//
+// The sk- rule is /(?:^|[^a-zA-Z0-9])(sk-[a-zA-Z0-9]{20,})/ — two guards the
+// existing suite never exercises on this prefix:
+//   1. a {20,} length floor, so short "sk-" fragments are NOT treated as keys
+//   2. a (?:^|[^a-zA-Z0-9]) left boundary, so an "sk-" that is glued to a
+//      preceding alphanumeric char (i.e. mid-word, like "disk-") does NOT match
+// Both protect against noisy false positives that would block legitimate
+// output. They are pure value-in / {pass} out — no I/O.
+// ---------------------------------------------------------------------------
+describe("noSecrets — sk- false-positive avoidance", () => {
+  const guard = noSecrets();
+
+  it("passes when an sk- fragment is shorter than the 20-char minimum", () => {
+    // "sk-short" has only 5 chars after the prefix — below the {20,} floor.
+    const r = guard.validate("the disk-usage sk-short label");
+    expect(r.pass).toBe(true);
+  });
+
+  it("passes when a 20+ char sk- run is glued to a preceding alphanumeric char", () => {
+    // 'sk-' here is preceded by 'i' (from "disk-"), so neither ^ nor the
+    // [^a-zA-Z0-9] boundary alternative matches — must not be flagged.
+    const r = guard.validate("disk-" + "a".repeat(20));
+    expect(r.pass).toBe(true);
+  });
+
+  it("still fails a real sk- key once the boundary and length both hold", () => {
+    // Sanity anchor: a properly bounded, full-length key is still caught,
+    // so the two passes above are about boundaries — not a dead guard.
+    const r = guard.validate("token is sk-" + "a".repeat(20));
+    expect(r.pass).toBe(false);
+    expect((r as any).feedback).toMatch(/secrets/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // containsPattern — default name when no description is provided
 // ---------------------------------------------------------------------------
 describe("containsPattern — default name", () => {

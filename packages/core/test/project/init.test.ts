@@ -134,6 +134,68 @@ describe("initProjectDir", () => {
 });
 
 // ---------------------------------------------------------------------------
+// initProjectDir — scheduler examples
+//
+// initProjectDir drops disabled example schedules under
+// .zana/scheduler/examples/. These are written as ".yml.example" (NOT ".yml")
+// so the daemon never auto-loads them, and they must survive a plain re-init
+// (so a user's hand-edits aren't clobbered) yet be restored when force=true.
+// None of this was previously exercised.
+// ---------------------------------------------------------------------------
+
+describe("initProjectDir — scheduler examples", () => {
+  const examplesDir = (root: string) =>
+    path.join(root, PROJECT_DIR, "scheduler", "examples");
+
+  it("writes disabled .yml.example schedules into scheduler/examples/", () => {
+    const root = makeTmpDir();
+    initProjectDir(root, { silent: true });
+
+    const dir = examplesDir(root);
+    expect(fs.existsSync(dir)).toBe(true);
+
+    const files = fs.readdirSync(dir).sort();
+    // Every dropped example is an inert template, never an active ".yml".
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) {
+      expect(f.endsWith(".yml.example")).toBe(true);
+      const body = fs.readFileSync(path.join(dir, f), "utf8");
+      expect(body).toContain("enabled: false");
+    }
+  });
+
+  it("does not clobber an edited example on a plain re-init", () => {
+    const root = makeTmpDir();
+    initProjectDir(root, { silent: true });
+
+    const dir = examplesDir(root);
+    const sample = fs.readdirSync(dir)[0];
+    const samplePath = path.join(dir, sample);
+    fs.writeFileSync(samplePath, "# user edited\n", "utf8");
+
+    initProjectDir(root, { silent: true });
+
+    expect(fs.readFileSync(samplePath, "utf8")).toBe("# user edited\n");
+  });
+
+  it("restores the original example body when force=true", () => {
+    const root = makeTmpDir();
+    initProjectDir(root, { silent: true });
+
+    const dir = examplesDir(root);
+    const sample = fs.readdirSync(dir)[0];
+    const samplePath = path.join(dir, sample);
+    fs.writeFileSync(samplePath, "# user edited\n", "utf8");
+
+    initProjectDir(root, { silent: true, force: true });
+
+    const restored = fs.readFileSync(samplePath, "utf8");
+    expect(restored).not.toBe("# user edited\n");
+    expect(restored).toContain("enabled: false");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // isProjectInitialized
 // ---------------------------------------------------------------------------
 

@@ -20,6 +20,19 @@ describe("model-router — selectModel", () => {
     expect(selectModel(borderPrompt)).toBe(TIERS.SONNET);
   });
 
+  // ── precedence: length fast path wins over a Haiku keyword ──────────────
+  // The `len > 2000` check (model-router.ts line 20) runs BEFORE the short-
+  // prompt Haiku-keyword check (line 24), and the Haiku branch additionally
+  // gates on `len < 200`. A long prompt that merely contains a Haiku keyword
+  // (e.g. "list ...") must therefore route to OPUS, never be downgraded to
+  // the cheapest tier. Pins the cost/correctness invariant that a large task
+  // is not misrouted to Haiku — currently untested.
+  it("routes a >2000-char prompt to OPUS even when it contains a HAIKU keyword", () => {
+    const longHaikuPrompt = "list " + "a".repeat(2001);
+    expect(longHaikuPrompt.length).toBeGreaterThan(2000);
+    expect(selectModel(longHaikuPrompt)).toBe(TIERS.OPUS);
+  });
+
   // ── Opus keyword matching ───────────────────────────────────────────────
   it.each(["design", "architect", "refactor across", "security"])(
     "returns OPUS when prompt contains keyword '%s'",
@@ -45,6 +58,15 @@ describe("model-router — selectModel", () => {
     expect(selectModel(mediumPrompt)).not.toBe(TIERS.HAIKU);
   });
 
+  // ── precedence: Opus keyword wins over Haiku keyword ────────────────────
+  // Documented invariant in model-router.ts: "order matters: check Opus
+  // first, then Haiku". A short prompt containing BOTH must resolve to OPUS.
+  it("prefers OPUS over HAIKU when a short prompt contains both keywords", () => {
+    const prompt = "list the security issues"; // "list" (haiku) + "security" (opus), <200 chars
+    expect(prompt.length).toBeLessThan(200);
+    expect(selectModel(prompt)).toBe(TIERS.OPUS);
+  });
+
   // ── category-based routing ──────────────────────────────────────────────
   it("returns OPUS for category 'security'", () => {
     expect(selectModel("do something", { category: "security" })).toBe(TIERS.OPUS);
@@ -60,6 +82,25 @@ describe("model-router — selectModel", () => {
 
   it("category matching is case-insensitive", () => {
     expect(selectModel("do something", { category: "Security" })).toBe(TIERS.OPUS);
+  });
+
+  // ── precedence: keyword routing wins over category routing ──────────────
+  // In model-router.ts the keyword checks (lines 22-26) run BEFORE category
+  // routing (lines 29-31). A prompt carrying an Opus keyword must therefore
+  // resolve to OPUS even when profileHints supply a SONNET category.
+  it("prefers an OPUS keyword over a SONNET category hint", () => {
+    expect(selectModel("please design this", { category: "code-review" }))
+      .toBe(TIERS.OPUS);
+  });
+
+  // Keyword routing (lines 22-26) runs BEFORE category routing (lines 29-31),
+  // so a short Haiku-keyword prompt downgrades to HAIKU even when the profile
+  // category ("security") would on its own route to OPUS. Pins the cost-
+  // sensitive precedence the existing suite leaves untested.
+  it("prefers a short HAIKU keyword over an OPUS category hint", () => {
+    const prompt = "show me"; // "show" (haiku) + <200 chars
+    expect(prompt.length).toBeLessThan(200);
+    expect(selectModel(prompt, { category: "security" })).toBe(TIERS.HAIKU);
   });
 
   // ── default fallback ────────────────────────────────────────────────────

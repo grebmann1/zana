@@ -207,6 +207,41 @@ describe("listAlive()", () => {
   });
 });
 
+// ── startHeartbeat ────────────────────────────────────────────────────────────
+
+describe("startHeartbeat()", () => {
+  it("rewrites lastHeartbeat on each interval tick and stops once the returned stop() is called", () => {
+    const id = registry.generateDaemonId();
+    const entry = registry.register({ id, port: 1234, apiPort: null, workspace: "/hb" });
+    const file = path.join(daemonsTestDir, `${id}.json`);
+    const initialHeartbeat = entry.lastHeartbeat;
+
+    // Fake timers keep the interval deterministic. advanceTimersByTime also
+    // advances the mocked clock, so the callback fires at start+interval and
+    // stamps that instant (00:00:11 + 10s = 00:00:21).
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-14T00:00:11.000Z"));
+      const stop = registry.startHeartbeat(id);
+      expect(typeof stop).toBe("function");
+
+      // One interval elapses → the daemon file's heartbeat is refreshed.
+      vi.advanceTimersByTime(registry.HEARTBEAT_INTERVAL_MS);
+      const afterTick = JSON.parse(fs.readFileSync(file, "utf8"));
+      expect(afterTick.lastHeartbeat).toBe("2026-06-14T00:00:21.000Z");
+      expect(afterTick.lastHeartbeat).not.toBe(initialHeartbeat);
+
+      // After stop(), further elapsed time must NOT rewrite the heartbeat.
+      stop();
+      vi.advanceTimersByTime(registry.HEARTBEAT_INTERVAL_MS * 3);
+      const afterStop = JSON.parse(fs.readFileSync(file, "utf8"));
+      expect(afterStop.lastHeartbeat).toBe("2026-06-14T00:00:21.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 // ── findRunningDaemon ────────────────────────────────────────────────────────
 
 describe("findRunningDaemon()", () => {
