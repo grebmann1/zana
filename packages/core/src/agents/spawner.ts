@@ -269,6 +269,12 @@ export function spawnHeadless(profile, options = {}) {
       ZANA_TERMINAL_ID: options.terminalId || "",
     },
     stdio: ["pipe", "pipe", "pipe"],
+    // detached makes the child a process-group leader (pgid === pid) on POSIX so
+    // killAgent() can signal the whole tree — the claude CLI spawns its own
+    // children (MCP servers, tool subprocesses), and a bare child.kill() would
+    // orphan those. We do NOT unref(), so the daemon still waits on the child
+    // normally; orphans from a daemon crash are swept by the zombie-reaper.
+    detached: process.platform !== "win32",
   });
 
   return child;

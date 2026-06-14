@@ -201,11 +201,51 @@ export function updateAgentFromHook(payload: any) {
   notifyChange();
 }
 
+/**
+ * Signal a headless child AND its descendants. Headless agents are spawned
+ * `detached` (see spawner.ts), so the child leads its own process group whose
+ * pgid equals its pid. Killing the negative pid (`-pid`) signals the whole
+ * group — the claude CLI's own children (MCP servers, tool subprocesses) die
+ * with it instead of being orphaned. Falls back to a direct child.kill() if
+ * the group signal fails (e.g. Windows, or the group already gone). Both
+ * branches are best-effort: a dead process throws ESRCH, which we swallow.
+ */
+function signalChildTree(child: any, sig: NodeJS.Signals) {
+  if (typeof child.pid === "number" && process.platform !== "win32") {
+    try {
+      process.kill(-child.pid, sig);
+      return;
+    } catch {
+      // group gone or never formed — fall through to the direct kill
+    }
+  }
+  try {
+    child.kill(sig);
+  } catch {}
+}
+
 export function killAgent(agentId: string) {
   const agent = agents.get(agentId);
   if (!agent) return false;
 
-  if (agent.terminalId) {
+  // Mark as killed so the headless child's close-handler suppresses its own
+  // (completed/errored) AGENT_TERMINATED emit — we emit reason:"killed" here.
+  agent.killed = true;
+
+  // Headless agents own a real child process. Interactive agents are driven
+  // through a PTY. Kill whichever this agent actually has — the old code only
+  // handled the PTY path, so killing a headless agent was a silent no-op and
+  // the process kept running (user could interrupt but not kill).
+  const child = agent.childProcess;
+  if (child) {
+    signalChildTree(child, "SIGTERM");
+    // Escalate to SIGKILL if SIGTERM didn't bring it down within the grace window.
+    setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) {
+        signalChildTree(child, "SIGKILL");
+      }
+    }, 5000);
+  } else if (agent.terminalId) {
     getPtyHost().killTerminal(agent.terminalId);
   }
 
@@ -402,9 +442,13 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
   const timeoutHandle = setTimeout(() => {
     if (getAgent(agentId)?.state === "active") {
       console.warn(`[agent-manager] agent ${agentId} timed out after ${AGENT_TIMEOUT_MS / 60000}min, killing`);
-      try { child.kill("SIGTERM"); } catch {}
+      // Signal the whole group (child is detached) so the timed-out agent's
+      // grandchildren don't outlive it as orphans.
+      signalChildTree(child, "SIGTERM");
       setTimeout(() => {
-        try { child.kill("SIGKILL"); } catch {}
+        if (child.exitCode === null && child.signalCode === null) {
+          signalChildTree(child, "SIGKILL");
+        }
       }, 5000);
     }
   }, AGENT_TIMEOUT_MS);
@@ -422,6 +466,12 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
 
   child.on("close", (code: number) => {
     clearTimeout(timeoutHandle);
+    // killAgent() already emitted reason:"killed" and set state — don't double-emit
+    // a completed/errored termination for a process we deliberately tore down.
+    if (agent.killed) {
+      persistAgentRun(agent, code);
+      return;
+    }
     agent.state = code === 0 ? "terminated" : "errored";
     agent.lastAction = code === 0 ? "Completed" : `Exited (code ${code})`;
     notifyChange();
