@@ -59,6 +59,15 @@ describe("handleModuleRoute()", () => {
   it("returns false for a well-formed path whose handler is not registered", () => {
     expect(loader.handleModuleRoute("/m/loader-test-mod/some-route", {}, {})).toBe(false);
   });
+
+  // The route regex (loader.ts line 546) requires a non-empty module-id segment
+  // — `([^/]+)`. A path with an empty id between the slashes ("/m//route") must
+  // NOT be treated as a module route, otherwise an empty moduleId could index
+  // into the route registry. Pins that guard, which the existing rejection
+  // cases (no trailing segment, non-/m/ prefix) leave untested.
+  it("returns false when the module-id segment is empty (/m//route)", () => {
+    expect(loader.handleModuleRoute("/m//some-route", {}, {})).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -78,5 +87,62 @@ describe("handleRoute()", () => {
     const res = {} as any;
     const result = await loader.handleRoute("loader-test-mod", "/a/b/c", req, res);
     expect(result).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enableModule / disableModule — guard rails
+//
+// Both must fail safely before mutating any global state when handed an id
+// they cannot resolve. enableModule() returns false when the id is not present
+// on disk (no module.json found); disableModule() returns false when the id was
+// never loaded into the in-memory registry. Neither path calls init() or the
+// workspace lock, so both are fully deterministic in a fresh test environment.
+// ---------------------------------------------------------------------------
+
+describe("enableModule()", () => {
+  it("returns false for a module id that is not present on disk", async () => {
+    await expect(
+      loader.enableModule("loader-test-never-on-disk-xyz"),
+    ).resolves.toBe(false);
+    // The failed enable must not leave a phantom record behind.
+    expect(loader.getModule("loader-test-never-on-disk-xyz")).toBeNull();
+  });
+});
+
+describe("disableModule()", () => {
+  it("returns false for a module that was never loaded", async () => {
+    await expect(
+      loader.disableModule("loader-test-never-loaded-xyz"),
+    ).resolves.toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// safe-before-init contracts
+//
+// shutdown() must be an idempotent no-op when init() was never called (the
+// `if (!initialized) return` guard), and handleRoute() must short-circuit on
+// an unregistered route BEFORE it injects res.json or parses req.body/query.
+// The body-parse path calls req.on(...) — passing a plain object with no .on
+// would throw if the registry guard did not run first, so a POST with a bare
+// req/res object pins that ordering. No init()/shutdown() side effects, no fs,
+// no timers — fully deterministic in a fresh per-file loader state.
+// ---------------------------------------------------------------------------
+
+describe("loader — safe-before-init contracts", () => {
+  it("shutdown() is a no-op that resolves when never initialized", async () => {
+    await expect(loader.shutdown()).resolves.toBeUndefined();
+  });
+
+  it("handleRoute() returns false without mutating req/res for an unregistered POST route", async () => {
+    const req = { method: "POST", url: "/m/loader-test-mod/x" } as any;
+    const res = {} as any;
+    const result = await loader.handleRoute("loader-test-mod", "/x", req, res);
+    expect(result).toBe(false);
+    // Registry guard short-circuits before res.json injection and body parsing.
+    expect(res.json).toBeUndefined();
+    expect(req.body).toBeUndefined();
+    expect(req.query).toBeUndefined();
   });
 });

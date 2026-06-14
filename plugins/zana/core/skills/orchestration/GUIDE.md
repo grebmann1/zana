@@ -13,7 +13,7 @@ Zana exposes the same primitives through two delivery paths. Pick the right one 
 
 **Inside a Claude Code session, prefer native.** Spawning a daemon orchestrator from inside a Claude Code chat duplicates the orchestrator role, burns extra tokens, and hides worker progress behind MCP polling. Use `mcp__zana__zana_start_team` only when you genuinely need a process that survives the Claude Code session ending — e.g., a cron-driven autopilot.
 
-> **Daemon-tool gate.** As of 0.1.5 the daemon-only MCP tools (`zana_spawn_agent*`, `zana_kill_agent`, `zana_agent_status`, `zana_agent_result`, `zana_list_agents`, `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`, `zana_list_running_teams`, `zana_ask_agent`, `zana_check_inbox`, `zana_send_ack`, `zana_autopilot_goal_*`, `zana_deliberate*`) are **hidden by default** to keep the Claude Code surface lean. They appear in `tools/list` and become callable only when the MCP server is launched with `ZANA_DAEMON_TOOLS=1` in its env (mirroring `ZANA_MASTER_MODE=true` for the swarm tools). Headless / CI / cron callers should set both flags; chat-driven users typically need neither — the slash commands cover everything.
+> **Daemon-tool gate.** As of 0.2.0 the daemon-path MCP tools (`zana_spawn_agent*`, `zana_kill_agent`, `zana_agent_status`, `zana_agent_result`, `zana_list_agents`, `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`, `zana_list_running_teams`, `zana_ask_agent`, `zana_check_inbox`, `zana_send_ack`, `zana_autopilot_goal_*`, `zana_deliberate*`) are **surfaced by default** — the daemon path is first-class (ADR `docs/decisions/0005`). Set `ZANA_DAEMON_TOOLS=0` in the MCP server env for the lean native-only surface, where these flows are covered by `Agent`+`SendMessage` and the slash commands. The swarm tools remain opt-in behind `ZANA_MASTER_MODE=true` (multi-daemon / headless only).
 
 The rest of this guide describes both, called out per section.
 
@@ -41,7 +41,7 @@ Use `zana_ticket_create` for each piece, then `zana_sprint_create` to group them
 
 ## The review pipeline (auto-driven — daemon path only)
 
-The ticket watcher described here runs **in the daemon**. Inside a Claude Code session with no daemon attached, `zana_ticket_update_status({ status: "review" })` does NOT auto-spawn a reviewer — you must spawn the reviewer yourself via `Agent` (or rely on the host's own review skill). The auto-driven pipeline below applies when a daemon is running and the watcher is subscribed (default for `zana headless`).
+The ticket watcher described here runs **in the daemon**. Inside a Claude Code session with no daemon attached, `zana_ticket_update_status({ status: "review" })` does NOT auto-spawn a reviewer — run `/zana:ticket:review <ticketId>` to drive the same two-phase gate in-session (see "Native review (no daemon)" below). The auto-driven pipeline below applies when a daemon is running and the watcher is subscribed (default for `zana headless`).
 
 Once a ticket is in `review`, the daemon's ticket watcher (`packages/work/src/tickets/watcher.ts`) runs the cycle on autopilot. You don't have to dispatch a reviewer — the daemon does it. You DO have to know the contract.
 
@@ -65,9 +65,28 @@ Default automation rules (loaded at daemon start):
 
 Hard limit: 3 rework cycles → ticket auto-blocks with comment "BLOCKED: failed review 3 times" and emits `ticket:blocked` event for human triage.
 
+### Native review (no daemon) — `/zana:ticket:review`
+
+The pipeline above is the **daemon** watcher. Inside a plain Claude Code chat with no daemon
+attached, moving a ticket to `review` does NOT auto-spawn anything — so use
+`/zana:ticket:review <ticketId>` to run the same gate in-session. It mirrors the watcher exactly:
+
+- Moves the ticket into `review`, runs the **QA phase** (spawns `code-reviewer`), then the
+  **architecture phase** (spawns `architect`) — sequential, one reviewer at a time.
+- Each reviewer ends with the same `VERDICT: PASS | FAIL` contract; the command parses it and
+  records the full review verbatim as a ticket comment.
+- PASS at QA → advance to architecture; PASS at architecture → `complete`. Any FAIL → `rework`.
+  Same 3-cycle rework cap → `blocked`.
+- Reviewers are spawned as top-level `Agent` subagents (final-message capture, like
+  `/zana:council`); they do not call `SendMessage`.
+
+`/zana:ticket:complete` warns when you close a ticket that never went through review and points
+at `/zana:ticket:review` — but still allows the deliberate skip for trivial work (a doc fix
+doesn't need the two-phase gate).
+
 What this means for you, the orchestrator:
 
-- After spawning the implementer, **`zana_ticket_update_status({ ticketId, status: "review" })` is the hand-off** — the QA reviewer auto-spawns *if the daemon's watcher is running*. Do not manually spawn a `code-reviewer` after the implementer in that case; the watcher will, and you'll double-spawn. On the native path (no daemon), spawn the reviewer yourself via `Agent`.
+- After spawning the implementer, **`zana_ticket_update_status({ ticketId, status: "review" })` is the hand-off** — the QA reviewer auto-spawns *if the daemon's watcher is running*. Do not manually spawn a `code-reviewer` after the implementer in that case; the watcher will, and you'll double-spawn. On the native path (no daemon), run `/zana:ticket:review <ticketId>` instead of hand-rolling the reviewer spawn — it drives both phases and the verdict→transition mapping for you.
 - **Worker prompts must end in a `VERDICT:` line** when they're spawned by a watcher rule. Inspect the rule's `promptTemplate` if unsure (`zana ticket rules list`). Workers spawned directly by you don't need a verdict — only watcher-spawned ones do.
 - If the user wants to **skip auto-review** for a ticket (e.g., trivial doc fix), close it from `in-progress → done` with `zana_ticket_update_status` directly. Skipping review is a deliberate choice, not the default.
 - If a ticket lands in `blocked`, treat it like a deliberation escalation: read the comments, then either `zana_ticket_update_status` to `in-progress` with a corrective spawn, or `cancelled` if the work was wrong.

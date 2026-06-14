@@ -210,6 +210,24 @@ claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/bin/z
 claude mcp add -s user zana node /absolute/path/to/zana/packages/mcp/dist/bin/zana-mcp-server.js
 ```
 
+**Workspace isolation — pin `ZANA_WORKSPACE` for a user-wide registration.**
+Every project's tickets/sprints/runs live under that project's `.zana/`, so the
+server must resolve the right workspace. It uses `ZANA_WORKSPACE` if set,
+otherwise the launch `cwd`. A `-s local` registration is per-project and Claude
+Code launches it from the project root, so `cwd` is correct automatically. A
+single `-s user` registration is shared across **all** your projects — pin the
+workspace explicitly so tickets never land in the wrong store:
+
+```bash
+# Run from inside the project; pins the workspace to it
+claude mcp add -s local zana node /absolute/path/to/zana/packages/mcp/dist/bin/zana-mcp-server.js \
+  --env ZANA_WORKSPACE="$PWD"
+```
+
+The server logs its chosen workspace at startup
+(`[zana-mcp] booting core in-process for: <path>`) — check it if tickets seem
+to be created in the wrong project.
+
 Verify:
 
 ```bash

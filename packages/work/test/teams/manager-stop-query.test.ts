@@ -214,6 +214,21 @@ describe("manager — getTeamStatus", () => {
     expect(status!.status).toBe("running");
     expect(Array.isArray(status!.workers)).toBe(true);
   });
+
+  it("transitions a running team to 'completed' when the orchestrator agent has terminated", () => {
+    bootTeam("team-status-done");
+    // Orchestrator reports terminated → getTeamStatus must flip running→completed.
+    listAgentsSpy.mockReturnValue([
+      { id: "orch-team-status-done", parentAgentId: null, state: "terminated" },
+    ]);
+
+    const status = manager.getTeamStatus("team-status-done");
+    expect(status).not.toBeNull();
+    expect(status!.status).toBe("completed");
+
+    // The transition is persisted: a second query still reports completed.
+    expect(manager.getTeamStatus("team-status-done")!.status).toBe("completed");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,5 +300,43 @@ describe("manager — listCheckpoints / getCheckpoint", () => {
   it("getCheckpoint returns null when the store has no matching checkpoint", () => {
     (checkpointStore.load as ReturnType<typeof vi.fn>).mockReturnValue(null);
     expect(manager.getCheckpoint("no-such-cp")).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("manager — startTeam duplicate guard", () => {
+  // The `runningTeams` Map is module-level and never cleared between tests, so
+  // we use unique teamIds (team-dup-*) that no other suite touches.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns { ok: false, error: 'team already running' } when startTeam is called twice with the same teamId", () => {
+    // First call succeeds and registers the team in runningTeams.
+    bootTeam("team-dup-guard");
+
+    // Second call with the same id must hit the runningTeams.has() guard and
+    // short-circuit before touching the agent manager or event bus.
+    const second = manager.startTeam("team-dup-guard", { headless: true });
+
+    expect(second).toEqual({ ok: false, error: "team already running" });
+  });
+
+  it("does not spawn a second orchestrator agent when the duplicate guard fires", () => {
+    bootTeam("team-dup-no-spawn");
+
+    // Clear spy history so we can assert on the second call in isolation.
+    agentManagerSpy.mockClear();
+
+    manager.startTeam("team-dup-no-spawn", { headless: true });
+
+    // The duplicate-guard path returns before reaching spawnHeadlessAgent.
+    expect(agentManagerSpy).not.toHaveBeenCalled();
   });
 });

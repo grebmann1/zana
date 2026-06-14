@@ -43,6 +43,14 @@ const inflightAgents = new Map<string, { scheduleId: string; spawnedAt: number }
 const INFLIGHT_TTL_MS = 6 * 60 * 1000;
 let busSubscribed = false;
 
+// A schedule whose action errors on every fire (deleted profileId, missing
+// skill, command ENOENT) would otherwise re-fire forever on its cron/interval.
+// Auto-disable after this many CONSECUTIVE error fires; any success resets the
+// streak, and re-enabling the schedule manually clears it. Mirrors the
+// claude-unleashed boot-error breaker (ADR-derived; see
+// reviews/claude-unleashed-incorporation.md §2a).
+const CONSEC_ERROR_CAP = 3;
+
 /** Remove inflightAgents entries older than INFLIGHT_TTL_MS. Returns count pruned. */
 export function sweepInflightAgents(): number {
   const now = Date.now();
@@ -54,6 +62,47 @@ export function sweepInflightAgents(): number {
     }
   }
   return pruned;
+}
+
+// Resolve an agent's current lifecycle state by id. Defaults to the core agent
+// manager; overridable in tests via _setAgentStateResolverForTest so the
+// overlap-skip gate can be exercised without spawning a real subprocess.
+let agentStateResolver: (agentId: string) => string | undefined = (agentId) => {
+  try {
+    return require("@zana-ai/core").agents.manager.getAgent(agentId)?.state;
+  } catch {
+    return undefined;
+  }
+};
+
+/** Test-only: override how the overlap gate reads agent state. Pass null to reset. */
+export function _setAgentStateResolverForTest(
+  resolver: ((agentId: string) => string | undefined) | null,
+) {
+  agentStateResolver =
+    resolver ??
+    ((agentId) => {
+      try {
+        return require("@zana-ai/core").agents.manager.getAgent(agentId)?.state;
+      } catch {
+        return undefined;
+      }
+    });
+}
+
+// Return the agentId of a still-LIVE agent spawned by a prior fire of this
+// schedule, or null if none. "Live" = a non-terminal state (spawning/active).
+// Used to skip overlapping fires. Defensive: an unresolvable agent (manager
+// unreachable, or already gone) counts as not-live, so we never block a fire
+// on a stale entry.
+function findLiveInflightForSchedule(scheduleId: string): string | null {
+  for (const [agentId, info] of inflightAgents) {
+    if (info.scheduleId !== scheduleId) continue;
+    let state: string | undefined;
+    try { state = agentStateResolver(agentId); } catch { state = undefined; }
+    if (state === "active" || state === "spawning") return agentId;
+  }
+  return null;
 }
 
 /** Test-only: snapshot the inflight tracking map. */
@@ -238,6 +287,12 @@ export function enableSchedule(id) {
   if (!schedule) return { error: "schedule not found" };
   schedule.enabled = true;
   schedule.updatedAt = new Date().toISOString();
+  // Manual re-enable clears any auto-disable breaker state so the schedule
+  // gets a fresh streak (the operator has presumably fixed the cause).
+  if (schedule.status && typeof schedule.status === "object") {
+    schedule.status.consecutiveErrors = 0;
+    schedule.status.autoDisabledReason = null;
+  }
   schedulerStore.saveScheduleSameFormat(schedule);
   startTrigger(schedule);
   return { ok: true, schedule };
@@ -386,6 +441,38 @@ export async function triggerSchedule(id) {
   sweepInflightAgents();
 
   const startedAt = new Date().toISOString();
+
+  // Overlap skip (liveness-gated): if a prior fire of THIS schedule spawned an
+  // agent that's still live, don't spawn another on top of it. The inflight
+  // map alone is only a memory-prune (time-based TTL); we check the agent's
+  // actual state so a long-running agent doesn't get doubled up. Mirrors the
+  // claude-unleashed prev-run-still-active skip
+  // (reviews/claude-unleashed-incorporation.md §2c).
+  const overlap = findLiveInflightForSchedule(id);
+  if (overlap) {
+    const result: any = {
+      status: "skipped",
+      detail: "prev-run-still-active",
+      startedAt,
+      finishedAt: startedAt,
+      actionType: schedule.action?.type,
+      blockedByAgentId: overlap,
+    };
+    // Record the skip in history + advance nextRunAt, but do NOT spawn.
+    const st = (schedule.status && typeof schedule.status === "object") ? { ...schedule.status } : {};
+    st.lastRunAt = startedAt;
+    st.lastRunResult = "skipped";
+    st.nextRunAt = computeNextRunAt(schedule, new Date(startedAt));
+    schedule.status = st;
+    schedule.lastRunAt = st.lastRunAt;
+    schedule.lastRunResult = st.lastRunResult;
+    schedule.nextRunAt = st.nextRunAt;
+    schedule.updatedAt = new Date().toISOString();
+    schedulerStore.saveScheduleSameFormat(schedule);
+    schedulerStore.appendRunResult(id, result);
+    return { ok: true, schedule, result, skipped: true };
+  }
+
   let actionResult: any;
 
   try {
@@ -421,6 +508,25 @@ export async function triggerSchedule(id) {
   status.lastRunResult = actionResult.status === "success" ? "success" : `error: ${actionResult.error}`;
   status.runCount = (typeof status.runCount === "number" ? status.runCount : 0) + 1;
   status.nextRunAt = computeNextRunAt(schedule, new Date(finishedAt));
+
+  // Consecutive-failure circuit breaker: a perpetually-erroring schedule
+  // (bad profileId, missing skill, command ENOENT) re-fires forever otherwise.
+  // Track the error streak and auto-disable at the cap. Any success resets it.
+  if (actionResult.status === "error") {
+    status.consecutiveErrors = (typeof status.consecutiveErrors === "number" ? status.consecutiveErrors : 0) + 1;
+    if (status.consecutiveErrors >= CONSEC_ERROR_CAP) {
+      schedule.enabled = false;
+      status.autoDisabledReason =
+        `auto-disabled after ${status.consecutiveErrors} consecutive errors: ${actionResult.error}`.slice(0, 200);
+      stopTrigger(id);
+      _log().warn(
+        `schedule ${id} auto-disabled after ${status.consecutiveErrors} consecutive errors`,
+      );
+    }
+  } else {
+    status.consecutiveErrors = 0;
+    status.autoDisabledReason = null;
+  }
 
   schedule.status = status;
   schedule.lastRunAt = status.lastRunAt;

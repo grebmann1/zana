@@ -1,6 +1,6 @@
 {
   "name": "zana",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Zana \u2014 multi-agent orchestrator for Claude Code. Manage your workers from a unified dashboard.",
   "author": "Zana",
   "main": "packages/mcp/dist/src/mcp-server.js",

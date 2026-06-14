@@ -57,6 +57,21 @@ export const DAEMON_MANAGED_FIELDS = [
   "runCount",
 ];
 
+// Sub-fields the daemon manages inside the `status` object (in addition to
+// lastRunAt/lastRunResult/nextRunAt/runCount). Documented here so the YAML
+// contract reference stays complete; users should not hand-set these.
+//   consecutiveErrors  — error-streak counter for the auto-disable breaker
+//   autoDisabledReason — set when the breaker disables a schedule; null otherwise
+// `lastRunResult` vocabulary: "success" | "error: <msg>" | "skipped"
+export const STATUS_MANAGED_SUBFIELDS = [
+  "lastRunAt",
+  "lastRunResult",
+  "nextRunAt",
+  "runCount",
+  "consecutiveErrors",
+  "autoDisabledReason",
+];
+
 export interface ValidationIssue {
   level: "error" | "warning";
   field: string;

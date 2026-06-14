@@ -33,6 +33,48 @@ Then in any workspace:
 zana headless . --background    # start the daemon (port 47402)
 ```
 
+### Workspace resolution — set `ZANA_WORKSPACE` per project
+
+Tickets, sprints, runs, checkpoints, and every other project-local store
+live under the active workspace's `.zana/` directory, and isolation between
+projects depends entirely on the server resolving the **right** workspace.
+
+The server picks its workspace in this order:
+
+1. **`ZANA_WORKSPACE`** env var — the explicit, recommended setting.
+2. **`process.cwd()`** — the launching process's working directory, which
+   Claude Code sets to the active project. This is the safety-net fallback.
+
+For a single global `--scope user` registration shared across many projects,
+**set `ZANA_WORKSPACE` per project** so there is no ambiguity. The simplest
+way is a project-scoped registration that pins it:
+
+```bash
+# Run from inside the project directory:
+claude mcp add --scope local zana zana-mcp-server \
+  --env ZANA_WORKSPACE="$PWD"
+```
+
+Or, equivalently, in a project `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "zana": {
+      "command": "zana-mcp-server",
+      "env": { "ZANA_WORKSPACE": "/absolute/path/to/your/project" }
+    }
+  }
+}
+```
+
+If `ZANA_WORKSPACE` is unset, the server falls back to its launch `cwd`. That
+is correct whenever the client launches the server from the project root (as
+Claude Code does), but the env var removes all doubt — and is required for any
+launcher that does not control `cwd`. The server prints its chosen workspace at
+startup: `[zana-mcp] booting core in-process for: <path>` — check it if tickets
+seem to be landing in the wrong place.
+
 In a Claude Code session the `mcp__zana__zana_*` tools are now
 available. Discover them with:
 

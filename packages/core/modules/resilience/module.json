@@ -1,0 +1,23 @@
+{
+  "id": "resilience",
+  "name": "Resilience (circuit breaker)",
+  "version": "0.1.0",
+  "main": "index.js",
+  "description": "In-memory circuit breaker for failure-prone operations (e.g. agent-spawn). Opens after N consecutive failures, stays open for a cooldown, then half-opens to let one probe through. Wires the isOpen/recordFailure/recordSuccess seams already called in the agent spawn path.",
+  "events": {
+    "emits": ["resilience:opened", "resilience:closed"],
+    "subscribes": []
+  },
+  "configSchema": {
+    "failureThreshold": {
+      "type": "number",
+      "default": 5,
+      "description": "Consecutive failures before the breaker opens for a key"
+    },
+    "cooldownMs": {
+      "type": "number",
+      "default": 30000,
+      "description": "How long the breaker stays open before half-opening to allow a probe"
+    }
+  }
+}

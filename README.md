@@ -135,22 +135,25 @@ Bare-minimum cheat sheet (development, from a clone):
 
 ## Daemon-only tools and master mode
 
-The default MCP install (`npx -y @zana-ai/mcp` with no env) registers the lean
-chat-friendly tool surface (~64 tools) — tickets, sprints, memory, artifacts,
-profiles, schedules, plus the team-template / event / channel surfaces. Tools
-that exist only to drive a long-lived daemon (agent lifecycle, team start/stop,
-autopilot, deliberation, P2P inbox) are hidden behind two env flags:
+The default MCP install (`npx -y @zana-ai/mcp` with no env) registers the full
+~88-tool surface — the daemon path is first-class (see
+`docs/decisions/0005`). That includes the 24 daemon-path tools (agent lifecycle,
+team start/stop, autopilot, deliberation, P2P inbox) alongside tickets, sprints,
+memory, artifacts, profiles, schedules, and the team-template / event / channel
+surfaces. Two env flags adjust the surface:
 
-- `ZANA_DAEMON_TOOLS=1` — exposes 24 daemon-only tools: `zana_spawn_agent*`,
-  `zana_kill_agent`, `zana_agent_status`, `zana_agent_result`, `zana_list_agents`,
+- `ZANA_DAEMON_TOOLS=0` — opts OUT to the lean native-only surface (~64 tools),
+  hiding the 24 daemon-path tools: `zana_spawn_agent*`, `zana_kill_agent`,
+  `zana_agent_status`, `zana_agent_result`, `zana_list_agents`,
   `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`,
   `zana_list_running_teams`, `zana_ask_agent`, `zana_check_inbox`,
-  `zana_send_ack`, `zana_autopilot_goal_*` (4), `zana_deliberate*` (6).
-  Set this only for headless / CI / cron callers — inside a Claude Code chat
-  the slash commands (`/zana:autopilot`, `/zana:council`, `/zana:team`) and
-  native `Agent` + `SendMessage` cover the same flows.
+  `zana_send_ack`, `zana_autopilot_goal_*` (4), `zana_deliberate*` (6). Use this
+  inside a Claude Code chat if you prefer the slash commands (`/zana:autopilot`,
+  `/zana:council`, `/zana:team`) + native `Agent` + `SendMessage`, which cover
+  the same flows.
 - `ZANA_MASTER_MODE=true` — exposes the 6 `zana_swarm_*` tools on top, for
-  multi-daemon setups where one daemon spawns and coordinates others.
+  multi-daemon setups where one daemon spawns and coordinates others (still
+  opt-in — headless only).
 
 ## Architecture notes
 

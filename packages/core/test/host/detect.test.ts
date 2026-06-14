@@ -34,4 +34,16 @@ describe("host/detect", () => {
     expect(isClaudeHost()).toBe(expected);
     expect(getHostType()).toBe(expected ? "claude" : "generic");
   });
+
+  it("re-evaluates on every call (result is not cached mid-session)", () => {
+    // Documented invariant: the host can flip during a session (e.g. an
+    // installer creates ~/.claude), so detection must not memoize.
+    process.env.ZANA_HOST_OVERRIDE = "generic";
+    expect(isClaudeHost()).toBe(false);
+    expect(getHostType()).toBe("generic");
+
+    process.env.ZANA_HOST_OVERRIDE = "claude";
+    expect(isClaudeHost()).toBe(true);
+    expect(getHostType()).toBe("claude");
+  });
 });

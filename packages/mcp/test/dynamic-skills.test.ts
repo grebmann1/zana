@@ -52,6 +52,15 @@ describe("loadToolSkills", () => {
     expect(loadToolSkills()).toEqual([]);
   });
 
+  it("returns [] when SKILLS_DIR points at a file, not a directory (non-ENOENT readdir error)", () => {
+    // Covers the `err.code !== "ENOENT"` branch: readdirSync on a regular file
+    // throws ENOTDIR. The loader must swallow it and return [] rather than throw.
+    const filePath = path.join(makeTmpDir("zana-skills-notdir-"), "not-a-dir.txt");
+    fs.writeFileSync(filePath, "i am a file", "utf8");
+    coreConfig.SKILLS_DIR = filePath;
+    expect(loadToolSkills()).toEqual([]);
+  });
+
   it("skips non-JSON files", () => {
     fs.writeFileSync(path.join(coreConfig.SKILLS_DIR, "readme.md"), "not json", "utf8");
     expect(loadToolSkills()).toEqual([]);

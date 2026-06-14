@@ -167,6 +167,24 @@ describe("fileExists", () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("uses an absolute path verbatim and ignores ctx.cwd", () => {
+    // Covers the path.isAbsolute() branch: an absolute filePath must be
+    // checked as-is, NOT joined onto ctx.cwd. We point cwd at an empty,
+    // unrelated dir to prove it is not consulted when the path is absolute.
+    tmpDir = mkdtempSync(join(tmpdir(), "zana-builtins-test-"));
+    const otherDir = mkdtempSync(join(tmpdir(), "zana-builtins-other-"));
+    const absFile = join(tmpDir, "artifact.txt");
+    writeFileSync(absFile, "ok");
+    try {
+      const guard = fileExists(absFile);
+      // cwd is the unrelated empty dir; absolute path should still resolve.
+      expect(guard.validate("", { cwd: otherDir }).pass).toBe(true);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+      rmSync(otherDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

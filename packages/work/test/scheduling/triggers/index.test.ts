@@ -89,3 +89,31 @@ describe("computeNextRunAt — null/undefined inputs", () => {
     expect(computeNextRunAt(undefined as any)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// computeNextRunAt — invalid cron / out-of-range interval
+//
+// pickBackend() calls cronBackend.validate() before using the cron field, so
+// it returns null early for a bad expression. computeNextRunAt() does NOT
+// validate — it passes the raw string straight to cronBackend.nextFireAt(),
+// which returns null for an invalid expression. This describe block guards
+// that asymmetry so callers know computeNextRunAt can return null even when a
+// cron field is present.
+// ---------------------------------------------------------------------------
+describe("computeNextRunAt — invalid / out-of-range trigger values", () => {
+  const from = new Date("2026-01-01T00:00:00.000Z");
+
+  it("returns null for an invalid cron expression (truthy but unparseable)", () => {
+    // "99 99 99 99 99" is truthy so the cron branch is entered, but
+    // cronBackend.nextFireAt() cannot parse it and returns null.
+    expect(computeNextRunAt({ schedule: { cron: "99 99 99 99 99" } }, from)).toBeNull();
+  });
+
+  it("returns null for a zero intervalMs (not > 0)", () => {
+    expect(computeNextRunAt({ schedule: { intervalMs: 0 } }, from)).toBeNull();
+  });
+
+  it("returns null for a negative intervalMs", () => {
+    expect(computeNextRunAt({ schedule: { intervalMs: -60_000 } }, from)).toBeNull();
+  });
+});

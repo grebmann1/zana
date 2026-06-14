@@ -433,6 +433,26 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
       const resilienceMod = require("../modules/loader").getModule?.("resilience");
       resilienceMod?.api?.recordSuccess?.("agent-spawn");
     }
+    // Post-run anomaly detection: flag a run that completed but looks unhealthy
+    // (nonzero exit, near a cost/time/token ceiling). Pure detector lives in
+    // @zana-ai/work; reach it via lazy require (core↔work cycle — see ADR 0001).
+    // Best-effort: never let detection block termination/persistence.
+    try {
+      const detect = require("@zana-ai/work").runs?.anomaly?.detectAnomalies;
+      const verdict = detect ? detect({ ...agent, exitCode: code }) : null;
+      if (verdict && verdict.anomalies.length > 0) {
+        agent.anomalies = verdict.anomalies;
+        agent.anomalySeverity = verdict.severity;
+        bus.emit(EVENTS.AGENT_ANOMALY, {
+          agentId,
+          profileId: profile.id,
+          severity: verdict.severity,
+          anomalies: verdict.anomalies,
+        });
+      }
+    } catch {
+      // detection unavailable (e.g. work not loaded) — skip silently.
+    }
     persistAgentRun(agent, code);
   });
 

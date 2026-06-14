@@ -247,4 +247,22 @@ describe("computePeakConcurrentAgents", () => {
     ];
     expect(computePeakConcurrentAgents(events)).toBe(0);
   });
+
+  // A later concurrency wave that exceeds an earlier one must raise the peak.
+  // The first burst peaks at 2, fully drains, then a second burst reaches 3.
+  // Pins the `if (current > peak) peak = current` re-update across waves —
+  // the existing suite only checks a single burst and a re-tie at the same
+  // peak, never a later wave climbing ABOVE the earlier high-water mark.
+  it("raises the peak when a later wave exceeds an earlier peak", () => {
+    const events = [
+      makeEvent("agent:spawned"),    // current=1, peak=1
+      makeEvent("agent:spawned"),    // current=2, peak=2
+      makeEvent("agent:terminated"), // current=1
+      makeEvent("agent:terminated"), // current=0 — first wave drained
+      makeEvent("agent:spawned"),    // current=1
+      makeEvent("agent:spawned"),    // current=2
+      makeEvent("agent:spawned"),    // current=3, peak=3 — exceeds earlier
+    ];
+    expect(computePeakConcurrentAgents(events)).toBe(3);
+  });
 });
