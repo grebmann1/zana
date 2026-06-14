@@ -146,4 +146,31 @@ describe("core.init()", { timeout: 30000 }, () => {
       await result.shutdown();
     }
   });
+
+  it("shutdown() emits ZANA_SHUTDOWN exactly once and is idempotent on repeat calls", async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+    // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
+    // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
+    fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+    tmpDirs.push(ws);
+
+    const result = await init({ workspace: ws, headless: false });
+
+    let shutdownCount = 0;
+    const onShutdown = () => { shutdownCount++; };
+    bus.on(EVENTS.ZANA_SHUTDOWN, onShutdown);
+
+    try {
+      // First shutdown() runs the teardown path and emits ZANA_SHUTDOWN.
+      await result.shutdown();
+      expect(shutdownCount).toBe(1);
+
+      // Second shutdown() must short-circuit on the `shuttingDown` guard:
+      // it resolves without re-running teardown or re-emitting the event.
+      await expect(result.shutdown()).resolves.toBeUndefined();
+      expect(shutdownCount).toBe(1);
+    } finally {
+      bus.off(EVENTS.ZANA_SHUTDOWN, onShutdown);
+    }
+  });
 });

@@ -167,6 +167,22 @@ describe("resolveProjectDir", () => {
     expect(resolveProjectDir(dir)).toBe(zanaDir);
   });
 
+  // The match guard (workspace-context.ts line 58) is
+  // `fs.existsSync(candidateZana) && fs.statSync(candidateZana).isDirectory()`.
+  // A `.zana` that is a regular FILE (not a directory) must therefore NOT be
+  // treated as a project state dir — the walk must skip it and continue
+  // upward, ultimately falling back to startPath/.zana. The existing happy
+  // paths only ever create a `.zana` directory, so the isDirectory() half of
+  // the guard is currently unpinned: drop it and a stray `.zana` file would be
+  // silently adopted as the tenant state dir.
+  it("ignores a .zana that is a regular file (not a directory)", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".zana"), "not a directory");
+    // No real .zana directory anywhere → falls back to startPath/.zana.
+    const result = resolveProjectDir(dir);
+    expect(result).toBe(path.join(dir, ".zana"));
+  });
+
   it("walks UP to find .zana in a parent directory", () => {
     const dir = makeTmpDir();
     const zanaDir = path.join(dir, ".zana");
@@ -245,6 +261,29 @@ describe("createForWorkspace()", () => {
     const ctx = createForWorkspace(dir);
     const paths = ctx.getProjectPaths();
     expect(paths.ticketsDir.startsWith(paths.projectDir)).toBe(true);
+  });
+
+  // The factory's isInitialized() (workspace-context.ts line 163) reports
+  // fs.existsSync(projectDir) — distinct from the singleton's
+  // `_workspaceRoot !== null` semantics. The factory therefore reports an
+  // un-bootstrapped workspace as NOT initialized even after createForWorkspace()
+  // returns, and flips to true only once the .zana dir physically exists. This
+  // fs-existence behavior is exercised by no existing test, so per-window
+  // contexts could silently report the wrong readiness on a bug. Planting .git
+  // pins resolveProjectDir to the tmp dir so the result is deterministic
+  // regardless of any .zana that may exist above /tmp.
+  it("isInitialized() reflects on-disk existence of the project dir", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".git")); // project boundary → projectDir = dir/.zana
+
+    const ctx = createForWorkspace(dir);
+    // .zana not yet created → factory reports not initialized.
+    expect(ctx.getProjectDir()).toBe(path.join(dir, ".zana"));
+    expect(ctx.isInitialized()).toBe(false);
+
+    // Bootstrap the project state dir → factory now reports initialized.
+    fs.mkdirSync(ctx.getProjectDir());
+    expect(ctx.isInitialized()).toBe(true);
   });
 });
 

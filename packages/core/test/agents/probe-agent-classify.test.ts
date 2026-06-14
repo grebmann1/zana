@@ -58,4 +58,33 @@ describe("classifySpawnError", () => {
       "transport",
     );
   });
+
+  // ── precedence: rate_limit (transient → retry) wins over quota (structural
+  // → escalate) ───────────────────────────────────────────────────────────
+  // The classifier checks the 429/rate-limit bucket BEFORE the 402/quota
+  // bucket. A failure carrying both signals (a 429 whose body mentions
+  // "quota") must bucket to rate_limit so it gets retried with backoff
+  // rather than escalated as a hard quota failure. Previously untested.
+  it("prefers rate_limit over quota when a message carries both signals", () => {
+    expect(classifySpawnError("429: monthly quota exhausted")).toBe("rate_limit");
+  });
+
+  // ── code + message are JOINED, then classified as one string ─────────────
+  // When the `code` and `message` fields point at different buckets, the
+  // most-specific-first ordering over the joined string decides. Here code
+  // "429" (rate_limit) outranks message "ECONNRESET" (transport) because the
+  // rate_limit check runs before the transport check. Pins the field-join +
+  // ordering interaction the existing suite leaves untested.
+  it("classifies the joined code+message by bucket ordering, not field origin", () => {
+    expect(classifySpawnError({ code: "429", message: "ECONNRESET" })).toBe("rate_limit");
+  });
+
+  // ── object with no string code/message falls through via String(err) ─────
+  // With neither a string `code` nor a string `message`, the classifier
+  // stringifies the object ("[object Object]"), matches nothing, and lands
+  // in the legacy "spawn" bucket. Confirms the additive fall-through holds
+  // for malformed error shapes rather than throwing.
+  it("falls through to 'spawn' for an object lacking string code/message", () => {
+    expect(classifySpawnError({ code: 500, detail: { nested: true } })).toBe("spawn");
+  });
 });

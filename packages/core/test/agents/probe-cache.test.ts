@@ -201,5 +201,20 @@ describe("probe-cache (T6-FU-2)", () => {
       const found = lookupProbeResult("profA:modX", { regularTtlMs: 5 * 60 * 1000, transientTtlMs: 0 });
       expect(found).toBeNull();
     });
+
+    it("object-form ttl with BOTH budgets <= 0 disables the cache (early-return miss)", () => {
+      // Guards the object-form arm of the top-level disabled-cache check in
+      // lookupProbeResult: `ttl.regularTtlMs <= 0 && ttl.transientTtlMs <= 0`.
+      // When BOTH budgets are non-positive the cache is fully off, so lookup
+      // must short-circuit to null and count a miss — even for a just-recorded
+      // fresh ok=true entry (no timers needed). The existing transientTtlMs=0
+      // test keeps regularTtlMs live, so this both-zero arm is otherwise
+      // unexercised.
+      recordProbeResult("profA:modX", fakeResult({ probeId: "fresh" }));
+      const before = getProbeCacheStats().misses;
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 0, transientTtlMs: 0 });
+      expect(found).toBeNull();
+      expect(getProbeCacheStats().misses).toBe(before + 1);
+    });
   });
 });

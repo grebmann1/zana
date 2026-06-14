@@ -214,6 +214,21 @@ describe("manager — getTeamStatus", () => {
     expect(status!.status).toBe("running");
     expect(Array.isArray(status!.workers)).toBe(true);
   });
+
+  it("transitions a running team to 'completed' when the orchestrator agent has terminated", () => {
+    bootTeam("team-status-done");
+    // Orchestrator reports terminated → getTeamStatus must flip running→completed.
+    listAgentsSpy.mockReturnValue([
+      { id: "orch-team-status-done", parentAgentId: null, state: "terminated" },
+    ]);
+
+    const status = manager.getTeamStatus("team-status-done");
+    expect(status).not.toBeNull();
+    expect(status!.status).toBe("completed");
+
+    // The transition is persisted: a second query still reports completed.
+    expect(manager.getTeamStatus("team-status-done")!.status).toBe("completed");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

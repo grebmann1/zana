@@ -59,6 +59,15 @@ describe("handleModuleRoute()", () => {
   it("returns false for a well-formed path whose handler is not registered", () => {
     expect(loader.handleModuleRoute("/m/loader-test-mod/some-route", {}, {})).toBe(false);
   });
+
+  // The route regex (loader.ts line 546) requires a non-empty module-id segment
+  // — `([^/]+)`. A path with an empty id between the slashes ("/m//route") must
+  // NOT be treated as a module route, otherwise an empty moduleId could index
+  // into the route registry. Pins that guard, which the existing rejection
+  // cases (no trailing segment, non-/m/ prefix) leave untested.
+  it("returns false when the module-id segment is empty (/m//route)", () => {
+    expect(loader.handleModuleRoute("/m//some-route", {}, {})).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

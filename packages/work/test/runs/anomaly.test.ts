@@ -70,6 +70,20 @@ describe("detectAnomalies", () => {
     expect(result.anomalies).toEqual([]);
   });
 
+  it("flags wall-clock duration in the near-limit band and escalates at the cap", () => {
+    // 0.8 * 600_000 = 480_000ms → warn band, below the hard cap.
+    const warn = detectAnomalies({ exitCode: 0, durationMs: 480_000 }, LIMITS);
+    expect(warn.anomalies).toHaveLength(1);
+    expect(warn.anomalies[0]).toMatchObject({ kind: "near-limit", severity: "warn" });
+    expect(warn.anomalies[0].detail).toContain("480s");
+    expect(warn.severity).toBe("warn");
+
+    // Exactly at the cap → critical.
+    const critical = detectAnomalies({ exitCode: 0, durationMs: 600_000 }, LIMITS);
+    expect(critical.anomalies[0]).toMatchObject({ kind: "near-limit", severity: "critical" });
+    expect(critical.severity).toBe("critical");
+  });
+
   it("reports max severity across multiple anomalies", () => {
     const result = detectAnomalies(
       { exitCode: 1, costUsd: 10, durationMs: 5_000 },
