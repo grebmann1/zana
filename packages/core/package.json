@@ -7,7 +7,7 @@
     "zana-daemon": "./dist/bin/daemon.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.js",
     "start": "node dist/bin/daemon.js",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"

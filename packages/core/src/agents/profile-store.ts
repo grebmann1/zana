@@ -8,13 +8,25 @@ export function profilesDir() {
 }
 
 function builtInDir() {
-  // In production builds, profiles live next to dist/src/agents (i.e. ../profiles).
-  // In source-mode tests, profile-store.ts is at packages/core/src/agents and the
-  // built-in profiles live at packages/core/profiles (i.e. ../../profiles).
-  const distLocal = path.join(__dirname, "..", "profiles");
-  if (fs.existsSync(distLocal)) return distLocal;
-  const srcFallback = path.join(__dirname, "..", "..", "profiles");
-  return srcFallback;
+  // Built-in profiles are JSON assets that tsc does not emit; the build's
+  // copy-assets step lands them at dist/src/profiles. Resolution must survive
+  // three layouts:
+  //   - dist build: __dirname=dist/src/agents → ../profiles = dist/src/profiles
+  //   - source-mode tests: __dirname=src/agents → ../../profiles = <pkg>/profiles
+  //   - the package source profiles/ dir, as a last-resort net if the copy
+  //     step was skipped (so a stale/partial dist still finds personas).
+  // __dirname is dist/src/agents in a build, src/agents in source-mode tests.
+  const candidates = [
+    path.join(__dirname, "..", "profiles"),             // dist mode: dist/src/profiles (copy-assets target)
+    path.join(__dirname, "..", "..", "profiles"),       // source mode: <pkg>/profiles
+    path.join(__dirname, "..", "..", "..", "profiles"), // dist mode last-resort: <pkg>/profiles (source net)
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  // Nothing resolved — return the first candidate so callers get a stable path,
+  // but the empty-result warning in listProfiles() will fire.
+  return candidates[0];
 }
 
 function ensureDir(dir) {
@@ -26,6 +38,7 @@ export function listProfiles() {
 
   // Built-in profiles
   const builtIn = builtInDir();
+  let builtInCount = 0;
   if (fs.existsSync(builtIn)) {
     for (const file of fs.readdirSync(builtIn)) {
       if (!file.endsWith(".json")) continue;
@@ -34,10 +47,22 @@ export function listProfiles() {
         const profile = JSON.parse(raw);
         profile.builtIn = true;
         profiles.push(profile);
+        builtInCount++;
       } catch (err) {
         console.warn(`[profile-store] failed to load built-in profile ${file}:`, err.message || err);
       }
     }
+  }
+  if (builtInCount === 0) {
+    // No built-in personas resolved — every auto-spawn (code-reviewer,
+    // architect, …) will fail to find its profile. This is almost always a
+    // broken build artifact (copy-assets step skipped). Warn loudly rather
+    // than silently degrade.
+    console.warn(
+      `[profile-store] WARNING: 0 built-in profiles found at ${builtIn}. ` +
+      `Auto-spawned reviewers/workers will fail to resolve. ` +
+      `Run the core build so scripts/copy-assets.js populates dist/src/profiles.`,
+    );
   }
 
   // User profiles

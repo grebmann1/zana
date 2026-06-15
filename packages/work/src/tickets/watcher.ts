@@ -173,7 +173,12 @@ const DEFAULT_RULES = [
     promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = issues remain; ticket should go to rework with your findings as the reason.\n\nBe terse. Lead with the verdict reasoning, end with the VERDICT line.",
   },
   {
-    trigger: { status: "review", reviewPhase: "architecture" },
+    // The qa→architecture advance happens via updateReviewPhase(), which emits
+    // ticket:reviewPhaseChanged (status stays "review" throughout). Triggering
+    // on ticket:statusChanged here would never match — the only statusChanged
+    // into review auto-sets reviewPhase=qa, never architecture. Listen for the
+    // phase-change event so the architect actually spawns.
+    trigger: { event: "ticket:reviewPhaseChanged", reviewPhase: "architecture" },
     action: { spawnProfile: "architect" },
     promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = ticket is done.\nFAIL = architectural issues; ticket should go to rework.\n\nBe terse.",
   },

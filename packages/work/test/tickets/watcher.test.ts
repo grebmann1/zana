@@ -80,11 +80,15 @@ describe("applyVerdict — PASS in architecture phase → completeTicket", () =>
       spawnAgent: () => Promise.resolve({ agentId: "fake-arch-agent-1" }),
     });
 
-    bus.emit("ticket:statusChanged", {
+    // Real production sequence: a QA PASS advances the phase via
+    // updateReviewPhase, which mutates the ticket to architecture and emits
+    // ticket:reviewPhaseChanged (status stays "review"). That is the event the
+    // architect rule listens for.
+    bus.emit("ticket:reviewPhaseChanged", {
       ticketId: fakeTicket.id,
-      oldStatus: "in-progress",
-      newStatus: "review",
-      updatedBy: "test",
+      oldPhase: "qa",
+      newPhase: "architecture",
+      updatedBy: "ticket-watcher",
     });
     await new Promise((r) => setTimeout(r, 300));
 
