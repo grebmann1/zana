@@ -47,7 +47,7 @@ export const tickets: ToolDomain = {
     },
     {
       name: "zana_ticket_claim",
-      description: "Claim a ticket (assigns it to you and moves to in-progress). Works on backlog and rework tickets.",
+      description: "Claim a ticket (assigns it to you and moves to in-progress). Works on backlog and rework tickets. Refuses if the ticket has open blockedBy dependencies — those must reach done/cancelled first.",
       inputSchema: {
         type: "object",
         properties: {
@@ -55,6 +55,29 @@ export const tickets: ToolDomain = {
           agentName: { type: "string", description: "Optional human-readable name to record on the ticket (e.g. 'worker-4'). Defaults to ZANA_AGENT_NAME env or 'Agent'." },
         },
         required: ["ticketId"],
+      },
+    },
+    {
+      name: "zana_ticket_claim_next",
+      description:
+        "Claim the highest-priority ready ticket — a backlog/rework ticket whose blockedBy dependencies are all done/cancelled — ordered by priority then age. This is the dependency-aware dispatcher: call it in a loop to execute a ticket graph in the correct order. Returns { ok: false, reason: 'none_ready' } when nothing is currently dispatchable.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentName: { type: "string", description: "Optional human-readable name to record on the claimed ticket. Defaults to ZANA_AGENT_NAME env or 'Agent'." },
+          sprintId: { type: "string", description: "Restrict selection to a single sprint (optional)." },
+        },
+      },
+    },
+    {
+      name: "zana_ticket_list_ready",
+      description:
+        "List claimable tickets (backlog/rework with all blockedBy dependencies closed), ordered by the dispatch priority. Read-only — does not claim. Use to inspect what would run next.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sprintId: { type: "string", description: "Restrict to a single sprint (optional)." },
+        },
       },
     },
     {
@@ -200,6 +223,26 @@ export const tickets: ToolDomain = {
         agentName: args.agentName || env("ZANA_AGENT_NAME", "Agent"),
         profileId: process.env.ZANA_PROFILE_ID || null,
       }),
+    zana_ticket_claim_next: (args, { callCore }) =>
+      callCore("ticket_claim_next", {
+        agentId: env("ZANA_TERMINAL_ID", "agent"),
+        agentName: args.agentName || env("ZANA_AGENT_NAME", "Agent"),
+        profileId: process.env.ZANA_PROFILE_ID || null,
+        sprintId: args.sprintId,
+      }),
+    zana_ticket_list_ready: async (args, { callCore }) => {
+      const tickets = await callCore("ticket_list_ready", { sprintId: args.sprintId });
+      if (!Array.isArray(tickets)) return tickets;
+      return tickets.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        sprintId: t.sprintId,
+        blockedBy: t.blockedBy,
+        createdAt: t.createdAt,
+      }));
+    },
     zana_ticket_update: (args, { callCore }) =>
       callCore("ticket_update", {
         ticketId: args.ticketId,

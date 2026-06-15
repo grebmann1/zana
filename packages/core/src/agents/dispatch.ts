@@ -199,6 +199,14 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
     case "ticket_claim": {
       return _ticketService().claimTicket(params.ticketId, params.agentId, params.agentName, params.profileId);
     }
+    case "ticket_claim_next": {
+      return _ticketService().claimNextReady(params.agentId, params.agentName, params.profileId, {
+        sprintId: params.sprintId,
+      });
+    }
+    case "ticket_list_ready": {
+      return _ticketService().listReadyTickets({ sprintId: params.sprintId });
+    }
     case "ticket_update_status": {
       return _ticketService().updateStatus(params.ticketId, params.status, params.updatedBy);
     }

@@ -202,6 +202,33 @@ describe("probe-cache (T6-FU-2)", () => {
       expect(found).toBeNull();
     });
 
+    it("regularTtlMs=0 still serves a transient-failure entry via transientTtlMs", () => {
+      // The top-level disabled-cache guard is asymmetric: it only short-circuits
+      // when BOTH budgets are <= 0. So regularTtlMs=0 alone must NOT disable the
+      // cache — for a transient failure, effectiveTtl() selects transientTtlMs,
+      // so a fresh entry within that budget is a HIT. The existing suite covers
+      // the inverse (transientTtlMs=0 + structural live) and both-zero, but never
+      // this regular-off / transient-live arm for a transient kind.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const transientResult = fakeResult({
+        ok: false,
+        failures: [{ leg: "factual", kind: "rate_limit", reason: "429" } as any],
+      });
+      recordProbeResult("profA:modX", transientResult);
+
+      // Within transientTtl (30s) → hit, despite regularTtlMs being 0.
+      vi.setSystemTime(new Date("2026-01-01T00:00:20Z"));
+      let found = lookupProbeResult("profA:modX", { regularTtlMs: 0, transientTtlMs: 30_000 });
+      expect(found).not.toBeNull();
+      expect(found!.failures[0].kind).toBe("rate_limit");
+
+      // Past transientTtl → miss (regular budget can't rescue it; it's 0).
+      vi.setSystemTime(new Date("2026-01-01T00:00:35Z"));
+      found = lookupProbeResult("profA:modX", { regularTtlMs: 0, transientTtlMs: 30_000 });
+      expect(found).toBeNull();
+    });
+
     it("object-form ttl with BOTH budgets <= 0 disables the cache (early-return miss)", () => {
       // Guards the object-form arm of the top-level disabled-cache check in
       // lookupProbeResult: `ttl.regularTtlMs <= 0 && ttl.transientTtlMs <= 0`.
@@ -213,6 +240,23 @@ describe("probe-cache (T6-FU-2)", () => {
       recordProbeResult("profA:modX", fakeResult({ probeId: "fresh" }));
       const before = getProbeCacheStats().misses;
       const found = lookupProbeResult("profA:modX", { regularTtlMs: 0, transientTtlMs: 0 });
+      expect(found).toBeNull();
+      expect(getProbeCacheStats().misses).toBe(before + 1);
+    });
+
+    it("regularTtlMs=0 disables caching for an ok=true entry even when transientTtlMs is positive", () => {
+      // Complements "regularTtlMs=0 still serves a transient-failure entry":
+      // for that arm effectiveTtl() picks the (positive) transientTtlMs, so the
+      // transient entry is a HIT. Here the entry is ok=true, so effectiveTtl()
+      // resolves to regularTtlMs=0. The top-level disabled-cache guard does NOT
+      // trip (transientTtlMs is positive), so control reaches the PER-ENTRY
+      // second guard `if (effective <= 0 || ...)` in lookupProbeResult — which
+      // must short-circuit to a miss at t=0 (no timer advance needed). Pins that
+      // a 0 regular budget disables the cache for ok/structural entries despite
+      // a live transient budget — the asymmetric arm the suite leaves untested.
+      recordProbeResult("profA:modX", fakeResult({ ok: true, probeId: "fresh-ok" }));
+      const before = getProbeCacheStats().misses;
+      const found = lookupProbeResult("profA:modX", { regularTtlMs: 0, transientTtlMs: 30_000 });
       expect(found).toBeNull();
       expect(getProbeCacheStats().misses).toBe(before + 1);
     });

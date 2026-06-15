@@ -70,6 +70,34 @@ describe("computeOverview", () => {
     const events = [makeEvent("unknown:type"), makeEvent("agent:spawned", { agentId: "x" })];
     expect(computeOverview(events).eventCount).toBe(2);
   });
+
+  // Every test above isolates a single field. This pins the single-pass switch
+  // (stats-engine.ts) accumulating ALL counters at once from one interleaved
+  // stream — distinct agents (with a duplicate), only PostToolUse hooks counted,
+  // ticket created/completed tallies, and an unrelated event that touches no
+  // counter but still bumps eventCount. Guards against cross-case interference.
+  it("accumulates every counter simultaneously from a mixed, interleaved stream", () => {
+    const events = [
+      makeEvent("agent:spawned", { agentId: "a1" }),
+      makeEvent("ticket:created"),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse" }),
+      makeEvent("agent:hook", { hook_event_name: "PreToolUse" }), // not a tool call
+      makeEvent("agent:spawned", { agentId: "a2" }),
+      makeEvent("ticket:created"),
+      makeEvent("agent:spawned", { agentId: "a1" }), // duplicate agent
+      makeEvent("ticket:completed"),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse" }),
+      makeEvent("noise:event"), // affects only eventCount
+    ];
+    expect(computeOverview(events)).toEqual({
+      totalAgents: 2,
+      totalToolCalls: 2,
+      ticketsCreated: 2,
+      ticketsCompleted: 1,
+      ticketCompletionRate: 1 / 2,
+      eventCount: 10,
+    });
+  });
 });
 
 // ─── computeToolBreakdown ────────────────────────────────────────────────────
@@ -167,6 +195,31 @@ describe("computeAgentTimeline", () => {
       expect(b.count).toBeGreaterThanOrEqual(0);
     }
   });
+
+  // stats-engine.ts sets `end = Math.max(events[last].timestamp, Date.now())`,
+  // so the bucket loop runs from the first spawn up to *now* — not merely up to
+  // the last event. After every agent has terminated, the timeline must keep
+  // emitting trailing zero-count buckets out to the frozen clock. The existing
+  // tests freeze time but only `.find()` individual buckets; none pin the
+  // timeline EXTENT or that it extends past the last event to Date.now().
+  it("extends buckets to Date.now() with trailing zero-count buckets after all agents terminate", () => {
+    const bucketMs = 1000;
+    // FROZEN_NOW = 5000; last event at 1000 → end = max(1000, 5000) = 5000.
+    const events = [
+      { type: "agent:spawned",    payload: { agentId: "a1" }, timestamp: 0 },
+      { type: "agent:terminated", payload: { agentId: "a1" }, timestamp: 1000 },
+    ];
+    const buckets = computeAgentTimeline(events, bucketMs);
+    // start=0, end=5000, step=1000 → 6 buckets (inclusive of end).
+    expect(buckets.map((b: { ts: number; count: number }) => b)).toEqual([
+      { ts: 0, count: 1 },    // a1 active
+      { ts: 1000, count: 0 }, // a1 terminated
+      { ts: 2000, count: 0 }, // trailing — driven by Date.now(), not last event
+      { ts: 3000, count: 0 },
+      { ts: 4000, count: 0 },
+      { ts: 5000, count: 0 },
+    ]);
+  });
 });
 
 // ─── computeTicketFlow ───────────────────────────────────────────────────────
@@ -217,6 +270,28 @@ describe("computeThroughput", () => {
     expect(buckets[0]).toMatchObject({ ts: 0, count: 2 });
     // Bucket [1000, 2000): 1 call
     expect(buckets[1]).toMatchObject({ ts: 1000, count: 1 });
+  });
+
+  // An idle gap between tool calls must surface as zero-count intermediate
+  // buckets, not collapse the series — otherwise throughput charts would
+  // misrepresent quiet periods as contiguous activity. The loop runs
+  // `ts <= end` stepping by bucketMs from the first to the last tool event,
+  // so a 3000ms span at 1000ms buckets yields 4 buckets with the middle two
+  // empty. The existing suite only exercises back-to-back buckets, leaving
+  // this gap-preservation behavior untested.
+  it("emits zero-count buckets for idle gaps between tool calls", () => {
+    const bucketMs = 1000;
+    const events = [
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Read" }, 0),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Edit" }, 3000),
+    ];
+    const buckets = computeThroughput(events, bucketMs);
+    expect(buckets).toEqual([
+      { ts: 0, count: 1 },
+      { ts: 1000, count: 0 },
+      { ts: 2000, count: 0 },
+      { ts: 3000, count: 1 },
+    ]);
   });
 });
 

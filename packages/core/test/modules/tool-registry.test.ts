@@ -68,6 +68,33 @@ describe("listModuleTools", () => {
     registerModuleTools("beta", [makeTool("zana_beta_a", "beta")]);
     expect(listModuleTools()).toHaveLength(3);
   });
+
+  // listModuleTools builds a NEW array each call (`all.push(...tools)` in
+  // tool-registry.ts), so the returned list is a defensive copy: a caller that
+  // mutates it must NOT corrupt the internal registry. Every other test only
+  // reads the result, so a regression that returned an internal array
+  // reference (e.g. a single cached/flattened array) would pass them all while
+  // letting one consumer's `.push()`/`.pop()` leak into every other consumer.
+  // Pins both the fresh-instance and the isolation contract.
+  it("returns a fresh, caller-isolated array that cannot mutate the registry", () => {
+    registerModuleTools("alpha", [makeTool("zana_alpha_a", "alpha")]);
+
+    const first = listModuleTools();
+    expect(first).toHaveLength(1);
+
+    // Distinct instance on each call.
+    expect(listModuleTools()).not.toBe(first);
+
+    // Mutating the returned copy must not bleed into the registry.
+    first.push(makeTool("zana_alpha_injected", "alpha"));
+    first.pop();
+    first.pop();
+    expect(first).toHaveLength(0);
+
+    const afterMutation = listModuleTools();
+    expect(afterMutation).toHaveLength(1);
+    expect(afterMutation[0].name).toBe("zana_alpha_a");
+  });
 });
 
 describe("getModuleTool", () => {
@@ -84,6 +111,21 @@ describe("getModuleTool", () => {
 
   it("returns null when registry is empty", () => {
     expect(getModuleTool("anything")).toBeNull();
+  });
+
+  // getModuleTool iterates registry.values() across ALL modules, not just the
+  // first-registered one (tool-registry.ts line 50). Every other found-case
+  // test registers a single module, so a regression that only searched the
+  // first module would still pass. This pins the cross-module lookup: a tool
+  // owned by a module registered AFTER another must still resolve, and to the
+  // correct owning module.
+  it("finds a tool belonging to a module registered after an earlier one", () => {
+    registerModuleTools("alpha", [makeTool("zana_alpha_a", "alpha")]);
+    registerModuleTools("beta", [makeTool("zana_beta_b", "beta")]);
+    const found = getModuleTool("zana_beta_b");
+    expect(found).not.toBeNull();
+    expect(found.moduleId).toBe("beta");
+    expect(found.name).toBe("zana_beta_b");
   });
 });
 

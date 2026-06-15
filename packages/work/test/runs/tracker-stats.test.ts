@@ -142,6 +142,30 @@ describe("tracker — getRunTimeline", () => {
     expect(Array.isArray(result.throughput)).toBe(true);
   });
 
+  it("returns empty arrays when a DIFFERENT run is active (id-mismatch branch, not just null currentRun)", async () => {
+    // Guards the second half of `currentRun && currentRun.id === runId`. The
+    // other two empty-array cases both run with currentRun === null, so they
+    // only exercise the left operand. This one keeps a live current run whose
+    // events WOULD compute a non-empty timeline, then queries a different id —
+    // the id guard must short-circuit to the hardcoded empty fallback rather
+    // than leak the active run's timeline. A regression dropping the id check
+    // would return non-empty arrays here and fail this test.
+    const realCore = await vi.importActual("@zana-ai/core") as any;
+
+    tracker.init();
+    const run = tracker.startRun(makeRunArgs());
+    // Populate runEvents so the compute branch yields a non-empty timeline for
+    // the active run — makes the id-mismatch fallback observably different.
+    realCore.events.bus.emit("agent:spawned", { agentId: "a1", profileId: "researcher" });
+
+    // Sanity: the active run itself computes a non-empty timeline.
+    expect(tracker.getRunTimeline(run.id).agentTimeline.length).toBeGreaterThan(0);
+
+    // Querying a different id while that run is still current → empty fallback.
+    const result = tracker.getRunTimeline("a-different-active-run-id");
+    expect(result).toStrictEqual({ agentTimeline: [], ticketFlow: [], throughput: [] });
+  });
+
   it("returns empty arrays after the current run ends (different runId)", () => {
     const run = tracker.startRun(makeRunArgs());
     tracker.endRun(run.id);

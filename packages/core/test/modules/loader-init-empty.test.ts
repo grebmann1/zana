@@ -50,4 +50,27 @@ describe("loader init() lifecycle with zero discovered modules", () => {
   it("getModule() still returns null after a zero-module init()", () => {
     expect(loader.getModule("any-id-never-registered")).toBeNull();
   });
+
+  // Routes are registered only via buildContext().exposeRoute(), which runs
+  // per-module during the Phase-1 init loop. With zero discovered modules that
+  // loop never executes, so a zero-module init() must leave the HTTP route
+  // surface completely inert. The sibling loader.test.ts pins route rejection
+  // only in the pre-init state (it never calls init()); this asserts the same
+  // guard holds *after* a successful empty init — catching a regression where
+  // init() accidentally pre-registers any route handler.
+  it("registers no routes after a zero-module init() — route surface stays inert", async () => {
+    // init() already ran in the preceding tests (idempotent); ensure state.
+    await loader.init();
+
+    // Synchronous router: well-formed /m/<id>/<route> with no registered handler.
+    expect(loader.handleModuleRoute("/m/any-mod/some-route", {} as any, {} as any)).toBe(false);
+
+    // Async router: an unregistered route must short-circuit to false without
+    // touching req/res (no res.json injection, no body/query parsing).
+    const req = { method: "GET", url: "/m/any-mod/some-route" } as any;
+    const res = {} as any;
+    await expect(loader.handleRoute("any-mod", "/some-route", req, res)).resolves.toBe(false);
+    expect(res.json).toBeUndefined();
+    expect(req.query).toBeUndefined();
+  });
 });

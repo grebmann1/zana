@@ -147,6 +147,34 @@ describe("core.init()", { timeout: 30000 }, () => {
     }
   });
 
+  // core.ts:60-62 — init() creates the workspace directory when it is absent
+  // (`if (!fs.existsSync(resolvedWorkspace)) fs.mkdirSync(...)`). The other tests
+  // in this file all pre-create the workspace via mkdtempSync, so that branch is
+  // never exercised. Here the leaf workspace dir is deliberately left absent and
+  // we assert init() materializes it. The mkdirSync runs BEFORE the
+  // workspaceContext.isInitialized() guard, so this side effect is independent of
+  // the singleton's state and therefore order-independent across the suite.
+  it("creates the workspace directory when it does not yet exist", async () => {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-parent-"));
+    // Anchor project resolution at `parent` so resolveProjectDir does not walk
+    // up to /tmp/.zana (sandbox-blocked). The child workspace dir itself stays
+    // absent so init()'s mkdirSync branch is the thing under test.
+    fs.mkdirSync(path.join(parent, ".zana"), { recursive: true });
+    tmpDirs.push(parent);
+
+    const ws = path.join(parent, "nested", "workspace");
+    expect(fs.existsSync(ws)).toBe(false);
+
+    const result = await init({ workspace: ws, headless: false });
+    try {
+      // init() must have created the previously-absent workspace directory.
+      expect(fs.existsSync(ws)).toBe(true);
+      expect(fs.statSync(ws).isDirectory()).toBe(true);
+    } finally {
+      await result.shutdown();
+    }
+  });
+
   it("shutdown() emits ZANA_SHUTDOWN exactly once and is idempotent on repeat calls", async () => {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk

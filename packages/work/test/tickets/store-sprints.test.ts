@@ -215,6 +215,45 @@ describe("listSprints — hiveId → daemonId on-read migration", () => {
     // hiveId must be removed.
     expect((found as any).hiveId).toBeUndefined();
   });
+
+  it("persists the migrated sprint back to disk so hiveId is permanently rewritten", () => {
+    // The existing test pins the in-memory result. store.ts also writes the
+    // migrated sprint back to disk (best-effort) so the legacy field is fixed
+    // permanently — a future listSprints reads clean data and an external
+    // reader never sees hiveId again. This pins that on-disk side-effect, which
+    // a refactor dropping the writeFileSync would otherwise silently break.
+    const sprintsDir = getSprintsDir();
+    fs.mkdirSync(sprintsDir, { recursive: true });
+
+    const id = `S-legacy-persist-${uid()}`;
+    const now = new Date().toISOString();
+    const filePath = path.join(sprintsDir, `${id}.json`);
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify(
+        {
+          id,
+          name: "Legacy sprint",
+          status: "planning",
+          hiveId: "daemon-old",
+          ticketIds: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    // Trigger the on-read migration.
+    store.listSprints();
+
+    // Re-read the raw file from disk — the migration must have rewritten it.
+    const onDisk = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    expect(onDisk.daemonId).toBe("daemon-old");
+    expect(onDisk.hiveId).toBeUndefined();
+  });
 });
 
 // ── malformed files are skipped ────────────────────────────────────────────

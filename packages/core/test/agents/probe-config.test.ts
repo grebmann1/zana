@@ -56,6 +56,25 @@ describe("probe-config", () => {
     expect(getProbeConfig().probeCacheTtlMs).toBe(0);
   });
 
+  // setProbeConfig reassigns `active` to a NEW object ({...active, ...partial})
+  // rather than mutating in place, so a config snapshot captured via an earlier
+  // getProbeConfig() call is copy-on-write stable: a caller that grabbed the
+  // config before an update must NOT see the field change under it. Pins the
+  // snapshot-isolation contract the existing suite leaves untested.
+  it("does not retroactively mutate a config reference captured before setProbeConfig", () => {
+    const before = getProbeConfig();
+    expect(before.probeTimeoutMs).toBe(120000);
+
+    setProbeConfig({ probeTimeoutMs: 5000 });
+
+    // The earlier snapshot still reflects the pre-update value...
+    expect(before.probeTimeoutMs).toBe(120000);
+    // ...while a fresh read sees the new value, and the two are distinct objects.
+    const after = getProbeConfig();
+    expect(after.probeTimeoutMs).toBe(5000);
+    expect(after).not.toBe(before);
+  });
+
   // transientProbeCacheTtlMs of 0 means "skip cache for transient failures"
   // (the original FU-T2 behavior, per probe-config.ts). Mirrors the
   // probeCacheTtlMs "0 disables" guard above for the cost-sensitive transient

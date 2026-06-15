@@ -97,6 +97,20 @@ describe("buildInteractiveCommand", () => {
     expect(args[idx + 1] || "").not.toContain("--- TICKET LIFECYCLE ---");
   });
 
+  // ticketLifecyclePreamble (spawner.ts) skips two profile shapes:
+  // `id.includes("orchestrator")` OR `id === "swarm-master"`. The sibling test
+  // above covers only the substring "orchestrator" arm — the exact-match
+  // "swarm-master" arm is otherwise unpinned, so a regression dropping that
+  // OR-clause (e.g. collapsing to just the includes() check) would still pass
+  // every other test while wrongly handing the swarm master a worker-shaped
+  // ticket-lifecycle preamble. This pins the swarm-master skip.
+  it("the swarm-master profile does NOT get the lifecycle preamble", () => {
+    const { args } = buildInteractiveCommand({ id: "swarm-master", systemPrompt: "coordinate the swarm" });
+    const idx = args.indexOf("--append-system-prompt");
+    if (idx === -1) return; // no append block at all is also acceptable
+    expect(args[idx + 1] || "").not.toContain("--- TICKET LIFECYCLE ---");
+  });
+
   it("preserves a profile's existing appendSystemPrompt and concatenates the lifecycle block", () => {
     const { args } = buildInteractiveCommand({
       id: "backend-dev",

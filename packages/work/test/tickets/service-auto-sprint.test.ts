@@ -167,6 +167,32 @@ describe("createTicket — auto-sprint attachment", () => {
     expect(ticket.sprintId).toBeNull();
   });
 
+  it("E. resolves sprintId from the active sprint even when getSprint returns null (no saveSprint, no throw)", () => {
+    // Store-inconsistency branch: listSprints surfaces an active sprint, so the
+    // id is resolved onto the ticket, but getSprint(id) returns null (the record
+    // is missing/raced away). The `if (sprint)` guard at service.ts must keep the
+    // ticket creation intact: sprintId is still set, but saveSprint is skipped.
+    fakeDb.listSprints.mockReturnValue([{ id: "ghost-sprint", status: "active" }]);
+    fakeDb.getSprint.mockReturnValue(null);
+
+    const ticket = svc.createTicket({
+      title: "Resolved but sprint record missing",
+      description: undefined,
+      priority: undefined,
+      labels: undefined,
+      blockedBy: undefined,
+      sprintId: undefined,
+      createdBy: "system",
+    });
+
+    expect(ticket.error).toBeUndefined();
+    expect(ticket.id).toBeDefined();
+    // The id was resolved from listSprints, so it lands on the ticket...
+    expect(ticket.sprintId).toBe("ghost-sprint");
+    // ...but with no sprint record to update, saveSprint must never run.
+    expect(fakeDb.saveSprint).not.toHaveBeenCalled();
+  });
+
   it("explicit sprintId bypasses auto-detection entirely", () => {
     // Even when an active sprint exists, an explicit sprintId must be honoured.
     const autoSprint = seedSprint({ name: "Auto" });

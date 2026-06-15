@@ -75,6 +75,27 @@ describe("jsonSchema", () => {
     const r = jsonSchema(null).validate('{"a":1}');
     expect(r.pass).toBe(true);
   });
+
+  // jsonSchema carries its OWN markdown-fence extraction (builtins.ts line 10),
+  // separate from jsonParse's copy. The existing jsonSchema tests only feed
+  // bare JSON, so the fence-stripping branch — strip ```json … ``` BEFORE
+  // parsing and running the schema validator — is otherwise untested. Also
+  // pins that the parsed object is surfaced as parsedOutput on success.
+  it("strips a ```json markdown fence before parsing and schema validation", () => {
+    const seen: unknown[] = [];
+    const recordingSchema = {
+      validate: (v: unknown) => {
+        seen.push(v);
+        return { success: true };
+      },
+    };
+    const r = jsonSchema(recordingSchema).validate('```json\n{"k":"v"}\n```');
+    expect(r.pass).toBe(true);
+    expect((r as any).parsedOutput).toEqual({ k: "v" });
+    // The schema validator must receive the parsed object from inside the
+    // fence, not the raw fenced string.
+    expect(seen).toEqual([{ k: "v" }]);
+  });
 });
 
 // ---------------------------------------------------------------------------

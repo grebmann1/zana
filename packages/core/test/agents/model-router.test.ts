@@ -8,6 +8,18 @@ describe("model-router — selectModel", () => {
       .toBe("my-custom-model");
   });
 
+  // ── precedence: explicit override wins over the length fast path ─────────
+  // The `profileHints.model` override (model-router.ts line 14) is checked
+  // BEFORE the `len > 2000` Opus fast path (line 20). A user who pins an
+  // explicit model must keep it even for a huge prompt that would otherwise be
+  // auto-upgraded to OPUS. The existing override test only pins override-vs-
+  // keyword; this pins override-vs-length against a check-reordering regression.
+  it("respects an explicit model override even for a >2000-char prompt", () => {
+    const longPrompt = "x".repeat(2001);
+    expect(selectModel(longPrompt, { model: "my-custom-model" }))
+      .toBe("my-custom-model");
+  });
+
   // ── length-based fast path ──────────────────────────────────────────────
   it("returns OPUS for prompts longer than 2000 characters", () => {
     const longPrompt = "x".repeat(2001);
@@ -45,6 +57,18 @@ describe("model-router — selectModel", () => {
     expect(selectModel("DESIGN the system")).toBe(TIERS.OPUS);
   });
 
+  // ── Opus keyword is the full phrase "refactor across", not bare "refactor" ──
+  // model-router.ts lists "refactor across" (not "refactor") as an OPUS keyword
+  // and matches via substring `text.includes(kw)`. A plain single-file refactor
+  // request must therefore NOT be upgraded to the most expensive tier — it has
+  // no Opus/Haiku keyword and falls through to the SONNET default. Pins the
+  // cost invariant against a regression that splits the phrase into "refactor".
+  it("does NOT route a bare 'refactor' prompt to OPUS (only 'refactor across')", () => {
+    expect(selectModel("refactor this single file")).toBe(TIERS.SONNET);
+    // The full phrase still upgrades to OPUS.
+    expect(selectModel("refactor across the whole codebase")).toBe(TIERS.OPUS);
+  });
+
   // ── Haiku keyword matching (short prompt only) ──────────────────────────
   it.each(["list", "status", "check", "what is", "show"])(
     "returns HAIKU for a short prompt containing keyword '%s'",
@@ -56,6 +80,22 @@ describe("model-router — selectModel", () => {
   it("does NOT return HAIKU when prompt is >= 200 chars even with a haiku keyword", () => {
     const mediumPrompt = "list " + "a".repeat(200);
     expect(selectModel(mediumPrompt)).not.toBe(TIERS.HAIKU);
+  });
+
+  // ── exact length boundary of the `len < 200` HAIKU gate ─────────────────
+  // model-router.ts gates the cheap tier on `len < 200` (strict). The suite
+  // covers a 205-char prompt and tiny prompts but never the off-by-one edge.
+  // A 199-char Haiku-keyword prompt must downgrade to HAIKU; bumping it to
+  // exactly 200 must NOT (200 < 200 is false → falls through to SONNET).
+  // Pins the precise cost boundary against an accidental `<=` regression.
+  it("treats the 200-char HAIKU gate as strict (199 → HAIKU, 200 → not)", () => {
+    const at199 = "list" + "a".repeat(195); // len 199, contains "list"
+    const at200 = "list" + "a".repeat(196); // len 200, contains "list"
+    expect(at199.length).toBe(199);
+    expect(at200.length).toBe(200);
+    expect(selectModel(at199)).toBe(TIERS.HAIKU);
+    expect(selectModel(at200)).not.toBe(TIERS.HAIKU);
+    expect(selectModel(at200)).toBe(TIERS.SONNET);
   });
 
   // ── precedence: Opus keyword wins over Haiku keyword ────────────────────

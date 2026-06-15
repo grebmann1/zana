@@ -116,6 +116,24 @@ describe("getSprintBoard — unknown status is silently dropped", () => {
     const board = getSprintBoard(SPRINT_ID) as Record<string, any[]>;
     expect(Object.values(board).flat()).toHaveLength(0);
   });
+
+  it("drops a 'cancelled' ticket even though it is a valid status — the board has no cancelled column", () => {
+    // "cancelled" is a member of VALID_STATUSES (service.ts), yet the board
+    // object exposes only six columns and 'cancelled' is deliberately not one
+    // of them. So a legitimately cancelled ticket is silently dropped, not an
+    // error and not an extra column. This pins that real-status edge, which the
+    // fictional-status cases above do not exercise.
+    const doneId = seedTicket("done");
+    seedTicket("cancelled");
+
+    const board = getSprintBoard(SPRINT_ID) as Record<string, any[]>;
+    expect(board).not.toHaveProperty("cancelled");
+    expect(Object.keys(board)).toHaveLength(STANDARD_STATUSES.length);
+    // Only the done ticket survives; the cancelled one is dropped.
+    const allTickets = Object.values(board).flat();
+    expect(allTickets).toHaveLength(1);
+    expect(board.done[0].id).toBe(doneId);
+  });
 });
 
 // ── board shape invariant ─────────────────────────────────────────────────────

@@ -5,6 +5,47 @@ function _bus(): any { return require("@zana-ai/core").events.bus; }
 const VALID_STATUSES = ["backlog", "in-progress", "review", "rework", "blocked", "done", "cancelled"];
 const VALID_PRIORITIES = ["critical", "high", "medium", "low"];
 
+// Lower rank = dispatched first. Unknown priorities sort as "medium".
+const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+
+// A dependency stops blocking once it reaches a terminal status. A referenced
+// ticket that no longer exists is treated as resolved — blocking forever on a
+// deleted dependency would deadlock the dependent ticket.
+function isDependencyClosed(status) {
+  return status === "done" || status === "cancelled";
+}
+
+// Returns the subset of `ticket.blockedBy` that are still open (i.e. genuinely
+// blocking). Missing dependencies are dropped, not counted.
+export function getOpenBlockers(ticket) {
+  const deps = Array.isArray(ticket?.blockedBy) ? ticket.blockedBy : [];
+  const open: string[] = [];
+  for (const depId of deps) {
+    const dep = ticketStore.getTicket(depId);
+    if (!dep) continue;
+    if (!isDependencyClosed(dep.status)) open.push(depId);
+  }
+  return open;
+}
+
+// Detects whether pointing `ticketId`'s blockedBy at `newBlockedBy` would
+// introduce a cycle. Walks the dependency graph from each proposed blocker; if
+// the walk reaches `ticketId` itself, the edge would close a loop (including a
+// direct self-reference).
+function wouldCreateCycle(ticketId, newBlockedBy) {
+  const visited = new Set<string>();
+  const stack = [...newBlockedBy];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    if (cur === ticketId) return true;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    const dep = ticketStore.getTicket(cur);
+    if (dep && Array.isArray(dep.blockedBy)) stack.push(...dep.blockedBy);
+  }
+  return false;
+}
+
 const STATUS_TRANSITIONS = {
   "backlog": ["in-progress", "cancelled"],
   "in-progress": ["review", "done", "backlog", "cancelled"],
@@ -46,9 +87,23 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
     }
   }
 
+  const id = crypto.randomUUID();
+
+  // Reject a cycle at create time. A freshly minted id can't be referenced by
+  // any existing ticket yet, so the only loop expressible here is a direct
+  // self-reference (blockedBy contains this id) — which the caller can't
+  // construct without knowing the id. The check is kept for symmetry with
+  // updateTicket, where the real cycle protection lives. blockedBy is an
+  // arbitrary graph; a cycle would deadlock every ticket on the loop, since
+  // none can ever reach a terminal status to unblock the others.
+  const deps = Array.isArray(blockedBy) ? blockedBy : [];
+  if (deps.length > 0 && wouldCreateCycle(id, deps)) {
+    return { error: "blockedBy would create a dependency cycle" };
+  }
+
   const now = new Date().toISOString();
   const ticket = {
-    id: crypto.randomUUID(),
+    id,
     title,
     description: description || "",
     status: "backlog",
@@ -95,6 +150,17 @@ export function claimTicket(ticketId, agentId, agentName, profileId?) {
     return { error: `cannot claim ticket in status: ${ticket.status}` };
   }
 
+  // Dependency gate — a ticket is only claimable once every blockedBy
+  // dependency has reached a terminal status. This is what makes ordered
+  // execution a guarantee rather than convention.
+  const openBlockers = getOpenBlockers(ticket);
+  if (openBlockers.length > 0) {
+    return {
+      error: `ticket blocked by ${openBlockers.length} open ${openBlockers.length === 1 ? "dependency" : "dependencies"}: ${openBlockers.join(", ")}`,
+      blockedBy: openBlockers,
+    };
+  }
+
   const oldStatus = ticket.status;
   ticket.assigneeId = agentId;
   ticket.assigneeName = agentName || agentId;
@@ -108,6 +174,49 @@ export function claimTicket(ticketId, agentId, agentName, profileId?) {
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:claimed", { ticketId, agentId, agentName: ticket.assigneeName, profileId });
   return { ok: true, ticket };
+}
+
+// Returns claimable tickets (backlog/rework with all dependencies closed),
+// ordered by priority then age (oldest first). This is the dispatch order a
+// caller should walk to respect the dependency graph. Read-only.
+export function listReadyTickets(filter: any = {}) {
+  const candidates = [
+    ...ticketStore.listTickets({ status: "backlog" }),
+    ...ticketStore.listTickets({ status: "rework" }),
+  ];
+  const ready = candidates.filter((t) => {
+    if (filter.sprintId && t.sprintId !== filter.sprintId) return false;
+    return getOpenBlockers(t).length === 0;
+  });
+  ready.sort((a, b) => {
+    const ra = PRIORITY_RANK[a.priority] ?? PRIORITY_RANK.medium;
+    const rb = PRIORITY_RANK[b.priority] ?? PRIORITY_RANK.medium;
+    if (ra !== rb) return ra - rb;
+    // Stable tie-break: oldest first, so dependency roots created earlier win.
+    return String(a.createdAt).localeCompare(String(b.createdAt));
+  });
+  return ready;
+}
+
+// Pick the highest-priority ready ticket and claim it. Returns
+// { ok: false, reason: "none_ready" } when nothing is currently dispatchable
+// (everything is blocked, in-flight, or done).
+//
+// Ticket ops are not transactional, so select-then-claim is not atomic: under
+// concurrent dispatchers two callers can select the same head. claimTicket
+// re-runs both the status and dependency gates, so the loser of a race never
+// bypasses them — it just fails. We walk candidates in priority order and skip
+// any that another dispatcher claimed out from under us, so a lost race yields
+// the next ready ticket rather than an error.
+export function claimNextReady(agentId, agentName, profileId?, filter: any = {}) {
+  const ready = listReadyTickets(filter);
+  if (ready.length === 0) return { ok: false, reason: "none_ready" };
+  for (const candidate of ready) {
+    const res = claimTicket(candidate.id, agentId, agentName, profileId);
+    if (res.ok) return res;
+    // Lost the race (already in-progress) or deps closed in between — try next.
+  }
+  return { ok: false, reason: "none_ready" };
 }
 
 export function updateStatus(ticketId, newStatus, updatedBy) {
@@ -207,6 +316,14 @@ export function updateTicket(ticketId, fields, updatedBy) {
   if ("type" in fields) {
     if (!VALID_TYPES.includes(fields.type)) {
       return { error: `invalid type: ${fields.type}. Must be one of: ${VALID_TYPES.join(", ")}` };
+    }
+  }
+
+  // Reject blockedBy edits that would introduce a dependency cycle.
+  if ("blockedBy" in fields) {
+    const deps = Array.isArray(fields.blockedBy) ? fields.blockedBy : [];
+    if (deps.length > 0 && wouldCreateCycle(ticketId, deps)) {
+      return { error: "blockedBy would create a dependency cycle" };
     }
   }
 

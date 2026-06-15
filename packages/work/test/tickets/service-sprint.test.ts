@@ -251,3 +251,40 @@ describe("addTicketToSprint", () => {
     expect(fakeDb.saveSprint).toHaveBeenCalled();
   });
 });
+
+// A guard-rejected lifecycle transition must be a pure no-op on the store:
+// no saveSprint call, and the persisted status must be left untouched. The
+// existing tests only assert the returned `error`, so a regression that moved
+// the save above the guard (or mutated the sprint before returning) would slip
+// through. These lock the store-immutability invariant.
+describe("sprint lifecycle guard rejection is a store no-op", () => {
+  it("startSprint on an already-active sprint does not persist and keeps status active", () => {
+    const sprint = svc.createSprint({ name: "S", teamId: null, daemonId: null, ticketIds: [] });
+    svc.startSprint(sprint.id); // planning → active
+    vi.clearAllMocks();
+
+    const result = svc.startSprint(sprint.id) as any;
+
+    expect(result.error).toMatch(/cannot start sprint/);
+    expect(fakeDb.saveSprint).not.toHaveBeenCalled();
+    expect(fakeDb.getSprint(sprint.id).status).toBe("active");
+  });
+
+  it("endSprint on a planning sprint does not persist and keeps status planning", () => {
+    const sprint = svc.createSprint({ name: "S", teamId: null, daemonId: null, ticketIds: [] });
+    vi.clearAllMocks();
+
+    const result = svc.endSprint(sprint.id) as any;
+
+    expect(result.error).toMatch(/cannot end sprint/);
+    expect(fakeDb.saveSprint).not.toHaveBeenCalled();
+    expect(fakeDb.getSprint(sprint.id).status).toBe("planning");
+    expect(fakeDb.getSprint(sprint.id).endedAt).toBeNull();
+  });
+
+  it("startSprint/endSprint for an unknown id never touch the store", () => {
+    svc.startSprint("ghost");
+    svc.endSprint("ghost");
+    expect(fakeDb.saveSprint).not.toHaveBeenCalled();
+  });
+});

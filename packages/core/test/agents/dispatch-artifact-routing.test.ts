@@ -75,6 +75,27 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("handleOrchestratorCommand — artifact_create", () => {
+  it("forwards the payload (action stripped) to createArtifact and returns its result", async () => {
+    const created = { id: "art-9", kind: "doc" };
+    mockArtifacts.createArtifact.mockReturnValue(created);
+    const result = await call("artifact_create", { kind: "doc", content: "hello" });
+    expect(result).toBe(created);
+    // The switch strips `action` before delegating; only the payload reaches the store.
+    expect(mockArtifacts.createArtifact).toHaveBeenCalledWith({ kind: "doc", content: "hello" });
+  });
+});
+
+describe("handleOrchestratorCommand — artifact_list", () => {
+  it("forwards the filter payload to listArtifacts and returns its result verbatim", async () => {
+    const listing = [{ id: "art-1" }, { id: "art-2" }];
+    mockArtifacts.listArtifacts.mockReturnValue(listing);
+    const result = await call("artifact_list", { kind: "doc" });
+    expect(result).toBe(listing);
+    expect(mockArtifacts.listArtifacts).toHaveBeenCalledWith({ kind: "doc" });
+  });
+});
+
 describe("handleOrchestratorCommand — artifact_read", () => {
   it("returns a not-found error shape when the artifact is missing", async () => {
     mockArtifacts.getArtifact.mockReturnValue(undefined);

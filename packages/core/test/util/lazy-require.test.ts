@@ -40,6 +40,27 @@ describe("lazyRequire — string path overload", () => {
     // Proxy object exists before we touch it
     expect(proxy).toBeDefined();
   });
+
+  // The lazy-evaluation contract for the STRING branch is otherwise untested:
+  // the suite above only proves the getter overload defers resolution. Yet the
+  // whole reason this helper exists (break the core/work/extras require-cycle at
+  // load time) hinges on the string branch NOT calling require() until first
+  // property access — lazy-require.ts resolve() runs `require(target)` only
+  // inside a trap. A bad module path is the cleanest probe: constructing the
+  // proxy must NOT throw (require deferred), and the MODULE_NOT_FOUND must
+  // surface only when a property is actually touched. Pins that a regression
+  // eagerly resolving the string branch (re-introducing the cycle) is caught.
+  it("string-path overload defers require() until first access (bad path throws only on access)", () => {
+    let proxy: Record<string, unknown>;
+    // Construction must be side-effect-free even for an unresolvable module.
+    expect(() => {
+      proxy = lazyRequire<Record<string, unknown>>(
+        "definitely-not-a-real-module-zzz-9f3a",
+      );
+    }).not.toThrow();
+    // require() fires (and fails) only when a property is read through a trap.
+    expect(() => proxy!.anything).toThrow(/Cannot find module|definitely-not-a-real-module/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -113,6 +134,26 @@ describe("lazyRequire — getter overload", () => {
     expect(proxy.counter).toBe(0);
     obj.counter = 7;
     expect(proxy.counter).toBe(7); // re-reads from cached reference
+  });
+
+  // The resolution cache (lazy-require.ts `resolve()`) is shared across ALL
+  // four proxy traps — get / has / ownKeys / getOwnPropertyDescriptor each call
+  // the same memoized `resolve()`. The existing "exactly once" test only
+  // exercises repeated `get` access, so a regression where a non-`get` trap
+  // re-resolved (or used a separate cache) would pass every other test. This
+  // pins that touching the proxy through four different traps still resolves
+  // the underlying module exactly once.
+  it("resolves exactly once even across different trap types", () => {
+    const { getter, callCount } = fakeModule({ foo: 1 });
+    const proxy = lazyRequire<{ foo: number }>(getter);
+    expect(callCount()).toBe(0); // untouched
+
+    "foo" in proxy; // has trap
+    void proxy.foo; // get trap
+    Reflect.ownKeys(proxy); // ownKeys trap
+    Object.getOwnPropertyDescriptor(proxy, "foo"); // getOwnPropertyDescriptor trap
+
+    expect(callCount()).toBe(1);
   });
 
   it("getOwnPropertyDescriptor returns the underlying descriptor", () => {

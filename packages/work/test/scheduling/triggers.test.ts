@@ -43,6 +43,17 @@ describe("interval backend", () => {
     expect(() => intervalBackend.stop(null as any)).not.toThrow();
     expect(() => intervalBackend.stop(undefined as any)).not.toThrow();
   });
+
+  it("unrefs the timer so it never keeps the event loop alive", () => {
+    const fire = vi.fn();
+    const handle = intervalBackend.start("s4", 1000, fire);
+    // The comment in interval.ts promises the handle is unref'd; assert the
+    // returned timer is actually in the unref'd state so a lone schedule
+    // can't block process exit.
+    expect(typeof (handle as any).unref).toBe("function");
+    expect((handle as any).hasRef()).toBe(false);
+    intervalBackend.stop(handle);
+  });
 });
 
 describe("cron backend — validation", () => {

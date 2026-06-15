@@ -177,6 +177,28 @@ describe("startTeam", () => {
       expect.objectContaining({ cwd: "/from-fn" }),
     );
   });
+
+  // Line 34: `cwd || (getWorkspaceFn ? getWorkspaceFn() : process.env.HOME)`.
+  // With neither a cwd nor a getWorkspaceFn, the third branch must be taken and
+  // process.env.HOME used as the working directory. The existing tests cover the
+  // cwd and getWorkspaceFn branches but never this HOME fallback. HOME is set and
+  // restored locally so the test stays deterministic and leaks no global state.
+  it("falls back to process.env.HOME when neither cwd nor getWorkspaceFn is provided", () => {
+    const originalHome = process.env.HOME;
+    process.env.HOME = "/home/fallback";
+    try {
+      mockCheckSystemResources.mockReturnValue(null);
+      mockStartTeam.mockReturnValue({ ok: true });
+      startTeam({ teamId: "t1" });
+      expect(mockStartTeam).toHaveBeenCalledWith(
+        "t1",
+        expect.objectContaining({ cwd: "/home/fallback" }),
+      );
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+    }
+  });
 });
 
 // ── stopTeam ─────────────────────────────────────────────────────────────────

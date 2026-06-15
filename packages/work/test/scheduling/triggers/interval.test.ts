@@ -57,6 +57,22 @@ describe("interval.stop()", () => {
   it("is safe with undefined", () => {
     expect(() => interval.stop(undefined as any)).not.toThrow();
   });
+
+  it("is idempotent — a second stop() on the same handle does not throw or re-arm the timer", () => {
+    // A scheduler may stop a trigger more than once (e.g. an explicit shutdown
+    // racing the failure-breaker that already tore the trigger down). The
+    // second stop must be a safe no-op: no throw, and the timer stays stopped.
+    const fire = vi.fn();
+    const handle = interval.start("s-double-stop", 500, fire);
+    vi.advanceTimersByTime(500); // 1 fire
+    expect(fire).toHaveBeenCalledTimes(1);
+
+    interval.stop(handle);
+    expect(() => interval.stop(handle)).not.toThrow();
+
+    vi.advanceTimersByTime(2000); // still no further fires after the double stop
+    expect(fire).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ── kind constant ─────────────────────────────────────────────────────────────

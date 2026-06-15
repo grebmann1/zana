@@ -47,6 +47,17 @@ describe("validateSchedule — history.retain must be an integer", () => {
       issues.some((i) => i.level === "error" && i.field === "history.retain"),
     ).toBe(false);
   });
+
+  it("rejects a non-numeric retain (the typeof r !== 'number' guard)", () => {
+    // Distinct branch from the float / range guards: validateSchedule must
+    // reject a string retain outright. This pins the intentional contrast with
+    // resolveHistoryConfig, which silently falls back to the default for a
+    // non-numeric retain rather than surfacing an error.
+    const issues = validateSchedule({ ...valid(), history: { retain: "10" } as any });
+    expect(
+      issues.some((i) => i.level === "error" && i.field === "history.retain"),
+    ).toBe(true);
+  });
 });
 
 // ── resolveHistoryConfig — null / undefined / primitive schedule ───────────

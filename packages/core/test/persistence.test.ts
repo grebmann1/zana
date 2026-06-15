@@ -454,6 +454,40 @@ describe("recoverOrphanedAgents", () => {
     expect(resumable).toHaveLength(0);
     expect(lost).toHaveLength(1);
   });
+
+  // ── heterogeneous snapshot set partitioned in a single pass ─────────────────
+  // Every other case above feeds recoverOrphanedAgents() a single snapshot, so
+  // the loop's partitioning of a MIXED set (recoverOrphanedAgents, lines 213-230)
+  // is never exercised end-to-end: an already-terminated record is skipped, a
+  // live pid is re-adopted, a dead resumable headless worker goes to `resumable`,
+  // and a dead non-resumable agent goes to `lost` — all from one file, one call.
+  // This pins that the three buckets are populated independently and that the
+  // skipped/terminated snapshot leaks into none of them.
+  it("partitions a mixed snapshot set into adopted / resumable / lost in one pass", async () => {
+    writeSnapshotFile(persistDir, [
+      { id: "already-dead", state: "terminated", pid: process.pid }, // skipped entirely
+      { id: "alive", state: "running", pid: process.pid },           // → adopted
+      {
+        id: "crashed-resumable",
+        state: "running",
+        pid: DEAD_PID,
+        mode: "headless",
+        claudeSessionId: "sess-mix",
+        prompt: "resume me",
+      },                                                              // → resumable
+      { id: "crashed-lost", state: "running", pid: DEAD_PID, mode: "interactive" }, // → lost
+    ]);
+    const p = await loadPersistence();
+
+    const { adopted, lost, resumable } = p.recoverOrphanedAgents();
+
+    expect(adopted.map((a: { id: string }) => a.id)).toEqual(["alive"]);
+    expect(resumable.map((a: { id: string }) => a.id)).toEqual(["crashed-resumable"]);
+    expect(lost.map((a: { id: string }) => a.id)).toEqual(["crashed-lost"]);
+    // The terminated snapshot is filtered out of every bucket.
+    const allIds = [...adopted, ...resumable, ...lost].map((a: { id: string }) => a.id);
+    expect(allIds).not.toContain("already-dead");
+  });
 });
 
 // ── startPeriodicCompaction / stopPeriodicCompaction ──────────────────────────

@@ -24,7 +24,7 @@ import * as fs from "node:fs";
 
 const SERVER_PATH = path.resolve(
   __dirname,
-  "../../dist/src/mcp-server.js"
+  "../dist/src/mcp-server.js"
 );
 
 /** Read the first newline-terminated JSON-RPC line from the subprocess stdout. */
@@ -200,6 +200,46 @@ describe("mcp-server: unknown method handling", () => {
       expect(msg.error).toBeDefined();
       expect(msg.error.code).toBe(-32601);
       expect(msg.error.message).toContain("Method not found");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }, 8000);
+});
+
+describe("mcp-server: stdin buffer overflow guard", () => {
+  // The stdin reader caps the unframed buffer at 10 MB (MCP_MAX_BUFFER_BYTES).
+  // A client that streams a huge payload with no newline delimiter must not be
+  // allowed to grow the buffer unbounded — the server flushes the buffer and
+  // replies with JSON-RPC parse error -32700 (id: null). This guards against a
+  // memory-exhaustion DoS and is fully deterministic (no daemon, no network).
+  it("rejects an over-limit unframed payload with JSON-RPC error -32700", async () => {
+    if (!fs.existsSync(SERVER_PATH)) {
+      console.warn("[skip] dist/src/mcp-server.js not found — run npm run build first");
+      return;
+    }
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zana-mcp-overflow-test-"));
+    try {
+      const proc = spawnServer(tmpDir);
+
+      // The server replies and we SIGKILL it while the large payload is still
+      // flushing, so the remaining write hits a closed pipe (EPIPE). That is
+      // expected here — swallow it so it doesn't surface as an unhandled error.
+      proc.stdin!.on("error", () => {});
+
+      // 11 MB of non-newline bytes — exceeds the 10 MB cap before any line is
+      // ever completed, so the overflow branch fires instead of JSON.parse.
+      const oversized = "x".repeat(11 * 1024 * 1024);
+      proc.stdin!.write(oversized);
+
+      const rawLine = await readLine(proc);
+      proc.kill("SIGKILL");
+
+      const msg = JSON.parse(rawLine);
+      expect(msg.id).toBeNull();
+      expect(msg.error).toBeDefined();
+      expect(msg.error.code).toBe(-32700);
+      expect(msg.error.message).toContain("Buffer overflow");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

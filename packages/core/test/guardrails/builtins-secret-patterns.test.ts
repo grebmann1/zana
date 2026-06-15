@@ -103,6 +103,39 @@ describe("noSecrets — sk- false-positive avoidance", () => {
 });
 
 // ---------------------------------------------------------------------------
+// noSecrets — PEM private-key header, optional algorithm prefix
+//
+// The SECRET_PATTERNS entry is /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----/.
+// builtins.test.ts only exercises the "RSA " variant, so the OPTIONAL nature of
+// that prefix is unpinned: a regression that drops the `?` (making an algorithm
+// label mandatory) would still pass the RSA test while silently letting a bare
+// PKCS#8 "-----BEGIN PRIVATE KEY-----" header — the most common modern form —
+// leak through undetected. These pin every accepted variant plus the prefixless
+// case, with a negative control that a non-PEM "PRIVATE KEY" phrase is allowed.
+// ---------------------------------------------------------------------------
+describe("noSecrets — PEM private-key header variants", () => {
+  const guard = noSecrets();
+
+  it.each([
+    ["bare PKCS#8 (no algorithm prefix)", "-----BEGIN PRIVATE KEY-----\nMIIE..."],
+    ["RSA", "-----BEGIN RSA PRIVATE KEY-----\nMIIE..."],
+    ["EC", "-----BEGIN EC PRIVATE KEY-----\nMHcC..."],
+    ["DSA", "-----BEGIN DSA PRIVATE KEY-----\nMIIB..."],
+  ])("fails on a %s PEM private-key header", (_label, output) => {
+    const r = guard.validate(output);
+    expect(r.pass).toBe(false);
+    expect((r as any).feedback).toMatch(/secrets/i);
+  });
+
+  it("passes when 'PRIVATE KEY' appears without the PEM BEGIN header", () => {
+    // The pattern anchors on the full "-----BEGIN ... PRIVATE KEY-----" header,
+    // so prose mentioning a private key is not a false positive.
+    const r = guard.validate("Store your PRIVATE KEY in a secrets manager.");
+    expect(r.pass).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // containsPattern — default name when no description is provided
 // ---------------------------------------------------------------------------
 describe("containsPattern — default name", () => {

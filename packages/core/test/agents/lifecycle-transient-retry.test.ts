@@ -259,4 +259,19 @@ describe("resumeHeadlessAgent — boot crash recovery", () => {
     expect(newId).toBeNull();
     expect(children.length).toBe(0);
   });
+
+  it("returns null when the snapshot lacks a prompt (nothing to resume)", () => {
+    // The guard is `!claudeSessionId || !prompt` — a snapshot with a session
+    // id but no prompt is just as unresumable as one missing the session id,
+    // and must NOT spawn a child.
+    const newId = resumeHeadlessAgent({
+      id: "y",
+      profileId: "tester",
+      mode: "headless",
+      claudeSessionId: "sess-no-prompt",
+      // no prompt
+    });
+    expect(newId).toBeNull();
+    expect(children.length).toBe(0);
+  });
 });

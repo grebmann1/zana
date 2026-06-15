@@ -127,6 +127,15 @@ describe("parseJudgeOutput", () => {
     expect(r!.verdict).toBe("rework");
     expect(r!.rationale).toBe("You must address concern Z.");
   });
+
+  it("falls back to the whole output as rationale when only the VERDICT line is present", () => {
+    // Invariant (judge.ts): if nothing follows the VERDICT line, surface the
+    // full output as rationale so the audit trail is never empty.
+    const r = parseJudgeOutput("VERDICT: approve");
+    expect(r).not.toBeNull();
+    expect(r!.verdict).toBe("approve");
+    expect(r!.rationale).toBe("VERDICT: approve");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,5 +157,13 @@ describe("shouldJudge", () => {
 
   it("returns false when state is PROPOSED regardless of strategy", () => {
     expect(shouldJudge({ state: "PROPOSED", riskTag: "low" }, "judge")).toBe(false);
+  });
+
+  it("never auto-judges a high-risk deliberation even with a judge strategy", () => {
+    // Safety invariant (judge.ts): high-risk escalations ALWAYS go to a human,
+    // regardless of strategy. The riskTag='high' guard must short-circuit
+    // before the strategy check for both judge-enabling strategies.
+    expect(shouldJudge({ state: "ESCALATED", riskTag: "high" }, "judge")).toBe(false);
+    expect(shouldJudge({ state: "ESCALATED", riskTag: "high" }, "hybrid")).toBe(false);
   });
 });
