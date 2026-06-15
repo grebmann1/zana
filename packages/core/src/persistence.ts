@@ -90,6 +90,15 @@ export function snapshotAgents(agents) {
     lastAction: a.lastAction,
     result: a.result,
     parentAgentId: a.parentAgentId || null,
+    pid: a.pid ?? null,
+    // Resume bookkeeping — lets boot-time crash recovery re-spawn a dead
+    // headless worker via `claude --resume <sessionId>` instead of abandoning
+    // it. Only headless agents carry a usable claudeSessionId + prompt.
+    claudeSessionId: a.claudeSessionId || null,
+    prompt: a.prompt ?? null,
+    cwd: a.cwd ?? null,
+    model: a.model ?? null,
+    retryAttempts: a.retryAttempts ?? 0,
   }));
   fs.writeFileSync(AGENTS_FILE, JSON.stringify(data, null, 2), "utf8");
 }
@@ -195,15 +204,21 @@ function isProcessAlive(pid) {
 
 export function recoverOrphanedAgents() {
   const snapshots = recoverAgentSnapshots();
-  if (snapshots.length === 0) return { adopted: [], lost: [] };
+  if (snapshots.length === 0) return { adopted: [], lost: [], resumable: [] };
 
   const adopted = [];
   const lost = [];
+  const resumable = [];
 
   for (const agent of snapshots) {
     if (agent.state === "terminated") continue;
     if (agent.pid && isProcessAlive(agent.pid)) {
       adopted.push({ ...agent, recoveredState: "re-adopted" });
+    } else if (isResumable(agent)) {
+      // Dead process, but a headless worker whose claude conversation can be
+      // resumed from disk. The caller (core.init) re-spawns it via
+      // `claude --resume <claudeSessionId>` rather than abandoning the work.
+      resumable.push({ ...agent, recoveredState: "resumable" });
     } else {
       lost.push({
         ...agent,
@@ -214,6 +229,25 @@ export function recoverOrphanedAgents() {
     }
   }
 
-  return { adopted, lost };
+  return { adopted, lost, resumable };
+}
+
+// A snapshot is resumable when it was a headless worker that captured a claude
+// session id and still has the prompt/cwd needed to re-spawn. Interactive
+// agents (PTY-backed, human-driven) are never auto-resumed.
+//
+// Note: an agent that was parked in "retrying" when the daemon crashed also
+// lands here (it's headless with a session id). That's intentional — the
+// in-memory backoff timer died with the daemon, so resuming via --resume on
+// boot is how its work survives. resumeHeadlessAgent carries forward
+// retryAttempts so it doesn't get a fresh retry budget on every restart.
+function isResumable(agent) {
+  return (
+    agent.mode === "headless" &&
+    typeof agent.claudeSessionId === "string" &&
+    agent.claudeSessionId.length > 0 &&
+    typeof agent.prompt === "string" &&
+    agent.prompt.length > 0
+  );
 }
 

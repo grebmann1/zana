@@ -103,6 +103,13 @@ export function buildClaudeArgs(profile, options = {}) {
     args.push("--name", sanitizeArg(options.name || profile.displayName));
   }
 
+  // Resume an existing claude conversation (transient-error retry / crash
+  // recovery). Additive: omitted unless the caller passes a session id, so
+  // the default cold-start path is unchanged.
+  if (options.resumeSessionId) {
+    args.push("--resume", sanitizeArg(options.resumeSessionId));
+  }
+
   if (profile.systemPrompt) {
     args.push("--system-prompt", sanitizeArg(profile.systemPrompt));
   }

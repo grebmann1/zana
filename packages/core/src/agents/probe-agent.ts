@@ -50,55 +50,13 @@ export interface ProbeResult {
 // Re-export ProbeFailure types so consumers can import from agents/manager.
 export type { ProbeFailure, ProbeFailureKind } from "../events/deliberation-events";
 
-// FU-T3a-3 — classify a spawn-path error message into a typed retry-policy
-// bucket. T9 will key retry policy off this: transient (timeout/rate_limit/
-// transport) get retried with backoff; structural (auth/quota/misconfig)
-// escalate. Heuristic on err.message + err.code — real-world error shapes
-// vary, so we match on common substrings rather than exact codes. Anything
-// unrecognized falls through to "spawn" (legacy bucket) so the contract is
-// strictly additive: no message previously bucketed as "spawn" will
-// silently retarget unless it actually matches a more-specific pattern.
-//
-// Caveat for callers: the heuristics are intentionally generous (e.g.
-// "401" matches but so does "/v1/401-handler" — false-positive risk).
-// Real-world error shapes vary widely across SDKs; if T9 finds the
-// classifier mis-buckets a real failure, tighten the regex here. Exported
-// for unit testing.
-export function classifySpawnError(err: unknown): ProbeFailureKind {
-  const msg = (() => {
-    if (err == null) return "";
-    if (typeof err === "string") return err;
-    if (typeof err === "object") {
-      const anyErr = err as any;
-      const parts: string[] = [];
-      if (typeof anyErr.code === "string") parts.push(anyErr.code);
-      if (typeof anyErr.message === "string") parts.push(anyErr.message);
-      if (parts.length === 0) parts.push(String(err));
-      return parts.join(" ");
-    }
-    return String(err);
-  })();
-  if (!msg) return "spawn";
-
-  // Order matters: match the most specific buckets first. Auth before
-  // transport so "TLS 401 cert error" buckets to auth (the gateway rejected
-  // creds), not transport.
-  if (/\b401\b|\b403\b|unauthor|forbidden|invalid[\s._-]*token/i.test(msg)) {
-    return "auth";
-  }
-  if (/\b429\b|rate[\s._-]*limit|too[\s._-]*many[\s._-]*requests?/i.test(msg)) {
-    return "rate_limit";
-  }
-  if (/\b402\b|payment[\s._-]*required|quota|exhausted|usage[\s._-]*limit/i.test(msg)) {
-    return "quota";
-  }
-  if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|TLS|certificate|SSL/i.test(msg)) {
-    return "transport";
-  }
-  // Process-level: ENOENT (binary not found), EACCES (perm-denied on binary).
-  // Fall through to "spawn" anyway so the legacy bucket holds the line.
-  return "spawn";
-}
+// classifySpawnError moved to the dependency-free error-classifier.ts so it can
+// be shared with lifecycle.ts (the transient-error retry loop) without the
+// probe-agent → lifecycle import cycle. Imported for internal use AND
+// re-exported to preserve the existing public surface (manager.ts and tests
+// import it from here).
+import { classifySpawnError } from "./error-classifier";
+export { classifySpawnError, isTransientFailure } from "./error-classifier";
 
 // Truncate raw output captured for debugging. Bound is config-driven via
 // probe-config (default 1024); tests can override with setProbeConfig().

@@ -8,6 +8,8 @@
 
 import { buildInteractiveCommand, spawnHeadless } from "./spawner";
 import { selectModel } from "./model-router";
+import { classifySpawnError, isTransientFailure } from "./error-classifier";
+import type { ProbeFailureKind } from "./error-classifier";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 import * as persistence from "../persistence";
@@ -82,6 +84,51 @@ export function clearSpawnOverloadStreak(parentAgentId: string | null | undefine
 export function getSpawnThrottleStreakLimit() {
   const cfg = moduleConfig.get()?.system;
   return cfg?.spawnThrottleStreakLimit ?? 5;
+}
+
+// ── Transient-error retry policy ────────────────────────────────────────────
+// A headless worker that exits nonzero from a TRANSIENT failure (rate-limit /
+// 529 overload / network blip) is re-spawned with `--resume <sessionId>` after
+// a backoff, preserving its conversation. Structural failures (auth/quota/
+// misconfig) and exhausted attempts terminate as before. Mirrors the resilience
+// behavior in claude-unleashed's daemon (parks → backoff → `claude --resume`).
+//
+// Defaults: 3 attempts, 30s / 2m / 8m backoff. Tunable via system config.
+const DEFAULT_RETRY_MAX_ATTEMPTS = 3;
+const DEFAULT_RETRY_BACKOFF_MS = [30_000, 120_000, 480_000];
+
+export function getTransientRetryMaxAttempts(): number {
+  const cfg = moduleConfig.get()?.system;
+  const v = cfg?.transientRetryMaxAttempts;
+  return typeof v === "number" && v >= 0 ? v : DEFAULT_RETRY_MAX_ATTEMPTS;
+}
+
+export function getTransientRetryBackoffMs(attempt: number): number {
+  const cfg = moduleConfig.get()?.system;
+  const ladder = Array.isArray(cfg?.transientRetryBackoffMs) && cfg.transientRetryBackoffMs.length > 0
+    ? cfg.transientRetryBackoffMs
+    : DEFAULT_RETRY_BACKOFF_MS;
+  // Clamp to the last rung for attempts beyond the ladder length.
+  const idx = Math.min(attempt, ladder.length - 1);
+  const ms = ladder[idx];
+  return typeof ms === "number" && ms >= 0 ? ms : DEFAULT_RETRY_BACKOFF_MS[DEFAULT_RETRY_BACKOFF_MS.length - 1];
+}
+
+// Test seam: the backoff timer. Overridable so unit tests can fire the retry
+// synchronously instead of waiting 30s. Defaults to real setTimeout.
+let _retryScheduler: (fn: () => void, ms: number) => void = (fn, ms) => {
+  const t = setTimeout(fn, ms);
+  // Don't let a pending retry keep the daemon process alive on shutdown.
+  if (typeof (t as any).unref === "function") (t as any).unref();
+};
+export function _setRetryScheduler(fn: (cb: () => void, ms: number) => void) {
+  _retryScheduler = fn;
+}
+export function _resetRetryScheduler() {
+  _retryScheduler = (fn, ms) => {
+    const t = setTimeout(fn, ms);
+    if (typeof (t as any).unref === "function") (t as any).unref();
+  };
 }
 
 const agents = new Map<string, any>();
@@ -245,7 +292,13 @@ export function killAgent(agentId: string) {
         signalChildTree(child, "SIGKILL");
       }
     }, 5000);
-  } else if (agent.terminalId) {
+  } else if (agent.mode === "interactive" && agent.terminalId) {
+    // Only interactive agents are PTY-backed. A headless agent parked in
+    // "retrying" has childProcess=null and a zana-hl-* terminalId that was
+    // never a PTY — routing it here would load node-pty (throwing on a
+    // headless-only daemon) to kill a terminal that doesn't exist. The
+    // `agent.killed` flag set above is what actually cancels its pending
+    // retry (see maybeScheduleTransientRetry's guard).
     getPtyHost().killTerminal(agent.terminalId);
   }
 
@@ -350,15 +403,6 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
   });
   const routedProfile = profile.model ? profile : { ...profile, model: routedModel };
 
-  const child = spawnHeadless(routedProfile, {
-    name: `${profile.displayName} [${agentId.slice(0, 6)}]`,
-    cwd,
-    prompt: options.prompt,
-    terminalId,
-    profileId: profile.id,
-    multiTurn: options.multiTurn || false,
-  });
-
   const agent: any = {
     id: agentId,
     profileId: profile.id,
@@ -368,7 +412,7 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
     mode: "headless",
     state: "active",
     model: routedProfile.model || "default",
-    pid: child.pid,
+    pid: null,
     spawnedAt: Date.now(),
     lastActivity: Date.now(),
     toolsAllowed: profile.allowedTools?.length || null,
@@ -377,18 +421,132 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
     lastAction: "Running headless...",
     parentAgentId: options.parentAgentId || null,
     result: null,
+    // --- resume / retry bookkeeping ---
+    // claudeSessionId is populated from the stream-json init frame below; the
+    // prompt + cwd are retained so a transient-error retry or boot-time crash
+    // recovery can re-spawn this exact worker with `--resume`.
+    claudeSessionId: null,
+    prompt: options.prompt ?? null,
+    cwd,
+    retryAttempts: 0,
   };
 
-  agent.childProcess = child;
-
   agents.set(agentId, agent);
+
+  // Spawn (or re-spawn, on transient-error retry) the underlying claude child
+  // and attach all stream/exit monitors. Factored into launchHeadlessChild so a
+  // retry re-runs the exact same wiring against a fresh child, reusing the
+  // captured session id via `--resume`.
+  launchHeadlessChild(agent, routedProfile, options, { resume: false });
+
   notifyChange();
   bus.emit(EVENTS.AGENT_SPAWNED, { agentId, profileId: profile.id, mode: "headless" });
 
+  return { agentId, terminalId };
+}
+
+/**
+ * Boot-time crash recovery: re-spawn a headless worker that died when a
+ * previous daemon crashed, resuming its claude conversation via
+ * `--resume <claudeSessionId>`. Driven by persistence.recoverOrphanedAgents()'s
+ * "resumable" bucket (dead pid, headless, has session id + prompt).
+ *
+ * Rebuilds a fresh agent record from the snapshot (a new id — the dead one is
+ * gone) and relaunches with the captured session so the work continues instead
+ * of being abandoned. Returns the new agentId, or null if the snapshot lacks
+ * the data needed to resume.
+ */
+export function resumeHeadlessAgent(snapshot: any) {
+  if (!snapshot?.claudeSessionId || !snapshot?.prompt) return null;
+
+  const agentId = crypto.randomUUID();
+  const terminalId = snapshot.terminalId || `zana-hl-${agentId.slice(0, 8)}`;
+  const cwd = snapshot.cwd || process.env.HOME;
+  const routedProfile = {
+    id: snapshot.profileId,
+    displayName: snapshot.profileName || snapshot.profileId,
+    model: snapshot.model || undefined,
+  };
+  const options = { prompt: snapshot.prompt, cwd, terminalId, parentAgentId: snapshot.parentAgentId || null };
+
+  const agent: any = {
+    id: agentId,
+    profileId: snapshot.profileId,
+    profileName: snapshot.profileName || snapshot.profileId,
+    profileIcon: "🤖",
+    terminalId,
+    mode: "headless",
+    state: "active",
+    model: snapshot.model || "default",
+    pid: null,
+    spawnedAt: Date.now(),
+    lastActivity: Date.now(),
+    toolsAllowed: null,
+    toolsTotal: null,
+    tokenCount: 0,
+    lastAction: "Resuming after daemon restart...",
+    parentAgentId: snapshot.parentAgentId || null,
+    result: null,
+    claudeSessionId: snapshot.claudeSessionId,
+    prompt: snapshot.prompt,
+    cwd,
+    // Carry forward the prior retry count so a worker that crashed mid-retry
+    // doesn't get a fresh full budget on every daemon restart.
+    retryAttempts: snapshot.retryAttempts ?? 0,
+    resumedFromCrash: true,
+  };
+
+  agents.set(agentId, agent);
+  launchHeadlessChild(agent, routedProfile, options, { resume: true });
+  notifyChange();
+  bus.emit(EVENTS.AGENT_SPAWNED, { agentId, profileId: snapshot.profileId, mode: "headless", resumed: true });
+
+  return agentId;
+}
+
+// Spawn the claude child for a headless agent record and wire up stdout/stderr
+// parsing, the inactivity timeout, and the exit handler (which drives the
+// transient-error retry loop). Called once on initial spawn and again per
+// retry. On a retry, `opts.resume` is true and the agent's captured
+// `claudeSessionId` is passed through so the conversation is preserved.
+function launchHeadlessChild(
+  agent: any,
+  routedProfile: any,
+  options: any,
+  opts: { resume: boolean },
+) {
+  const agentId = agent.id;
+  const profileId = agent.profileId;
+
+  // On a `--resume` re-spawn the prior transcript (which already holds the
+  // original task and whatever progress was made before the transient failure)
+  // is replayed from disk. Re-sending the ORIGINAL prompt as the next turn
+  // would re-ask the whole task on top of that progress; instead send a short
+  // continuation nudge so the worker picks up where it left off. A cold spawn
+  // sends the real prompt as before.
+  const RESUME_NUDGE = "Continue the task from where you left off before the interruption.";
+  const child = spawnHeadless(routedProfile, {
+    name: `${agent.profileName} [${agentId.slice(0, 6)}]`,
+    cwd: agent.cwd,
+    prompt: opts.resume ? RESUME_NUDGE : options.prompt,
+    terminalId: agent.terminalId,
+    profileId,
+    multiTurn: options.multiTurn || false,
+    resumeSessionId: opts.resume ? agent.claudeSessionId || undefined : undefined,
+  });
+
+  agent.pid = child.pid;
+  agent.childProcess = child;
+  // Fresh stdout buffer per (re)spawn — a retry starts a new transcript.
   let outputBuffer = "";
-  // Expose raw stdout buffer on the agent record so probes (and other consumers)
-  // can fall back to it when stream-json parsing fails to populate `result`.
   agent.outputBuffer = "";
+  // The claude CLI writes API errors (429/529/transport) to STDERR, not the
+  // stream-json stdout. Accumulate it untruncated so the transient-error
+  // classifier at close time sees the real error text (agent.lastAction is
+  // only an 80-char stamp — too lossy to classify on). Bounded to avoid
+  // unbounded growth on a chatty stderr.
+  let stderrBuffer = "";
+  agent.stderrBuffer = "";
 
   child.stdout.on("data", (chunk: Buffer) => {
     const text = chunk.toString();
@@ -401,6 +559,17 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
     for (const line of lines) {
       try {
         const msg = JSON.parse(line);
+        // The first stream-json line is the init/system frame carrying the
+        // claude session id. Capture it so a transient-error retry (and
+        // boot-time crash recovery) can re-spawn this worker with
+        // `--resume <id>` and preserve the conversation. Older CLIs put it on
+        // the top-level `session_id`; tolerate both shapes.
+        if (agent.claudeSessionId == null) {
+          const sid = msg.session_id || msg.sessionId;
+          if (typeof sid === "string" && sid.length > 0) {
+            agent.claudeSessionId = sid;
+          }
+        }
         if (msg.type === "assistant" && msg.message?.content) {
           const textBlocks = msg.message.content.filter((b: any) => b.type === "text");
           if (textBlocks.length > 0) {
@@ -432,6 +601,10 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
 
   child.stderr.on("data", (chunk: Buffer) => {
     const text = chunk.toString();
+    // Keep the last ~8KB of stderr — enough to hold an API error message for
+    // transient-failure classification without growing without bound.
+    stderrBuffer = (stderrBuffer + text).slice(-8192);
+    agent.stderrBuffer = stderrBuffer;
     if (text.includes("error") || text.includes("Error")) {
       agent.lastAction = `Error: ${text.slice(0, 80)}`;
     }
@@ -459,7 +632,7 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
     agent.state = "error";
     agent.lastAction = `Spawn error: ${err.message}`;
     notifyChange();
-    emitTerminated(agentId, profile.id, "spawn-error", { error: err.message });
+    emitTerminated(agentId, profileId, "spawn-error", { error: err.message });
     const resilienceMod = require("../modules/loader").getModule?.("resilience");
     resilienceMod?.api?.recordFailure?.("agent-spawn");
   });
@@ -472,10 +645,20 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
       persistAgentRun(agent, code);
       return;
     }
+
+    // Transient-error retry: a nonzero exit whose captured output looks like a
+    // rate-limit / 529 overload / network blip is re-spawned with `--resume`
+    // after a backoff, preserving the conversation. Structural failures
+    // (auth/quota/misconfig) and exhausted attempts fall through to normal
+    // termination. Gated off by setting transientRetryMaxAttempts to 0.
+    if (code !== 0 && maybeScheduleTransientRetry(agent, routedProfile, options)) {
+      return; // parked in "retrying"; do NOT terminate or persist yet
+    }
+
     agent.state = code === 0 ? "terminated" : "errored";
     agent.lastAction = code === 0 ? "Completed" : `Exited (code ${code})`;
     notifyChange();
-    emitTerminated(agentId, profile.id, code === 0 ? "completed" : "errored", {
+    emitTerminated(agentId, profileId, code === 0 ? "completed" : "errored", {
       exitCode: code,
       output: agent.result || null,
     });
@@ -495,7 +678,7 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
         agent.anomalySeverity = verdict.severity;
         bus.emit(EVENTS.AGENT_ANOMALY, {
           agentId,
-          profileId: profile.id,
+          profileId,
           severity: verdict.severity,
           anomalies: verdict.anomalies,
         });
@@ -505,6 +688,60 @@ export function spawnHeadlessAgent(profile: any, options: any = {}) {
     }
     persistAgentRun(agent, code);
   });
+}
 
-  return { agentId, terminalId };
+// Decide whether a just-exited headless worker should be retried after a
+// transient failure, and if so park it in "retrying" and arm the backoff timer.
+// Returns true when a retry was scheduled (caller must NOT terminate), false
+// when the caller should proceed with normal termination.
+//
+// Retry requires ALL of:
+//   - a captured claudeSessionId (without it `--resume` can't preserve state)
+//   - the failure classifies as transient (rate_limit / transport / overload)
+//   - retryAttempts is below the configured ceiling
+function maybeScheduleTransientRetry(agent: any, routedProfile: any, options: any): boolean {
+  const maxAttempts = getTransientRetryMaxAttempts();
+  if (maxAttempts <= 0) return false;
+  if (agent.retryAttempts >= maxAttempts) return false;
+  if (!agent.claudeSessionId) return false;
+
+  // Classify on stderr FIRST (where the claude CLI writes API errors), then
+  // fall back to stdout and the lastAction stamp. Joined so a transient marker
+  // on either stream is seen even if the other holds unrelated narration.
+  const errText = [agent.stderrBuffer, agent.outputBuffer, agent.lastAction]
+    .filter((s: any) => typeof s === "string" && s.length > 0)
+    .join("\n");
+  const kind: ProbeFailureKind = classifySpawnError(errText);
+  if (!isTransientFailure(kind)) return false;
+
+  const attempt = agent.retryAttempts; // 0-based index into the backoff ladder
+  const delayMs = getTransientRetryBackoffMs(attempt);
+  agent.retryAttempts = attempt + 1;
+  agent.state = "retrying";
+  agent.lastFailureKind = kind;
+  agent.lastAction = `Transient ${kind} — retry ${agent.retryAttempts}/${maxAttempts} in ${Math.round(delayMs / 1000)}s`;
+  agent.childProcess = null;
+  agent.pid = null;
+  notifyChange();
+  bus.emit(EVENTS.AGENT_RETRYING, {
+    agentId: agent.id,
+    profileId: agent.profileId,
+    kind,
+    attempt: agent.retryAttempts,
+    maxAttempts,
+    delayMs,
+  });
+
+  _retryScheduler(() => {
+    const live = getAgent(agent.id);
+    // A kill (or any external terminal transition) during the backoff window
+    // cancels the retry — don't resurrect a worker the operator tore down.
+    if (!live || live.killed || live.state !== "retrying") return;
+    live.state = "active";
+    live.lastAction = `Resuming (attempt ${live.retryAttempts}/${maxAttempts})`;
+    notifyChange();
+    launchHeadlessChild(live, routedProfile, options, { resume: true });
+  }, delayMs);
+
+  return true;
 }

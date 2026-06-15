@@ -75,10 +75,29 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   pluginLoader.init();
   eventLog.init(resolvedWorkspace);
 
-  // Crash recovery: detect orphaned agents from previous run
-  const { adopted, lost } = persistence.recoverOrphanedAgents();
-  if (adopted.length > 0 || lost.length > 0) {
-    process.stderr.write(`[core] crash recovery: ${adopted.length} re-adopted, ${lost.length} lost\n`);
+  // Crash recovery: detect orphaned agents from previous run. Live processes
+  // are re-adopted; dead-but-resumable headless workers (captured claude
+  // session id + prompt) are re-spawned via `--resume` so their work survives a
+  // daemon crash; the rest are marked lost.
+  const { adopted, lost, resumable = [] } = persistence.recoverOrphanedAgents();
+  let resumedCount = 0;
+  for (const snapshot of resumable) {
+    try {
+      const newId = agentManager.resumeHeadlessAgent(snapshot);
+      if (newId) resumedCount++;
+      else {
+        // Couldn't resume after all — treat as lost so it isn't silently dropped.
+        bus.emit("agent:terminated", { agentId: snapshot.id, reason: "daemon-restart" });
+      }
+    } catch (err: any) {
+      process.stderr.write(`[core] resume failed for ${snapshot.id}: ${err?.message || err}\n`);
+      bus.emit("agent:terminated", { agentId: snapshot.id, reason: "daemon-restart" });
+    }
+  }
+  if (adopted.length > 0 || lost.length > 0 || resumedCount > 0) {
+    process.stderr.write(
+      `[core] crash recovery: ${adopted.length} re-adopted, ${resumedCount} resumed, ${lost.length} lost\n`,
+    );
     for (const agent of lost) {
       bus.emit("agent:terminated", { agentId: agent.id, reason: "daemon-restart" });
     }

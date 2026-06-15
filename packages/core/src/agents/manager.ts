@@ -15,6 +15,7 @@ export {
   // Lifecycle: spawn/kill/status + change listeners
   spawnInteractive,
   spawnHeadlessAgent,
+  resumeHeadlessAgent,
   killAgent,
   getAgent,
   listAgents,

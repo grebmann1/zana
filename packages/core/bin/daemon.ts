@@ -204,6 +204,10 @@ if (configIdx !== -1) {
     initTimeout: { type: "integer", default: 10000 },
     suspendTimeout: { type: "integer", default: 5000 },
     hotReload: { type: "boolean", default: false },
+    // Transient-error retry ceiling for headless workers (0 disables retries).
+    // The backoff ladder (transientRetryBackoffMs) is an array — not settable
+    // via this scalar CLI, edit config.json directly to tune it.
+    transientRetryMaxAttempts: { type: "integer", default: 3 },
   };
 
   function discoverSchemas() {

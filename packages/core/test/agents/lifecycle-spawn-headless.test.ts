@@ -90,6 +90,21 @@ describe("spawnHeadlessAgent — registration", () => {
     expect(agent.model).toBe("claude-haiku-routed");
   });
 
+  // Complementary to the routed-model assertion above: when the profile
+  // carries an explicit `model`, the 3-tier router MUST be bypassed
+  // (lifecycle.ts: `profile.model ? profile : {...profile, model: routedModel}`).
+  // The mocked selectModel always returns "claude-haiku-routed", so an explicit
+  // model surviving onto the agent record proves routing was skipped — guarding
+  // against a regression that would silently downgrade a caller-pinned model.
+  it("bypasses model routing when the profile pins an explicit model", () => {
+    const pinnedProfile = { ...PROFILE, model: "claude-opus-explicit" };
+    const { agentId } = spawnHeadlessAgent(pinnedProfile, { prompt: "do a thing" });
+
+    const agent = getAgent(agentId);
+    expect(agent.model).toBe("claude-opus-explicit");
+    expect(agent.model).not.toBe("claude-haiku-routed");
+  });
+
   it("emits AGENT_SPAWNED on the bus with headless mode", () => {
     const seen: any[] = [];
     const handler = (p: any) => seen.push(p);
@@ -181,5 +196,60 @@ describe("spawnHeadlessAgent — stdout stream-json parsing", () => {
       lastChild.stdout.emit("data", Buffer.from("progress... 50%\nnot json\n"));
     }).not.toThrow();
     expect(getAgent(agentId).result).toBeNull();
+  });
+});
+
+describe("spawnHeadlessAgent — claude session id capture", () => {
+  let agentId: string;
+  beforeEach(() => {
+    ({ agentId } = spawnHeadlessAgent(PROFILE, { prompt: "x" }));
+  });
+
+  it("starts with claudeSessionId null and retains prompt + cwd for resume", () => {
+    const agent = getAgent(agentId);
+    expect(agent.claudeSessionId).toBeNull();
+    expect(agent.prompt).toBe("x");
+    expect(typeof agent.cwd).toBe("string");
+    expect(agent.retryAttempts).toBe(0);
+  });
+
+  it("captures session_id from the init/system frame", () => {
+    lastChild.stdout.emit(
+      "data",
+      Buffer.from(
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "sess-abc-123",
+        }) + "\n",
+      ),
+    );
+    expect(getAgent(agentId).claudeSessionId).toBe("sess-abc-123");
+  });
+
+  it("tolerates the legacy top-level sessionId shape", () => {
+    lastChild.stdout.emit(
+      "data",
+      Buffer.from(JSON.stringify({ sessionId: "sess-legacy-9" }) + "\n"),
+    );
+    expect(getAgent(agentId).claudeSessionId).toBe("sess-legacy-9");
+  });
+
+  it("does not overwrite a captured session id with a later frame", () => {
+    const emit = (obj: any) =>
+      lastChild.stdout.emit("data", Buffer.from(JSON.stringify(obj) + "\n"));
+    emit({ type: "system", subtype: "init", session_id: "first" });
+    // A later frame that happens to carry a different session_id must not clobber.
+    emit({ type: "system", session_id: "second" });
+    expect(getAgent(agentId).claudeSessionId).toBe("first");
+  });
+
+  it("ignores empty/non-string session ids", () => {
+    const emit = (obj: any) =>
+      lastChild.stdout.emit("data", Buffer.from(JSON.stringify(obj) + "\n"));
+    emit({ type: "system", session_id: "" });
+    expect(getAgent(agentId).claudeSessionId).toBeNull();
+    emit({ type: "system", session_id: 42 });
+    expect(getAgent(agentId).claudeSessionId).toBeNull();
   });
 });

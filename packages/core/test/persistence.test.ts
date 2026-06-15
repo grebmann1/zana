@@ -94,6 +94,32 @@ describe("recoverInboxes", () => {
     const result = p.recoverInboxes();
     expect(result.get("agent-X")).toEqual([{ type: "ok" }]);
   });
+
+  it("compacts the on-disk file to only surviving messages as a recovery side effect", async () => {
+    const p = await loadPersistence();
+    // 4 appended lines: two messages, a drain (which supersedes them), then one
+    // post-drain message. Only the post-drain message survives.
+    p.persistInboxMessage("agent-A", { type: "msg1" });
+    p.persistInboxMessage("agent-A", { type: "msg2" });
+    p.persistInboxDrain("agent-A");
+    p.persistInboxMessage("agent-A", { type: "msg3" });
+
+    const inboxFile = path.join(persistDir, "inboxes.ndjson");
+    expect(fs.readFileSync(inboxFile, "utf8").split("\n").filter(Boolean)).toHaveLength(4);
+
+    p.recoverInboxes();
+
+    // recoverInboxes() rewrites the file from current state: one line for the
+    // single surviving message, with no drain markers or superseded history.
+    const lines = fs.readFileSync(inboxFile, "utf8").split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    const entry = JSON.parse(lines[0]);
+    expect(entry).toMatchObject({ agentId: "agent-A", msg: { type: "msg3" } });
+    expect(entry.drained).toBeUndefined();
+
+    // A second recovery from the compacted file yields the same state (idempotent).
+    expect(p.recoverInboxes().get("agent-A")).toEqual([{ type: "msg3" }]);
+  });
 });
 
 // ── compactInboxFile ──────────────────────────────────────────────────────────
@@ -166,6 +192,66 @@ describe("snapshotAgents + recoverAgentSnapshots", () => {
     expect(result).toEqual([]);
   });
 
+  it("defaults retryAttempts to 0 when absent but round-trips the resume-bookkeeping fields when present", async () => {
+    // snapshotAgents normalizes the resume bookkeeping (claudeSessionId, prompt,
+    // cwd, model, retryAttempts) so boot-time recovery can re-spawn a headless
+    // worker via `claude --resume`. The retryAttempts default of 0 — and its
+    // faithful round-trip when set — guards the documented invariant that a
+    // resumed worker does NOT get a fresh retry budget on every restart.
+    const p = await loadPersistence();
+
+    const withRetries = {
+      id: "resumable-1",
+      profileId: "p",
+      profileName: "worker",
+      terminalId: "t",
+      mode: "headless",
+      state: "retrying",
+      spawnedAt: "",
+      lastActivity: "",
+      lastAction: null,
+      result: null,
+      claudeSessionId: "sess-1",
+      prompt: "resume the migration",
+      cwd: "/tmp/work",
+      model: "sonnet",
+      retryAttempts: 2,
+    };
+    const noRetries = {
+      id: "fresh-1",
+      profileId: "p",
+      profileName: "worker",
+      terminalId: "t",
+      mode: "headless",
+      state: "running",
+      spawnedAt: "",
+      lastActivity: "",
+      lastAction: null,
+      result: null,
+      // retryAttempts intentionally omitted → must default to 0, not undefined
+    };
+
+    p.snapshotAgents([withRetries, noRetries]);
+    const recovered = p.recoverAgentSnapshots();
+
+    const a = recovered.find((r: { id: string }) => r.id === "resumable-1");
+    expect(a).toMatchObject({
+      retryAttempts: 2,
+      claudeSessionId: "sess-1",
+      prompt: "resume the migration",
+      cwd: "/tmp/work",
+      model: "sonnet",
+    });
+
+    const b = recovered.find((r: { id: string }) => r.id === "fresh-1");
+    expect(b.retryAttempts).toBe(0);
+    // Missing optional resume fields are normalized to null, never undefined.
+    expect(b.claudeSessionId).toBeNull();
+    expect(b.prompt).toBeNull();
+    expect(b.cwd).toBeNull();
+    expect(b.model).toBeNull();
+  });
+
   it("omits parentAgentId when undefined on the source agent", async () => {
     const p = await loadPersistence();
     const agent = {
@@ -219,6 +305,28 @@ describe("persistChannelMessage + recoverChannels", () => {
     expect(channels).toBeInstanceOf(Map);
     expect(channels.size).toBe(0);
   });
+
+  it("skips malformed NDJSON lines and omits channels with no valid messages", async () => {
+    const p = await loadPersistence();
+    const channelsDir = path.join(persistDir, "channels");
+    fs.mkdirSync(channelsDir, { recursive: true });
+
+    // "general" has a mix of valid + malformed lines → only valid survive.
+    fs.writeFileSync(
+      path.join(channelsDir, "general.ndjson"),
+      'not-json\n{"text":"ok"}\n{bad}\n{"text":"also-ok"}\n',
+      "utf8"
+    );
+    // "junk" has only malformed lines → the messages.length>0 guard omits it.
+    fs.writeFileSync(path.join(channelsDir, "junk.ndjson"), "garbage\n{nope}\n", "utf8");
+    // Non-NDJSON files are ignored entirely.
+    fs.writeFileSync(path.join(channelsDir, "README.txt"), "ignore me", "utf8");
+
+    const channels = p.recoverChannels();
+    expect(channels.get("general")).toEqual([{ text: "ok" }, { text: "also-ok" }]);
+    expect(channels.has("junk")).toBe(false);
+    expect(channels.has("README")).toBe(false);
+  });
 });
 
 // ── recoverOrphanedAgents ─────────────────────────────────────────────────────
@@ -236,9 +344,9 @@ function writeSnapshotFile(dir: string, agents: unknown[]): void {
 }
 
 describe("recoverOrphanedAgents", () => {
-  it("returns empty adopted/lost arrays when no snapshot file exists", async () => {
+  it("returns empty adopted/lost/resumable arrays when no snapshot file exists", async () => {
     const p = await loadPersistence();
-    expect(p.recoverOrphanedAgents()).toEqual({ adopted: [], lost: [] });
+    expect(p.recoverOrphanedAgents()).toEqual({ adopted: [], lost: [], resumable: [] });
   });
 
   it("re-adopts a snapshot whose process is still alive", async () => {
@@ -270,6 +378,81 @@ describe("recoverOrphanedAgents", () => {
     const { adopted, lost } = p.recoverOrphanedAgents();
     expect(adopted).toHaveLength(0);
     expect(lost).toHaveLength(0);
+  });
+
+  it("buckets a dead headless worker with a session id + prompt as resumable, not lost", async () => {
+    writeSnapshotFile(persistDir, [{
+      id: "crashed",
+      state: "running",
+      pid: DEAD_PID,
+      mode: "headless",
+      claudeSessionId: "sess-resume-1",
+      prompt: "finish the migration",
+      cwd: "/tmp/work",
+    }]);
+    const p = await loadPersistence();
+
+    const { adopted, lost, resumable } = p.recoverOrphanedAgents();
+    expect(adopted).toHaveLength(0);
+    expect(lost).toHaveLength(0);
+    expect(resumable).toHaveLength(1);
+    expect(resumable[0]).toMatchObject({
+      id: "crashed",
+      recoveredState: "resumable",
+      claudeSessionId: "sess-resume-1",
+    });
+  });
+
+  it("a dead headless worker WITHOUT a session id is lost, not resumable", async () => {
+    writeSnapshotFile(persistDir, [{
+      id: "no-session",
+      state: "running",
+      pid: DEAD_PID,
+      mode: "headless",
+      prompt: "do work",
+      // no claudeSessionId → cannot --resume
+    }]);
+    const p = await loadPersistence();
+
+    const { lost, resumable } = p.recoverOrphanedAgents();
+    expect(resumable).toHaveLength(0);
+    expect(lost).toHaveLength(1);
+    expect(lost[0]).toMatchObject({ id: "no-session", state: "terminated" });
+  });
+
+  it("a dead headless worker WITH a session id but no prompt is lost, not resumable", async () => {
+    // isResumable requires BOTH a session id AND a non-empty prompt — without a
+    // prompt there is nothing to re-feed `claude --resume`, so it must be lost.
+    writeSnapshotFile(persistDir, [{
+      id: "no-prompt",
+      state: "running",
+      pid: DEAD_PID,
+      mode: "headless",
+      claudeSessionId: "sess-no-prompt",
+      // no prompt → cannot re-spawn the work
+    }]);
+    const p = await loadPersistence();
+
+    const { lost, resumable } = p.recoverOrphanedAgents();
+    expect(resumable).toHaveLength(0);
+    expect(lost).toHaveLength(1);
+    expect(lost[0]).toMatchObject({ id: "no-prompt", state: "terminated" });
+  });
+
+  it("a dead INTERACTIVE agent is never resumed even with a session id", async () => {
+    writeSnapshotFile(persistDir, [{
+      id: "interactive",
+      state: "running",
+      pid: DEAD_PID,
+      mode: "interactive",
+      claudeSessionId: "sess-x",
+      prompt: "x",
+    }]);
+    const p = await loadPersistence();
+
+    const { lost, resumable } = p.recoverOrphanedAgents();
+    expect(resumable).toHaveLength(0);
+    expect(lost).toHaveLength(1);
   });
 });
 

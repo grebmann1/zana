@@ -89,4 +89,27 @@ describe("spawnHeadless — argv assembly", () => {
     spawnHeadless({ ...PROFILE, permissionMode: "plan" }, { prompt: "x" });
     expect(pairAfter(lastArgs(), "--permission-mode")).toBe("plan");
   });
+
+  it("omits --resume by default (cold start)", () => {
+    spawnHeadless(PROFILE, { prompt: "x" });
+    expect(lastArgs()).not.toContain("--resume");
+  });
+
+  it("emits --resume <sessionId> when a resume id is supplied", () => {
+    spawnHeadless(PROFILE, { prompt: "x", resumeSessionId: "sess-xyz-7" });
+    expect(pairAfter(lastArgs(), "--resume")).toBe("sess-xyz-7");
+  });
+
+  it("--resume precedes the trailing -p prompt in the real arg vector", () => {
+    // Pins the actual argv ordering the retry path produces: `claude ...
+    // --resume <id> ... -p <prompt>`. The resume id must come before the
+    // positional prompt block, and both must be present.
+    spawnHeadless(PROFILE, { prompt: "continue please", resumeSessionId: "sess-9" });
+    const args = lastArgs();
+    const resumeIdx = args.indexOf("--resume");
+    const pIdx = args.lastIndexOf("-p");
+    expect(resumeIdx).toBeGreaterThanOrEqual(0);
+    expect(pIdx).toBeGreaterThan(resumeIdx);
+    expect(args[args.length - 1]).toBe("continue please");
+  });
 });

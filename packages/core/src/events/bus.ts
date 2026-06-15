@@ -10,6 +10,7 @@ export const EVENTS = {
   AGENT_STATUS_CHANGED: "agent:statusChanged",
   AGENT_PROBED: "agent:probed",
   AGENT_ANOMALY: "agent:anomaly",
+  AGENT_RETRYING: "agent:retrying",
   TEAM_STARTED: "team:started",
   TEAM_STOPPED: "team:stopped",
   TEAM_WORKER_SPAWNED: "team:workerSpawned",
