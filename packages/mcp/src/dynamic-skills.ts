@@ -17,6 +17,24 @@ export interface ToolSkill {
   schema: any;      // MCP tool schema published to `tools/list`
 }
 
+// A tool-type skill publishes its `toolSchema` straight into `tools/list`.
+// The MCP client (Claude Code) validates every entry with Zod and rejects the
+// ENTIRE batch if any one is malformed — so a single bad skill file silently
+// nukes the whole tool surface. The skills dir is global (`~/.zana/skills`),
+// shared across every workspace, which makes one stray fixture a host-wide
+// outage. Validate at this boundary: a skill missing `name` or `inputSchema`
+// is skipped with a named warning rather than poisoning the served list.
+export function isValidToolSchema(schema: any): boolean {
+  return (
+    !!schema &&
+    typeof schema === "object" &&
+    typeof schema.name === "string" &&
+    schema.name.length > 0 &&
+    typeof schema.inputSchema === "object" &&
+    schema.inputSchema !== null
+  );
+}
+
 export function loadToolSkills(): ToolSkill[] {
   const skillsDir = coreConfig().SKILLS_DIR;
   try {
@@ -26,6 +44,13 @@ export function loadToolSkills(): ToolSkill[] {
       try {
         const skill = JSON.parse(fs.readFileSync(path.join(skillsDir, f), "utf8"));
         if (skill.type === "tool" && skill.enabled && skill.toolSchema) {
+          if (!isValidToolSchema(skill.toolSchema)) {
+            process.stderr.write(
+              `[zana-mcp] skipping tool skill ${f} (${skill.name || "unnamed"}): ` +
+              `toolSchema must have a non-empty 'name' and an object 'inputSchema'\n`,
+            );
+            continue;
+          }
           out.push({ skill, schema: skill.toolSchema });
         }
       } catch (err: any) {

@@ -14,7 +14,7 @@ const path = require("node:path");
 import { ZANA_DAEMON_TOOLS, DAEMON_GATED_TOOL_NAMES } from "./gating";
 import type { ToolDefinition, ToolContext } from "./types";
 import { collectStaticTools, collectHandlers } from "./registrations";
-import { loadToolSkills, handleScratchpad } from "./dynamic-skills";
+import { loadToolSkills, handleScratchpad, isValidToolSchema } from "./dynamic-skills";
 
 // MCP stdio protocol uses stdout for framed JSON-RPC only.
 // Route normal logs to stderr to avoid corrupting the MCP stream.
@@ -135,9 +135,18 @@ function getAllTools(): ToolDefinition[] {
     inputSchema: t.inputSchema || { type: "object", properties: {} },
   }));
   const all: ToolDefinition[] = [...STATIC_TOOLS, ...moduleTools, ...DYNAMIC_TOOLS];
-  if (ZANA_DAEMON_TOOLS) return all;
+  // Final boundary guard: the MCP client validates every tool entry and
+  // rejects the WHOLE `tools/list` batch if any one is malformed. Module- and
+  // skill-contributed tools are not authored here, so drop any entry missing a
+  // valid name/inputSchema rather than letting it poison the entire surface.
+  const valid = all.filter((t) => {
+    if (isValidToolSchema(t)) return true;
+    process.stderr.write(`[zana-mcp] dropping malformed tool from tools/list: ${JSON.stringify(t?.name)}\n`);
+    return false;
+  });
+  if (ZANA_DAEMON_TOOLS) return valid;
   // Default install: hide daemon-only duplicates of native Claude Code flows.
-  return all.filter((t) => !DAEMON_GATED_TOOL_NAMES.has(t.name));
+  return valid.filter((t) => !DAEMON_GATED_TOOL_NAMES.has(t.name));
 }
 
 // --- JSON-RPC framing ---

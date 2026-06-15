@@ -25,9 +25,12 @@ const req = createRequire(import.meta.url);
 const coreConfig: Record<string, string> = req("@zana-ai/core").config;
 
 // Import the module under test (after requiring core so the require cache is warm).
-const { loadToolSkills, handleScratchpad } = await import(
+const { loadToolSkills, handleScratchpad, isValidToolSchema } = await import(
   "../src/dynamic-skills.ts"
 );
+
+// A minimal well-formed MCP tool schema: non-empty name + object inputSchema.
+const OBJ_SCHEMA = { type: "object", properties: {} };
 
 // ── loadToolSkills ─────────────────────────────────────────────────────────────
 
@@ -70,7 +73,7 @@ describe("loadToolSkills", () => {
     writeSkill(coreConfig.SKILLS_DIR, "chat.json", {
       type: "chat",
       enabled: true,
-      toolSchema: { name: "chat_tool" },
+      toolSchema: { name: "chat_tool", inputSchema: OBJ_SCHEMA },
     });
     expect(loadToolSkills()).toEqual([]);
   });
@@ -79,7 +82,7 @@ describe("loadToolSkills", () => {
     writeSkill(coreConfig.SKILLS_DIR, "disabled.json", {
       type: "tool",
       enabled: false,
-      toolSchema: { name: "disabled_tool" },
+      toolSchema: { name: "disabled_tool", inputSchema: OBJ_SCHEMA },
     });
     expect(loadToolSkills()).toEqual([]);
   });
@@ -97,7 +100,7 @@ describe("loadToolSkills", () => {
       type: "tool",
       enabled: true,
       handler: "scratchpad",
-      toolSchema: { name: "zana_scratchpad", description: "A scratch tool" },
+      toolSchema: { name: "zana_scratchpad", description: "A scratch tool", inputSchema: OBJ_SCHEMA },
     };
     writeSkill(coreConfig.SKILLS_DIR, "scratchpad.json", skill);
     const results = loadToolSkills();
@@ -108,13 +111,13 @@ describe("loadToolSkills", () => {
 
   it("loads multiple valid tool-skills and ignores invalid ones", () => {
     writeSkill(coreConfig.SKILLS_DIR, "a.json", {
-      type: "tool", enabled: true, toolSchema: { name: "tool_a" },
+      type: "tool", enabled: true, toolSchema: { name: "tool_a", inputSchema: OBJ_SCHEMA },
     });
     writeSkill(coreConfig.SKILLS_DIR, "b.json", {
-      type: "tool", enabled: false, toolSchema: { name: "tool_b" },
+      type: "tool", enabled: false, toolSchema: { name: "tool_b", inputSchema: OBJ_SCHEMA },
     });
     writeSkill(coreConfig.SKILLS_DIR, "c.json", {
-      type: "tool", enabled: true, toolSchema: { name: "tool_c" },
+      type: "tool", enabled: true, toolSchema: { name: "tool_c", inputSchema: OBJ_SCHEMA },
     });
     const results = loadToolSkills();
     expect(results).toHaveLength(2);
@@ -127,11 +130,71 @@ describe("loadToolSkills", () => {
   it("silently skips a malformed JSON file and still loads the others", () => {
     fs.writeFileSync(path.join(coreConfig.SKILLS_DIR, "broken.json"), "{{{bad json", "utf8");
     writeSkill(coreConfig.SKILLS_DIR, "good.json", {
-      type: "tool", enabled: true, toolSchema: { name: "tool_good" },
+      type: "tool", enabled: true, toolSchema: { name: "tool_good", inputSchema: OBJ_SCHEMA },
     });
     const results = loadToolSkills();
     expect(results).toHaveLength(1);
     expect(results[0].schema.name).toBe("tool_good");
+  });
+
+  // Regression: a tool-skill whose toolSchema is present-but-malformed (no
+  // name and/or no inputSchema) used to be published RAW into tools/list. The
+  // MCP client validates every entry and rejects the WHOLE batch on one bad
+  // one — and because the skills dir is global, a single stray fixture took
+  // down Zana's tool surface in every project. These must now be skipped.
+  it("skips a tool-skill with an empty toolSchema ({})", () => {
+    writeSkill(coreConfig.SKILLS_DIR, "empty.json", {
+      type: "tool", enabled: true, toolSchema: {},
+    });
+    expect(loadToolSkills()).toEqual([]);
+  });
+
+  it("skips a tool-skill whose toolSchema has a name but no inputSchema", () => {
+    writeSkill(coreConfig.SKILLS_DIR, "no-input.json", {
+      type: "tool", enabled: true, toolSchema: { name: "my-tool" },
+    });
+    expect(loadToolSkills()).toEqual([]);
+  });
+
+  it("skips a tool-skill whose toolSchema has an inputSchema but no name", () => {
+    writeSkill(coreConfig.SKILLS_DIR, "no-name.json", {
+      type: "tool", enabled: true, toolSchema: { inputSchema: OBJ_SCHEMA },
+    });
+    expect(loadToolSkills()).toEqual([]);
+  });
+
+  it("keeps the valid tool-skills even when a malformed one sits beside them", () => {
+    writeSkill(coreConfig.SKILLS_DIR, "bad.json", {
+      type: "tool", enabled: true, toolSchema: {},
+    });
+    writeSkill(coreConfig.SKILLS_DIR, "ok.json", {
+      type: "tool", enabled: true, toolSchema: { name: "tool_ok", inputSchema: OBJ_SCHEMA },
+    });
+    const results = loadToolSkills();
+    expect(results).toHaveLength(1);
+    expect(results[0].schema.name).toBe("tool_ok");
+  });
+});
+
+// ── isValidToolSchema ────────────────────────────────────────────────────────────
+
+describe("isValidToolSchema", () => {
+  it("accepts a schema with a non-empty name and an object inputSchema", () => {
+    expect(isValidToolSchema({ name: "t", inputSchema: OBJ_SCHEMA })).toBe(true);
+  });
+
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["empty object", {}],
+    ["missing inputSchema", { name: "t" }],
+    ["missing name", { inputSchema: OBJ_SCHEMA }],
+    ["empty name", { name: "", inputSchema: OBJ_SCHEMA }],
+    ["non-string name", { name: 42, inputSchema: OBJ_SCHEMA }],
+    ["null inputSchema", { name: "t", inputSchema: null }],
+    ["non-object inputSchema", { name: "t", inputSchema: "nope" }],
+  ])("rejects %s", (_label, schema) => {
+    expect(isValidToolSchema(schema)).toBe(false);
   });
 });
 
