@@ -92,12 +92,14 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 - [`zana_team_status`](#zana_team_status)
 - [`zana_ticket_add_to_sprint`](#zana_ticket_add_to_sprint)
 - [`zana_ticket_claim`](#zana_ticket_claim)
+- [`zana_ticket_claim_next`](#zana_ticket_claim_next)
 - [`zana_ticket_comment`](#zana_ticket_comment)
 - [`zana_ticket_complete`](#zana_ticket_complete)
 - [`zana_ticket_create`](#zana_ticket_create)
 - [`zana_ticket_edit`](#zana_ticket_edit)
 - [`zana_ticket_get`](#zana_ticket_get)
 - [`zana_ticket_list`](#zana_ticket_list)
+- [`zana_ticket_list_ready`](#zana_ticket_list_ready)
 - [`zana_ticket_update`](#zana_ticket_update)
 - [`zana_ticket_update_status`](#zana_ticket_update_status)
 - [`zana_toggle_skill`](#zana_toggle_skill)
@@ -432,7 +434,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/channels.ts:118`
+- MCP wrapper: `packages/mcp/src/registrations/channels.ts:119`
 - Handler: `packages/swarm/src/swarm/router.ts:getChannelHistory (via case 'channel_history')`
 
 **Common pitfalls:**
@@ -605,7 +607,7 @@ _No input parameters._
 
 ## zana_deliberate
 
-**Description:** Start a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. Each voter is an independent agent with its own profile/model. Dissent is preserved verbatim across EVERY round. Default behavior: returns IMMEDIATELY with the proposed deliberation record (state=PROPOSED, _outcome='running'). Real-Claude voters can take 5-10 min each; the orchestration loop runs detached on the daemon. Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. Pass `wait: true` to block until completion (legacy / scripted use). When complete, the deliberation record carries: `_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' | 'judged'. `_judge` — present only on 'judged'; { verdict, humanId } describing how the auto-judge resolved an escalation. `_judgeError` — present only when the configured strategy was judge/hybrid but adjudication failed; deliberation stays ESCALATED for manual override. `_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details } describing why the initial council failed to convene (e.g. quorum_lost, all_probes_failed). `_reassemblyEscalation` — present only on 'escalated_during_reassembly'; { reason, details } describing why a subsequent round's council failed (e.g. dropout_was_dissenter).
+**Description:** Start a multi-voice deliberation: parallel review → synthesis → up-to-N convergence rounds → settle or escalate. Each voter is an independent agent with its own profile/model. Dissent is preserved verbatim across EVERY round. Default behavior: returns IMMEDIATELY with the proposed deliberation record (state=PROPOSED, _outcome='running'). Real-Claude voters can take 5-10 min each; the orchestration loop runs detached on the daemon. Poll `zana_deliberation_status({deliberationId})` until state is SETTLED or ESCALATED. Pass `wait: true` to block until completion (legacy / scripted use). When complete, the deliberation record carries: `_outcome` — 'settled' | 'escalated' | 'escalated_at_assembly' | 'escalated_during_reassembly' | 'judged'. `_judge` — present only on 'judged'; { verdict, humanId } describing how the auto-judge resolved an escalation. `_judgeError` — present only when the configured strategy was judge/hybrid but adjudication failed; deliberation stays ESCALATED for manual override. `_assemblyEscalation` — present only on 'escalated_at_assembly'; { reason, details, voterFailures, nextSteps } naming each dropped voter and the typed probe-failure kind (timeout/auth/validation/misconfig/rate_limit/quota/transport/spawn). Surface voterFailures[] and nextSteps verbatim to the user. `_reassemblyEscalation` — present only on 'escalated_during_reassembly'; same shape as _assemblyEscalation, describing why a subsequent round's council failed.
 
 **Input:**
 
@@ -620,6 +622,8 @@ _No input parameters._
 | quorum | string \| number | no | majority \| all \| <integer>. Default from module config. |
 | riskTag | string | no | `low` \| `medium` \| `high` — high → mandatory escalation regardless of vote (default 'medium'). |
 | rounds | number | no | Hard cap on convergence rounds (default from module config). |
+| skipProbe | boolean | no | Bypass the capability-probe gate. Use for low-stakes / brainstorm flows where probe latency (3 spawns × N voters) outweighs the value of catching a broken voter early. If a voter is genuinely broken, the failure surfaces during the collect-reviews round instead of at probe time. Default false (probes run as today). |
+| verbose | boolean | no | Reserved for future use. The escalation response always includes the full deliberation record plus voterFailures[]/nextSteps in _assemblyEscalation / _reassemblyEscalation; this flag is currently a no-op. |
 | voterModels | object | no | Per-voter model override: { profileId → modelId }. Replaces the profile's declared model for this deliberation only. Each model must be in the local registry. |
 | voters | array<string> \| object | no | Voters to convene. Either an explicit profile-id array OR a named role pack { pack, quantity? }. Defaults to ['architect','security-reviewer','researcher'] when omitted. |
 | wait | boolean | no | If true, block until the deliberation reaches a terminal state. Default false (async). |
@@ -657,7 +661,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1085`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1183`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberateHandler`
 
 **Common pitfalls:**
@@ -680,7 +684,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1261`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1379`
 
 ---
 
@@ -718,7 +722,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1229`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1347`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationListHandler`
 
 **Common pitfalls:**
@@ -737,11 +741,13 @@ _No input parameters._
 |---|---|---|---|
 | deliberationId | string | yes |  |
 | response | string \| null | no | Free-text human note. null or empty string = skip. |
+| skipProbe | boolean | no | Inherits the same semantics as zana_deliberate's skipProbe. Pass true on resume to keep the original brainstorm-shaped flow probe-free; otherwise the next (re)assembly will re-introduce probe latency. |
+| verbose | boolean | no | Reserved for future use; currently a no-op (escalation responses always include the full record + voterFailures[]). |
 
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1197`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1305`
 
 ---
 
@@ -781,7 +787,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1244`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1362`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationOverrideHandler`
 
 **Common pitfalls:**
@@ -827,7 +833,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1217`
+- MCP wrapper: `packages/mcp/src/tools/deliberate.ts:1335`
 - Handler: `packages/mcp/src/tools/deliberate.ts:deliberationStatusHandler`
 
 **Common pitfalls:**
@@ -1090,7 +1096,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/channels.ts:113`
+- MCP wrapper: `packages/mcp/src/registrations/channels.ts:114`
 - Handler: `packages/swarm/src/swarm/router.ts:listChannels (via case 'list_channels')`
 
 **Common pitfalls:**
@@ -1414,7 +1420,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/channels.ts:77`
+- MCP wrapper: `packages/mcp/src/registrations/channels.ts:78`
 - Handler: `packages/swarm/src/swarm/router.ts:publishToChannel (via case 'publish_channel')`
 
 **Common pitfalls:**
@@ -1935,13 +1941,13 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/channels.ts:130`
+- MCP wrapper: `packages/mcp/src/registrations/channels.ts:131`
 
 ---
 
 ## zana_send_message
 
-**Description:** Send a typed message to another agent. Supports various message types for structured communication.
+**Description:** Send a typed message to another agent. Provide either toAgentId (UUID) or toAgentName (e.g. 'synthesizer'); if both are given, toAgentId wins. Supports various message types for structured communication.
 
 **Input:**
 
@@ -1951,7 +1957,8 @@ _No input parameters._
 | priority | string | no | `low` \| `normal` \| `urgent` — Message priority (default: normal) |
 | replyTo | string | no | Message ID if this is a reply |
 | requiresAck | boolean | no | Whether to request acknowledgment |
-| toAgentId | string | yes | Target agent ID |
+| toAgentId | string | no | Target agent ID (UUID). Either this or toAgentName is required. |
+| toAgentName | string | no | Target agent by human-readable name (resolved via active agent registry). Either this or toAgentId is required. |
 | type | string | yes | `question` \| `finding` \| `handoff` \| `status` \| `request` — Message type |
 
 **Output shape:**
@@ -2029,13 +2036,14 @@ _No input parameters._
 
 ## zana_sprint_board
 
-**Description:** Get a sprint board with tickets grouped by status columns (backlog, in-progress, review, done).
+**Description:** Get a sprint board with tickets grouped by status columns (backlog, in-progress, review, done). Returns a slim shape (id/title/status/priority/assigneeName/labels) by default; pass verbose=true for the full ticket payload (description + audit + comments).
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
 | sprintId | string | yes | Sprint ID |
+| verbose | boolean | no | Return full ticket payloads (default: false — slim shape) |
 
 **Output shape:**
 
@@ -2124,7 +2132,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/sprints.ts:28`
+- MCP wrapper: `packages/mcp/src/registrations/sprints.ts:31`
 - Handler: `packages/work/src/tickets/service.ts:createSprint`
 
 **Common pitfalls:**
@@ -2165,7 +2173,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/sprints.ts:50`
+- MCP wrapper: `packages/mcp/src/registrations/sprints.ts:53`
 - Handler: `packages/work/src/tickets/service.ts:endSprint`
 
 ---
@@ -2237,7 +2245,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/sprints.ts:41`
+- MCP wrapper: `packages/mcp/src/registrations/sprints.ts:44`
 - Handler: `packages/work/src/tickets/service.ts:startSprint`
 
 ---
@@ -2324,7 +2332,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/channels.ts:102`
+- MCP wrapper: `packages/mcp/src/registrations/channels.ts:103`
 - Handler: `packages/swarm/src/swarm/router.ts:subscribeChannel (via case 'subscribe_channel')`
 
 **Common pitfalls:**
@@ -2551,19 +2559,20 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:141`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:167`
 - Handler: `packages/work/src/tickets/service.ts:addTicketToSprint`
 
 ---
 
 ## zana_ticket_claim
 
-**Description:** Claim a ticket (assigns it to you and moves to in-progress). Works on backlog and rework tickets.
+**Description:** Claim a ticket (assigns it to you and moves to in-progress). Works on backlog and rework tickets. Refuses if the ticket has open blockedBy dependencies — those must reach done/cancelled first.
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
+| agentName | string | no | Optional human-readable name to record on the ticket (e.g. 'worker-4'). Defaults to ZANA_AGENT_NAME env or 'Agent'. |
 | ticketId | string | yes | Ticket ID to claim |
 
 **Output shape:**
@@ -2618,6 +2627,24 @@ _No input parameters._
 
 ---
 
+## zana_ticket_claim_next
+
+**Description:** Claim the highest-priority ready ticket — a backlog/rework ticket whose blockedBy dependencies are all done/cancelled — ordered by priority then age. This is the dependency-aware dispatcher: call it in a loop to execute a ticket graph in the correct order. Returns { ok: false, reason: 'none_ready' } when nothing is currently dispatchable.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| agentName | string | no | Optional human-readable name to record on the claimed ticket. Defaults to ZANA_AGENT_NAME env or 'Agent'. |
+| sprintId | string | no | Restrict selection to a single sprint (optional). |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:60`
+
+---
+
 ## zana_ticket_comment
 
 **Description:** Add a comment/update log to a ticket.
@@ -2645,7 +2672,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:73`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:99`
 - Handler: `packages/work/src/tickets/service.ts:addComment`
 
 **Common pitfalls:**
@@ -2707,7 +2734,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:85`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:111`
 - Handler: `packages/work/src/tickets/service.ts:completeTicket`
 
 **Common pitfalls:**
@@ -2840,7 +2867,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:97`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:123`
 - Handler: `packages/work/src/tickets/service.ts:updateTicket`
 
 **Common pitfalls:**
@@ -2972,6 +2999,23 @@ _No input parameters._
 
 ---
 
+## zana_ticket_list_ready
+
+**Description:** List claimable tickets (backlog/rework with all blockedBy dependencies closed), ordered by the dispatch priority. Read-only — does not claim. Use to inspect what would run next.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| sprintId | string | no | Restrict to a single sprint (optional). |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:72`
+
+---
+
 ## zana_ticket_update
 
 **Description:** Update a ticket with progress, plan, status, review phase, or files changed. Workers and reviewers use this to report progress and advance the review pipeline.
@@ -3030,7 +3074,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:115`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:141`
 - Handler: `packages/core/src/agents/manager.ts case 'ticket_update'`
 
 **Common pitfalls:**
@@ -3095,7 +3139,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:57`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:83`
 - Handler: `packages/work/src/tickets/service.ts:updateStatus`
 
 **Common pitfalls:**

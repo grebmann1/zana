@@ -169,17 +169,18 @@ into native `Agent`+`SendMessage` calls (no daemon round-trip).
 
 Rows tagged **daemon-only** are surfaced by default — the daemon path is
 first-class (see ADR `docs/decisions/0005`). The default `npx -y @zana-ai/mcp`
-install registers all ~88 tools. Set `ZANA_DAEMON_TOOLS=0` in the MCP server
-env for the lean native-only surface (~64 tools), where these flows are covered
+install registers all 90 tools. Set `ZANA_DAEMON_TOOLS=0` in the MCP server
+env for the lean native-only surface (66 tools), where these flows are covered
 by `Agent`+`SendMessage` and the slash commands. `ZANA_MASTER_MODE=true` adds
-the 6 swarm tools on top (still opt-in — multi-daemon / headless only).
+the 6 swarm tools on top (still opt-in — multi-daemon / headless only), for 96
+in all — the full set documented in `docs/MCP-TOOL-REFERENCE.md`.
 
 | Domain | Representative tools | Path |
 |---|---|---|
 | **Agents (lifecycle)** | `zana_spawn_agent`, `zana_list_agents`, `zana_kill_agent`, `zana_agent_status`, `zana_oneshot_query` | daemon-only (gated) — use `Agent({ run_in_background: true })` natively |
 | **Teams (templates)** | `zana_list_teams`, `zana_get_team`, `zana_save_team`, `zana_delete_team` | both |
 | **Teams (lifecycle)** | `zana_start_team`, `zana_team_status`, `zana_stop_team`, `zana_list_running_teams` | daemon-only (gated) — use `/zana:team` natively |
-| **Tickets** | `zana_ticket_create`, `zana_ticket_claim`, `zana_ticket_complete`, `zana_ticket_list` | both — work-tracking |
+| **Tickets** | `zana_ticket_create`, `zana_ticket_claim`, `zana_ticket_claim_next`, `zana_ticket_complete`, `zana_ticket_list`, `zana_ticket_list_ready` | both — work-tracking (`claim_next`/`list_ready` are the dependency-aware dispatcher) |
 | **Sprints** | `zana_sprint_create`, `zana_sprint_start`, `zana_sprint_board` | both — work-tracking |
 | **Deliberation** | `zana_deliberate`, `zana_deliberate_cancel`, `zana_deliberation_status`, `zana_deliberation_nudge`, `zana_deliberation_override` | daemon-only (gated) — use `/zana:council` natively |
 | **Autopilot** | `zana_autopilot_goal_driven`, `zana_autopilot_goal_status`, `zana_autopilot_goal_cancel`, `zana_autopilot_goal_list` | daemon-only (gated) — use `/zana:autopilot` natively |

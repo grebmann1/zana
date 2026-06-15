@@ -84,7 +84,7 @@ available. Discover them with:
 
 ## Tool surface
 
-94 tools across these domains (see
+96 tools across these domains (see
 [`docs/MCP-TOOL-REFERENCE.md`](../../docs/MCP-TOOL-REFERENCE.md) for the
 full schema reference):
 

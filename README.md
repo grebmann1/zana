@@ -136,13 +136,13 @@ Bare-minimum cheat sheet (development, from a clone):
 ## Daemon-only tools and master mode
 
 The default MCP install (`npx -y @zana-ai/mcp` with no env) registers the full
-~88-tool surface — the daemon path is first-class (see
+90-tool surface — the daemon path is first-class (see
 `docs/decisions/0005`). That includes the 24 daemon-path tools (agent lifecycle,
 team start/stop, autopilot, deliberation, P2P inbox) alongside tickets, sprints,
 memory, artifacts, profiles, schedules, and the team-template / event / channel
 surfaces. Two env flags adjust the surface:
 
-- `ZANA_DAEMON_TOOLS=0` — opts OUT to the lean native-only surface (~64 tools),
+- `ZANA_DAEMON_TOOLS=0` — opts OUT to the lean native-only surface (66 tools),
   hiding the 24 daemon-path tools: `zana_spawn_agent*`, `zana_kill_agent`,
   `zana_agent_status`, `zana_agent_result`, `zana_list_agents`,
   `zana_oneshot_query`, `zana_start_team`, `zana_stop_team`, `zana_team_status`,
