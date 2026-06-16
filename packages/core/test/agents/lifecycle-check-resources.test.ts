@@ -7,7 +7,7 @@
 //
 // No real spawning, no real PTY, no network — fully deterministic.
 
-import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as osReal from "node:os";
@@ -39,6 +39,13 @@ beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(osReal.tmpdir(), "zana-lifecycle-test-"));
   moduleConfig.setConfigPath(path.join(tmpDir, "config.json"));
   // No config file → `load()` falls back to DEFAULTS: soft=0.8, hard=2.0
+});
+
+beforeEach(() => {
+  // The CPU gate is OFF by default (system.cpuGateEnabled=false). The threshold
+  // tests below exercise the loadavg math, so opt the gate in explicitly. A
+  // test can override this with its own save() to assert the default-off path.
+  moduleConfig.save({ modules: {}, system: { cpuGateEnabled: true } } as any);
 });
 
 afterEach(() => {
@@ -122,7 +129,7 @@ describe("checkSystemResources — custom thresholds from config", () => {
     // Very low threshold: 4 cores × 0.1 = 0.4; load = 0.5 → overloaded
     moduleConfig.save({
       modules: {},
-      system: { cpuLoadThreshold: 0.1, cpuLoadHardCap: 2.0 },
+      system: { cpuGateEnabled: true, cpuLoadThreshold: 0.1, cpuLoadHardCap: 2.0 },
     } as any);
     stubOs(0.5, 4);
     const result = checkSystemResources("soft");
@@ -135,9 +142,27 @@ describe("checkSystemResources — custom thresholds from config", () => {
     // Raise threshold to 1.5 → 4 × 1.5 = 6.0; load = 4.0 should now pass.
     moduleConfig.save({
       modules: {},
-      system: { cpuLoadThreshold: 1.5, cpuLoadHardCap: 3.0 },
+      system: { cpuGateEnabled: true, cpuLoadThreshold: 1.5, cpuLoadHardCap: 3.0 },
     } as any);
     stubOs(4.0, 4);
     expect(checkSystemResources("soft")).toBeNull();
+  });
+});
+
+describe("checkSystemResources — gate disabled (default)", () => {
+  // Pins the new default: with cpuGateEnabled absent/false the gate is a no-op
+  // regardless of load, so a future change can't silently re-arm it.
+  it("returns null at crushing load when the gate key is absent", () => {
+    moduleConfig.save({ modules: {}, system: { cpuLoadThreshold: 0.8 } } as any);
+    stubOs(100, 4); // far above any soft/hard threshold
+    expect(checkSystemResources("soft")).toBeNull();
+    expect(checkSystemResources("hard")).toBeNull();
+  });
+
+  it("returns null at crushing load when cpuGateEnabled is explicitly false", () => {
+    moduleConfig.save({ modules: {}, system: { cpuGateEnabled: false } } as any);
+    stubOs(100, 4);
+    expect(checkSystemResources("soft")).toBeNull();
+    expect(checkSystemResources("hard")).toBeNull();
   });
 });
