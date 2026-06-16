@@ -5,7 +5,7 @@
 // code/message, null/undefined) are coerced before matching.
 
 import { describe, it, expect } from "vitest";
-import { classifySpawnError } from "@zana-ai/core/src/agents/error-classifier.ts";
+import { classifySpawnError, isTransientFailure } from "@zana-ai/core/src/agents/error-classifier.ts";
 
 describe("classifySpawnError — auth bucket", () => {
   it("buckets 401/403 and auth phrasing as auth", () => {
@@ -28,6 +28,22 @@ describe("classifySpawnError — transport bucket", () => {
     expect(classifySpawnError("getaddrinfo ENOTFOUND api.host")).toBe("transport");
     expect(classifySpawnError("connect ECONNREFUSED 127.0.0.1:443")).toBe("transport");
     expect(classifySpawnError("socket hang up ECONNRESET")).toBe("transport");
+  });
+
+  // The transport regex carries more alternatives than the sibling case above
+  // exercises: EAI_AGAIN (transient DNS), and the TLS/certificate/SSL family.
+  // ENOTFOUND/ECONNREFUSED/ECONNRESET/ETIMEDOUT pin only four of them, and the
+  // ordering test's "TLS 401" message buckets as AUTH (401 wins), so a bare
+  // TLS/certificate/SSL/EAI_AGAIN failure is otherwise unpinned — dropping any
+  // of those alternatives would still pass every existing test while silently
+  // demoting a retryable network blip to the non-retried 'spawn' bucket.
+  it("buckets EAI_AGAIN and the TLS/certificate/SSL family as transport", () => {
+    expect(classifySpawnError("getaddrinfo EAI_AGAIN api.host")).toBe("transport");
+    expect(classifySpawnError("write EPROTO ... TLS handshake failed")).toBe("transport");
+    expect(classifySpawnError("unable to verify the first certificate")).toBe("transport");
+    expect(classifySpawnError("SSL routines: alert handshake failure")).toBe("transport");
+    // And these are retryable — the whole point of the transport bucket.
+    expect(isTransientFailure(classifySpawnError("getaddrinfo EAI_AGAIN api.host"))).toBe(true);
   });
 });
 
@@ -107,6 +123,23 @@ describe("classifySpawnError — non-string error shapes", () => {
     expect(classifySpawnError({ code: 401, message: "boom" })).toBe("spawn");
     // Control: the SAME 429 as a string code IS seen and buckets as rate_limit.
     expect(classifySpawnError({ code: "429" })).toBe("rate_limit");
+  });
+
+  // errToString (error-classifier.ts) special-cases null, string, and object;
+  // ANY other primitive — a bare number, boolean, bigint — falls through to the
+  // final `return String(err)` (line 31). The sibling shape-tests only ever pass
+  // null/undefined/string/object, so that primitive fallthrough is otherwise
+  // unpinned. A thrown numeric status is realistic (`throw 529`), and unlike an
+  // object carrying a NUMERIC `code` (dropped → 'spawn', pinned above), a bare
+  // primitive number IS stringified and matched. This pins that contrast so a
+  // regression collapsing the two coercion paths would be caught.
+  it("stringifies a bare primitive (number/boolean) before matching", () => {
+    // 529 → "529" → rate_limit (transient backpressure), not the dropped 'spawn'.
+    expect(classifySpawnError(529)).toBe("rate_limit");
+    // 403 as a number → "403" → auth.
+    expect(classifySpawnError(403)).toBe("auth");
+    // A primitive whose String() carries no recognized token → legacy 'spawn'.
+    expect(classifySpawnError(true)).toBe("spawn");
   });
 
   it("falls through to 'spawn' for an unrecognized message", () => {

@@ -84,6 +84,21 @@ describe("initProjectDir", () => {
     expect(cfg?.name).toBe(path.basename(root));
   });
 
+  it("falls back to the directory basename when package.json is malformed JSON", () => {
+    // Guards the try/catch in deriveProjectName (init.ts): a present but
+    // unparseable package.json must not crash init — the error is swallowed and
+    // the name falls through to the directory basename. The existing suite
+    // covers valid/no-name/absent package.json but never this parse-failure arm.
+    const root = makeTmpDir();
+    fs.writeFileSync(path.join(root, "package.json"), "{ not: valid json,,", "utf8");
+
+    // Must not throw despite the broken manifest.
+    expect(() => initProjectDir(root, { silent: true })).not.toThrow();
+
+    const cfg = getProjectManifest(root);
+    expect(cfg?.name).toBe(path.basename(root));
+  });
+
   it("is idempotent — re-running does not clobber existing config.json", () => {
     const root = makeTmpDir();
     initProjectDir(root, { silent: true });

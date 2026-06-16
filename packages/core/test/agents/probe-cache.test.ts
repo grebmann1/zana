@@ -110,6 +110,35 @@ describe("probe-cache (T6-FU-2)", () => {
     expect(found!.probeId).toBe("v2");
   });
 
+  // The legacy single-number `ttl` form is kind-agnostic: effectiveTtl returns
+  // it verbatim (`if (typeof ttl === "number") return ttl`) WITHOUT consulting
+  // the failure kind. So a transient (timeout) failure recorded and looked up
+  // with a plain number budget must stay a HIT for the full number window —
+  // it must NOT be expired early on a transient budget. Every existing
+  // number-form test records an ok=true result, leaving this transient-failure
+  // + number-form arm unexercised; pins the legacy contract against a
+  // regression that routes the number form through the per-kind transient path.
+  it("number-form ttl is kind-agnostic: a transient failure uses the full number window", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const transientResult = fakeResult({
+      ok: false,
+      failures: [{ leg: "factual", kind: "timeout", reason: "slow" } as any],
+    });
+    recordProbeResult("profA:modX", transientResult);
+
+    // 60s in — well past any transient (30s) budget, but the number form has no
+    // transient budget, so the full 5-minute window applies → still a HIT.
+    vi.setSystemTime(new Date("2026-01-01T00:01:00Z"));
+    const found = lookupProbeResult("profA:modX", 5 * 60 * 1000);
+    expect(found).not.toBeNull();
+    expect(found!.failures[0].kind).toBe("timeout");
+
+    // Past the number window → miss.
+    vi.setSystemTime(new Date("2026-01-01T00:06:00Z").getTime() + 1);
+    expect(lookupProbeResult("profA:modX", 5 * 60 * 1000)).toBeNull();
+  });
+
   // ── Per-kind TTL (transient cache) ────────────────────────────────────────
   describe("per-kind TTL", () => {
     it("transient-failure cache uses transientTtlMs, expires earlier than regular", () => {

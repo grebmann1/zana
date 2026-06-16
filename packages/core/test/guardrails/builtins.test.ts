@@ -44,6 +44,21 @@ describe("jsonParse", () => {
     const r = guard.validate("");
     expect(r.pass).toBe(false);
   });
+
+  // The fence regex (builtins.ts line 42) is unanchored and non-greedy, so it
+  // extracts the FIRST ```…``` block from anywhere in the output and ignores
+  // the surrounding prose. This is the real-world case the guard exists for —
+  // a chatty LLM that wraps its JSON in explanation ("Here you go: ```json …```
+  // hope that helps"). Every existing jsonParse test feeds either bare JSON or
+  // a fence whose body is the WHOLE output, so the strip-prose-around-a-fence
+  // behavior is otherwise unpinned; a regression that parsed the raw output
+  // (prose included) would still pass them but fail here.
+  it("extracts JSON from a fenced block surrounded by prose", () => {
+    const output = 'Sure! Here is the result:\n```json\n{"status":"ok"}\n```\nHope that helps.';
+    const r = guard.validate(output);
+    expect(r.pass).toBe(true);
+    expect((r as any).parsedOutput).toEqual({ status: "ok" });
+  });
 });
 
 // ---------------------------------------------------------------------------

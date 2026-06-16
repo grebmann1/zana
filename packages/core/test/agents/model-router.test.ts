@@ -124,6 +124,16 @@ describe("model-router — selectModel", () => {
     expect(selectModel("do something", { category: "Security" })).toBe(TIERS.OPUS);
   });
 
+  // Category routing keys off exact membership in OPUS_CATEGORIES /
+  // SONNET_CATEGORIES (model-router.ts lines 30-31), so a category in NEITHER
+  // list must fall through to the default. The neutral prompt below trips no
+  // keyword or length rule, isolating the category arm: the result pins that an
+  // unrecognized category does NOT accidentally route to OPUS and lands on the
+  // SONNET default. The existing suite only exercises recognized categories.
+  it("falls through to SONNET for an unrecognized category hint", () => {
+    expect(selectModel("do something", { category: "frontend" })).toBe(TIERS.SONNET);
+  });
+
   // ── precedence: keyword routing wins over category routing ──────────────
   // In model-router.ts the keyword checks (lines 22-26) run BEFORE category
   // routing (lines 29-31). A prompt carrying an Opus keyword must therefore

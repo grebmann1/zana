@@ -221,6 +221,41 @@ describe("spawnValidatedAgent — failing guardrail", () => {
   });
 });
 
+describe("spawnValidatedAgent — multiple guardrails", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // The whole suite only ever wires up a SINGLE guardrail, so the guard loop in
+  // spawnValidatedAgent (index.ts lines 114-125) is never exercised with more
+  // than one guard. That loop `break`s at the first failing guard and reports
+  // THAT guard's id as failedGuardrail. This pins the short-circuit: with a
+  // passing guard ordered before a failing guard before a never-reached guard,
+  // (a) the failure is attributed to the middle guard's id, not the first; and
+  // (b) the guard ordered AFTER the failure is never evaluated on any attempt.
+  it("stops at the first failing guardrail and never evaluates later guards", async () => {
+    const first = { id: "first-pass", maxRetries: 2, validate: vi.fn(() => ({ pass: true })) };
+    const second = { id: "second-fail", maxRetries: 2, validate: vi.fn(() => ({ pass: false, feedback: "second says no" })) };
+    const third = { id: "third-never", maxRetries: 2, validate: vi.fn(() => ({ pass: true })) };
+
+    // DEFAULT_MAX_RETRIES=2 → 3 attempts total; supply a terminated state each.
+    const mgr = makeAgentManager(["terminated", "terminated", "terminated"], "out");
+    const p = spawnValidatedAgent(mgr, { id: "p6" }, { prompt: "go" }, [first, second, third]);
+    await vi.runAllTimersAsync();
+    const res = await p;
+
+    expect(res.guardrailsPassed).toBe(false);
+    expect((res as any).failedGuardrail).toBe("second-fail");
+    expect((res as any).error).toBe("second says no");
+    expect(res.attempts).toBe(3);
+
+    // First guard runs every attempt; failing guard runs every attempt; the
+    // guard ordered after the failure is short-circuited and never called.
+    expect(first.validate).toHaveBeenCalledTimes(3);
+    expect(second.validate).toHaveBeenCalledTimes(3);
+    expect(third.validate).not.toHaveBeenCalled();
+  });
+});
+
 describe("spawnValidatedAgent — retry recovery", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

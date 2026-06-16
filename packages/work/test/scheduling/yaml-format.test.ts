@@ -78,7 +78,11 @@ describe("YAML round-trip", () => {
     expect(yaml).toContain("Zana scheduled task");
     const parsed = parseYaml(yaml);
     expect(parsed).toMatchObject(original);
-  });
+    // serialize→parse is fully synchronous and runs in <1ms; the generous
+    // explicit timeout guards only against fork-pool starvation under the
+    // heavily-parallel full-suite run (where this test has spuriously hit the
+    // default 5s budget despite passing instantly in isolation).
+  }, 30_000);
 
   it("parseYaml returns null on garbage", () => {
     expect(parseYaml("::: not yaml :::")).toBeNull();

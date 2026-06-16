@@ -220,6 +220,29 @@ describe("computeAgentTimeline", () => {
       { ts: 5000, count: 0 },
     ]);
   });
+
+  // Complement to the test above. `end = Math.max(events[last].timestamp,
+  // Date.now())` has two sides: the prior test pins the Date.now() side (last
+  // event 1000 < frozen now 5000). This pins the OTHER side — when the LAST
+  // event is a non-agent event whose timestamp exceeds Date.now(), it (not the
+  // clock) drives the timeline extent. `events[last]` is taken regardless of
+  // type, so a trailing ticket:created at ts=8000 (> FROZEN_NOW=5000) must
+  // stretch the buckets out to 8000, all trailing buckets zero after a1 ends.
+  it("extends buckets to the last event's timestamp when it exceeds Date.now() (any event type)", () => {
+    const bucketMs = 1000;
+    const events = [
+      { type: "agent:spawned",    payload: { agentId: "a1" }, timestamp: 0 },
+      { type: "agent:terminated", payload: { agentId: "a1" }, timestamp: 1000 },
+      { type: "ticket:created",   payload: {},               timestamp: 8000 }, // last; not a spawn/term
+    ];
+    const buckets = computeAgentTimeline(events, bucketMs);
+    // start=0, end=max(8000, 5000)=8000, step=1000 → 9 buckets (inclusive).
+    expect(buckets).toHaveLength(9);
+    expect(buckets[0]).toEqual({ ts: 0, count: 1 });    // a1 active
+    expect(buckets[buckets.length - 1].ts).toBe(8000);  // extent driven by last event, not clock
+    // every bucket from termination onward is zero
+    for (const b of buckets.slice(1)) expect(b.count).toBe(0);
+  });
 });
 
 // ─── computeTicketFlow ───────────────────────────────────────────────────────
@@ -292,6 +315,24 @@ describe("computeThroughput", () => {
       { ts: 2000, count: 0 },
       { ts: 3000, count: 1 },
     ]);
+  });
+
+  // Degenerate single-window case: when every PostToolUse event shares one
+  // timestamp, start === end, so the `ts <= end` loop body runs exactly once
+  // and must emit a SINGLE bucket tallying all of them — not zero buckets (a
+  // `<` bound would skip the only window) and not one-bucket-per-event. The
+  // existing suite only exercises multi-bucket spans and idle gaps, leaving
+  // this start===end boundary of the loop untested.
+  it("collapses tool calls sharing one timestamp into a single bucket", () => {
+    const bucketMs = 1000;
+    const events = [
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Read" }, 2000),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Bash" }, 2000),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Edit" }, 2000),
+    ];
+    const buckets = computeThroughput(events, bucketMs);
+    // start = end = 2000 → loop runs once → exactly one bucket holding all 3.
+    expect(buckets).toEqual([{ ts: 2000, count: 3 }]);
   });
 });
 

@@ -79,4 +79,25 @@ describe("config watcher", () => {
     expect(cfg.startWatcher).toBe(cfg.startWatching);
     expect(cfg.stopWatcher).toBe(cfg.stopWatching);
   });
+
+  // onConfigChanged() returns an unsubscribe disposer. The other tests only
+  // register listeners; none exercise the returned function. This pins the
+  // contract: calling the disposer removes ONLY that listener, so a later
+  // on-disk change no longer fires it while other listeners still run.
+  it("the disposer returned by onConfigChanged() unsubscribes only that listener", () => {
+    vi.useFakeTimers();
+    const kept = vi.fn();
+    const removed = vi.fn();
+    cfg.onConfigChanged(kept);
+    const dispose = cfg.onConfigChanged(removed);
+    cfg.startWatching();
+
+    dispose(); // unsubscribe `removed` before any change is polled
+
+    writeFileSync(cfgPath, JSON.stringify({ modules: { delta: { enabled: false } } }), "utf8");
+    vi.advanceTimersByTime(2000);
+
+    expect(removed).not.toHaveBeenCalled(); // disposed listener stays silent
+    expect(kept).toHaveBeenCalledTimes(1); // surviving listener still fires
+  });
 });

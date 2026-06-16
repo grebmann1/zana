@@ -175,6 +175,39 @@ describe("core.init()", { timeout: 30000 }, () => {
     }
   });
 
+  // core.ts:68-70 — when init() is called with headless:true it sets the
+  // ZANA_HEADLESS=1 env var so downstream modules can detect daemon mode; with
+  // headless:false (the default) it must leave the var unset. afterEach deletes
+  // ZANA_HEADLESS, so each branch starts from a clean slate and the assertion is
+  // order-independent.
+  it("sets ZANA_HEADLESS=1 in headless mode and leaves it unset otherwise", async () => {
+    delete process.env.ZANA_HEADLESS;
+
+    const wsHeadless = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+    fs.mkdirSync(path.join(wsHeadless, ".zana"), { recursive: true });
+    tmpDirs.push(wsHeadless);
+
+    const headlessResult = await init({ workspace: wsHeadless, headless: true, skipApiServer: true });
+    try {
+      expect(process.env.ZANA_HEADLESS).toBe("1");
+    } finally {
+      await headlessResult.shutdown();
+    }
+
+    // A fresh non-headless init() must not re-set the flag (afterEach cleared it).
+    delete process.env.ZANA_HEADLESS;
+    const wsInteractive = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+    fs.mkdirSync(path.join(wsInteractive, ".zana"), { recursive: true });
+    tmpDirs.push(wsInteractive);
+
+    const interactiveResult = await init({ workspace: wsInteractive, headless: false });
+    try {
+      expect(process.env.ZANA_HEADLESS).toBeUndefined();
+    } finally {
+      await interactiveResult.shutdown();
+    }
+  });
+
   it("shutdown() emits ZANA_SHUTDOWN exactly once and is idempotent on repeat calls", async () => {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk

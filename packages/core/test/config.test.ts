@@ -33,6 +33,22 @@ describe("config — static constants and global paths", () => {
     expect(path.dirname((config as any).PERSIST_DIR)).toBe(config.ZANA_DIR);
     expect(path.dirname((config as any).SCRATCHPAD_DIR)).toBe(config.ZANA_DIR);
   });
+
+  it("RECENT_WORKSPACES_PATH is ZANA_DIR/recent-workspaces.json", () => {
+    expect((config as any).RECENT_WORKSPACES_PATH).toBe(
+      path.join(config.ZANA_DIR, "recent-workspaces.json"),
+    );
+  });
+
+  it("CLAUDE_SETTINGS_BACKUP lives under ~/.claude, NOT under ZANA_DIR", () => {
+    // The Claude settings backup intentionally sits beside Claude's own
+    // config (~/.claude), so a Zana uninstall that nukes ~/.zana cannot
+    // destroy the user's pre-Zana Claude settings backup.
+    expect((config as any).CLAUDE_SETTINGS_BACKUP).toBe(
+      path.join(os.homedir(), ".claude", "settings.json.bak.zana"),
+    );
+    expect(path.dirname((config as any).CLAUDE_SETTINGS_BACKUP)).not.toBe(config.ZANA_DIR);
+  });
 });
 
 describe("config — deprecated project-local getters are gone", () => {

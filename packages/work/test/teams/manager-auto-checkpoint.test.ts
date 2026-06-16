@@ -74,7 +74,12 @@ beforeAll(async () => {
   // callback is our spy's argument, not a listener on the real manager.
   manager = await import("@zana-ai/work/src/teams/manager.ts");
   expect(typeof onAgentsChange).toBe("function");
-});
+  // Bootstrapping the real @zana-ai/core via importActual pulls in the
+  // core↔work↔extras require-cycle and can exceed the default 10s hook
+  // timeout when the full package suite runs many workers in parallel
+  // (the import itself is cheap in isolation). Give it headroom so this
+  // suite is deterministic under load rather than flaking on a slow import.
+}, 60000);
 
 /** Start a team with a unique id and a known orchestrator agent id. */
 function bootTeam(teamId: string, orchId: string) {
