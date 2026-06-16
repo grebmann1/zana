@@ -47,6 +47,7 @@ export function getMaxConcurrentAgents() {
  */
 export function checkSystemResources(severity: "soft" | "hard" = "soft") {
   const cfg = moduleConfig.get()?.system;
+  if (cfg?.cpuGateEnabled !== true) return null; // gate off by default; opt in via system.cpuGateEnabled
   const cpuSoft = cfg?.cpuLoadThreshold ?? 0.8;
   const cpuHard = cfg?.cpuLoadHardCap ?? 2.0;
   const factor = severity === "hard" ? cpuHard : cpuSoft;

@@ -28,6 +28,9 @@ beforeAll(() => {
   // non-existent workspace dir during unit-test load.
   const tmp = mkdtempSync(path.join(tmpdir(), "zana-load-gate-"));
   moduleConfig.setConfigPath(path.join(tmp, "config.json"));
+  // The CPU gate is OFF by default (system.cpuGateEnabled=false). These tests
+  // exercise the threshold math, so opt the gate in explicitly.
+  moduleConfig.save({ modules: {}, system: { cpuGateEnabled: true } } as any);
 });
 
 function setLoad(value: number) {
