@@ -177,6 +177,9 @@ describe("resolveProjectDir", () => {
   // silently adopted as the tenant state dir.
   it("ignores a .zana that is a regular file (not a directory)", () => {
     const dir = makeTmpDir();
+    // .git marks the project boundary so the walk can't escape into the shared
+    // tmp parent (which may hold a stray .zana) before falling back.
+    fs.mkdirSync(path.join(dir, ".git"));
     fs.writeFileSync(path.join(dir, ".zana"), "not a directory");
     // No real .zana directory anywhere → falls back to startPath/.zana.
     const result = resolveProjectDir(dir);

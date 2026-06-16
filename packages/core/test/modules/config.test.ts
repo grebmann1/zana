@@ -144,4 +144,28 @@ describe("applySchemaDefaults()", () => {
     expect(() => cfg.applySchemaDefaults("beta", null as any)).not.toThrow();
     expect(() => cfg.applySchemaDefaults("beta", undefined as any)).not.toThrow();
   });
+
+  // applySchemaDefaults() mutates only the in-memory `currentConfig` (config.ts
+  // sets `currentConfig = cfg`) and, unlike setModuleConfig(), never calls
+  // save(). Applying a module's schema defaults must therefore stay purely
+  // in-process: the on-disk config.json must NOT be created/written, so the
+  // file keeps only user-authored values rather than being polluted with every
+  // module's computed defaults. Pins that persistence boundary — currently
+  // untested — and contrasts it with setModuleConfig(), which DOES persist.
+  it("does not persist defaults to disk (in-memory only, no config.json written)", () => {
+    const file = join(tmpDir, "config.json");
+    expect(existsSync(file)).toBe(false); // fresh missing-file state from beforeEach
+
+    cfg.applySchemaDefaults("gamma", { timeout: { default: 5000 } });
+
+    // In-memory state reflects the applied default...
+    expect(cfg.getModuleConfig("gamma").config.timeout).toBe(5000);
+    // ...but nothing was written to disk.
+    expect(existsSync(file)).toBe(false);
+
+    // Contrast: setModuleConfig() DOES persist, proving the assertion above is
+    // about applySchemaDefaults' behavior, not a broken config path.
+    cfg.setModuleConfig("gamma", { config: { other: 1 } });
+    expect(existsSync(file)).toBe(true);
+  });
 });

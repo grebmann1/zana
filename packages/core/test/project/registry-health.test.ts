@@ -28,6 +28,10 @@ import { initProjectDir } from "../../src/project/init.ts";
 const createdDirs: string[] = [];
 function makeProjectDir(suffix: string): string {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), `zana-health-${suffix}-`));
+  // .git marks the project boundary so resolveProjectDir's upward walk can't
+  // escape into the shared tmp parent (which may hold a stray .zana) and
+  // misreport a missing project state dir as present.
+  fs.mkdirSync(path.join(d, ".git"));
   createdDirs.push(d);
   return d;
 }
