@@ -433,4 +433,236 @@ describe("core.init()", { timeout: 30000 }, () => {
       }
     },
   );
+
+  // ── auto-router LATE-LABEL escalation via "ticket:updated" (core.ts:255-258) ─
+  // Distinct from the create-time escalation gate: core.ts also wires a second
+  // listener onto "ticket:updated" so a ticket that gains an escalation label
+  // *after* creation still escalates. The handler intentionally only re-routes
+  // when the update touched `labels` (`if (fields.includes("labels"))`) so a
+  // routine field edit never burns an architect. Every other auto-router test
+  // fires only "ticket:created", so this relabel-driven path is otherwise
+  // unexercised. Here a routine ticket is created (→ needs-triage, no bound
+  // profile), then relabeled "architecture"; updateTicket emits "ticket:updated"
+  // with fields:["labels"] synchronously on the shared core bus, so by the time
+  // updateTicket() returns the handler has run and escalateForDesign() has parked
+  // the ticket (awaiting-decision) and bound the architect profile.
+  // Deterministic: no timers/network.
+  it(
+    "auto-router escalates a ticket relabeled with an escalation label after creation",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+        // Created WITHOUT an escalation label → falls through to needs-triage,
+        // assigneeProfileId stays null (no confident route in a fresh workspace).
+        const created = ticketService.createTicket({
+          title: "Tweak the xyzzy widget margins",
+          labels: [],
+          createdBy: "core-test",
+        });
+        expect(created.error).toBeUndefined();
+        const before = ticketService.getTicket(created.id);
+        expect(before.labels).toContain("needs-triage");
+        expect(before.assigneeProfileId).toBeNull();
+        expect(before.labels).not.toContain("awaiting-decision");
+
+        // Relabel with an escalation label. This fires "ticket:updated" with
+        // fields:["labels"], which the late-label listener acts on.
+        const updated = ticketService.updateTicket(
+          created.id,
+          { labels: ["architecture"] },
+          "core-test",
+        );
+        expect(updated.error).toBeUndefined();
+
+        const after = ticketService.getTicket(created.id);
+        // Intended outcome of the relabel escalation: parked + architect bound.
+        expect(after.labels).toContain("awaiting-decision");
+        expect(after.assigneeProfileId).toBe("architect");
+      } finally {
+        await result.shutdown();
+      }
+    },
+  );
+
+  // ── auto-router NON-LABEL update is ignored (negative arm of core.ts:255-258) ─
+  // The "ticket:updated" listener guards routeTicket behind `fields.includes(
+  // "labels")` so "a routine field edit never burns an architect" (core.ts
+  // comment). The sibling relabel test exercises the POSITIVE arm (a labels edit
+  // escalates); this pins the NEGATIVE arm — a non-label edit must NOT escalate,
+  // even when the ticket is fully escalation-eligible (carries an "architecture"
+  // label, has no bound profile, and is not yet parked). We manufacture that
+  // eligible-but-unescalated state by creating the ticket with the kill-switch
+  // OFF (so create-time routing is skipped, leaving the escalation label intact
+  // and the profile null), then re-enable routing and edit only the title. If a
+  // regression dropped the `fields.includes("labels")` guard, routeTicket would
+  // run on the title edit and escalate the ticket to the design lane.
+  // Deterministic: no timers/network; updateTicket emits "ticket:updated" with
+  // fields:["title"] synchronously on the shared core bus.
+  it(
+    "auto-router does NOT escalate on a non-label update of an escalation-eligible ticket",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      const moduleConfig = (core as any).modules.config;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+
+        // Create with the kill-switch OFF so the create-time handler short-
+        // circuits: the "architecture" label survives unescalated and no profile
+        // is bound — exactly the eligible-but-unescalated state we need.
+        moduleConfig.setModuleConfig("system", { autoAssignProfile: false });
+        const created = ticketService.createTicket({
+          title: "Original title",
+          labels: ["architecture"],
+          createdBy: "core-test",
+        });
+        expect(created.error).toBeUndefined();
+        const before = ticketService.getTicket(created.id);
+        expect(before.labels).toContain("architecture");
+        expect(before.labels).not.toContain("awaiting-decision");
+        expect(before.assigneeProfileId).toBeNull();
+
+        // Re-enable routing, then edit ONLY the title. ticket:updated carries
+        // fields:["title"] → the guard skips routeTicket → no escalation.
+        moduleConfig.setModuleConfig("system", { autoAssignProfile: true });
+        const updated = ticketService.updateTicket(
+          created.id,
+          { title: "Edited title" },
+          "core-test",
+        );
+        expect(updated.error).toBeUndefined();
+
+        const after = ticketService.getTicket(created.id);
+        expect(after.title).toBe("Edited title");
+        // Negative arm: a non-label edit must leave escalation untouched.
+        expect(after.labels).not.toContain("awaiting-decision");
+        expect(after.assigneeProfileId).toBeNull();
+      } finally {
+        // Restore the default so the disabled state never leaks to later runs.
+        moduleConfig.setModuleConfig("system", { autoAssignProfile: true });
+        await result.shutdown();
+      }
+    },
+  );
+
+  // ── auto-router "already parked" guard (core.ts: `if (labels.includes(
+  //    "awaiting-decision")) return;`) ───────────────────────────────────────
+  // routeTicket() short-circuits a ticket that already carries the
+  // "awaiting-decision" label ("Already parked for a human — don't re-route.").
+  // Every other auto-router test reaches that label only THROUGH escalation,
+  // which also binds the "architect" profile — so the EARLIER
+  // `if (ticket.assigneeProfileId) return;` guard shadows the parked guard and
+  // it never gets to decide anything. This isolates the parked guard on its own:
+  // a ticket created already-parked but with NO bound profile and NO escalation
+  // label. Without the guard the handler would fall through to assignProfile()
+  // and tag it `needs-triage` (the routine fall-through proven by a sibling
+  // test); WITH the guard it returns first and the ticket stays pristine. Pins a
+  // regression that dropped the parked guard from silently re-triaging a ticket a
+  // human already pulled aside for a decision. Deterministic: no timers/network;
+  // createTicket emits "ticket:created" synchronously on the shared core bus.
+  it(
+    "auto-router leaves an already-parked (awaiting-decision) ticket untouched",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+        // Parked for a human up front (no escalation label, no bound profile).
+        const created = ticketService.createTicket({
+          title: "Tweak the xyzzy widget margins",
+          labels: ["awaiting-decision"],
+          createdBy: "core-test",
+        });
+        expect(created.error).toBeUndefined();
+
+        const after = ticketService.getTicket(created.id);
+        // Parked guard fired first → handler returned → ticket is pristine:
+        // still parked, never re-triaged, no profile burned.
+        expect(after.labels).toContain("awaiting-decision");
+        expect(after.labels).not.toContain("needs-triage");
+        expect(after.assigneeProfileId).toBeNull();
+      } finally {
+        await result.shutdown();
+      }
+    },
+  );
+
+  // ── auto-router CONFIGURABLE escalation labels (core.ts:233-236) ─────────────
+  // The escalation gate's trigger set is not hard-coded: it reads
+  //   const escalationLabels = Array.isArray(sys.escalationLabels)
+  //     ? sys.escalationLabels
+  //     : ["architecture", "needs-decision", "invariant"];
+  // so an operator can REPLACE the defaults via system.escalationLabels. Every
+  // other auto-router test runs with the built-in defaults, so this override —
+  // the documented config knob — is otherwise unexercised. This pins BOTH arms
+  // of the override in one focused behavior: (1) a ticket carrying the custom
+  // label escalates to the design lane (awaiting-decision + architect bound),
+  // and (2) a ticket carrying the now-removed default label ("architecture")
+  // NO LONGER escalates and instead falls through to needs-triage. A regression
+  // that ignored sys.escalationLabels (reverting to the hard-coded defaults)
+  // would fail arm (1); one that merged instead of replaced would fail arm (2).
+  // Config is toggled on the BUILT core's singleton ((core as any).modules.config)
+  // and restored in finally so the override never leaks into later runs.
+  // Deterministic: no timers/network; createTicket emits "ticket:created"
+  // synchronously on the shared core bus.
+  it(
+    "auto-router honors a custom system.escalationLabels override (replaces defaults)",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      const moduleConfig = (core as any).modules.config;
+      try {
+        // Replace the default escalation set with a single custom label.
+        moduleConfig.setModuleConfig("system", { escalationLabels: ["red-alert"] });
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+
+        // Arm 1: the custom label escalates to the design lane.
+        const custom = ticketService.createTicket({
+          title: "Custom-escalation ticket",
+          labels: ["red-alert"],
+          createdBy: "core-test",
+        });
+        expect(custom.error).toBeUndefined();
+        const afterCustom = ticketService.getTicket(custom.id);
+        expect(afterCustom.labels).toContain("awaiting-decision");
+        expect(afterCustom.assigneeProfileId).toBe("architect");
+
+        // Arm 2: the now-removed default label does NOT escalate — the override
+        // replaces the defaults, so "architecture" falls through to needs-triage.
+        const dflt = ticketService.createTicket({
+          title: "Tweak the xyzzy widget margins",
+          labels: ["architecture"],
+          createdBy: "core-test",
+        });
+        expect(dflt.error).toBeUndefined();
+        const afterDflt = ticketService.getTicket(dflt.id);
+        expect(afterDflt.labels).not.toContain("awaiting-decision");
+        expect(afterDflt.labels).toContain("needs-triage");
+        expect(afterDflt.assigneeProfileId).not.toBe("architect");
+      } finally {
+        // Restore the default config so the override never leaks to later runs.
+        moduleConfig.setModuleConfig("system", { escalationLabels: undefined });
+        await result.shutdown();
+      }
+    },
+  );
 });

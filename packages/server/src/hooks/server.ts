@@ -7,10 +7,10 @@
 
 import * as http from "node:http";
 import * as url from "node:url";
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
 function _log() { return _core().util.logger.getLogger("hook-server"); }
-type WorkspaceContextModule = typeof import("@zana-ai/core/dist/src/project/workspace-context");
+type WorkspaceContextModule = typeof import("@zana-ai/contracts/dist/src/workspace-context");
 type TicketService = typeof import("@zana-ai/work/dist/src/tickets/service");
 type SchedulingService = typeof import("@zana-ai/work/dist/src/scheduling/service");
 type EventBusService = typeof import("@zana-ai/core/dist/src/events/service");

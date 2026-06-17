@@ -13,9 +13,9 @@ import type { ProbeFailureKind } from "./error-classifier";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 import * as persistence from "../persistence";
-import { bus, EVENTS } from "../events/bus";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import * as eventLog from "../events/log";
-import { MAX_CONCURRENT_AGENTS } from "../config";
+import { MAX_CONCURRENT_AGENTS } from "@zana-ai/contracts";
 import * as moduleConfig from "../modules/config";
 
 // Lazy-load pty-host only when interactive mode is needed (requires node-pty native module)
@@ -361,7 +361,7 @@ export function persistAgentRun(agent: any, exitCode: number | null) {
   try {
     const fsMod = require("node:fs");
     const pathMod = require("node:path");
-    const workspaceContext = require("../project/workspace-context");
+    const workspaceContext = require("@zana-ai/contracts");
     const runsDir = workspaceContext.getProjectPaths().runsDir;
     fsMod.mkdirSync(runsDir, { recursive: true });
 

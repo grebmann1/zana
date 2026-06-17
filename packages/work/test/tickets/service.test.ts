@@ -243,6 +243,34 @@ describe("addComment", () => {
   });
 });
 
+// ── claimTicket dependency gate ───────────────────────────────────────────
+
+describe("claimTicket dependency gate", () => {
+  it("refuses to claim while an open blocker exists, then allows it once the blocker closes", () => {
+    const blockerId = seedTicket({ status: "in-progress" });
+    const dependentId = seedTicket({ status: "backlog", blockedBy: [blockerId] });
+
+    // Blocker is not terminal → dependent stays gated.
+    const blocked = svc.claimTicket(dependentId, "agent-1", "Agent One");
+    expect(blocked.ok).toBeUndefined();
+    expect(blocked.error).toMatch(/blocked by 1 open dependency/);
+    expect(blocked.blockedBy).toEqual([blockerId]);
+
+    // Close the blocker; the dependent becomes claimable.
+    fakeDb._tickets.get(blockerId).status = "done";
+    const unblocked = svc.claimTicket(dependentId, "agent-1", "Agent One");
+    expect(unblocked.ok).toBe(true);
+    expect(unblocked.ticket.status).toBe("in-progress");
+  });
+
+  it("ignores a deleted dependency rather than deadlocking on it", () => {
+    const dependentId = seedTicket({ status: "backlog", blockedBy: ["T-never-existed"] });
+    const result = svc.claimTicket(dependentId, "agent-2", "Agent Two");
+    expect(result.ok).toBe(true);
+    expect(result.ticket.status).toBe("in-progress");
+  });
+});
+
 // ── updateReviewPhase ─────────────────────────────────────────────────────
 
 describe("updateReviewPhase", () => {

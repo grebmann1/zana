@@ -53,7 +53,7 @@ beforeEach(() => {
   // Each test gets a fresh tmp plugins dir under SCRATCH_BASE.
   const dir = fs.mkdtempSync(path.join(scratchBase, "loader-"));
   tmpDirs.push(dir);
-  realCore.config.PLUGINS_DIR = dir;
+  require("@zana-ai/contracts/dist/src/config").PLUGINS_DIR = dir;
 });
 
 afterEach(() => {

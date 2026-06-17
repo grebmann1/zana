@@ -265,6 +265,16 @@ describe("findRunningDaemon()", () => {
     expect(registry.findRunningDaemon("/repo-b")).toBeNull();
   });
 
+  it("ignores a non-headless daemon for the requested workspace (auditor finding 6fcb24e6)", () => {
+    // A daemon for the exact workspace exists and is alive, but it is NOT
+    // headless. The workspace-scoped lookup requires `headless === true`, so a
+    // non-headless daemon must NOT satisfy the concurrent-daemon guard.
+    const id = registry.generateDaemonId();
+    registry.register({ id, port: 7777, apiPort: null, workspace: "/repo-c", headless: false });
+
+    expect(registry.findRunningDaemon("/repo-c")).toBeNull();
+  });
+
   it("returns null when no workspace is given and no daemons are alive", () => {
     expect(registry.findRunningDaemon(null)).toBeNull();
   });

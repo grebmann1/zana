@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 // Lazy access to @zana-ai/core — avoids load-order issues during core init.
 function _core() { return require("@zana-ai/core"); }
 function PLUGINS_DIR() { return _core().config.PLUGINS_DIR; }

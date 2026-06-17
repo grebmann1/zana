@@ -20,7 +20,7 @@ import {
   createForWorkspace,
   WorkspaceNotInitializedError,
   _resetForTesting,
-} from "../../src/project/workspace-context.ts";
+} from "../src/workspace-context.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

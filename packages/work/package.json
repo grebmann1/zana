@@ -13,7 +13,8 @@
   "dependencies": {
     "@zana-ai/core": "0.3.0",
     "node-cron": "^3.0.3",
-    "yaml": "^2.5.0"
+    "yaml": "^2.5.0",
+    "@zana-ai/contracts": "0.3.0"
   },
   "peerDependencies": {
     "@zana-ai/extras": "0.3.0"

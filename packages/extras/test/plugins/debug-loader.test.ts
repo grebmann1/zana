@@ -36,7 +36,7 @@ beforeEach(() => {
   realCore = require("@zana-ai/core");
   fs.mkdirSync(scratchBase, { recursive: true });
   pluginsDir = fs.mkdtempSync(path.join(scratchBase, "zana-debug-"));
-  realCore.config.PLUGINS_DIR = pluginsDir;
+  require("@zana-ai/contracts/dist/src/config").PLUGINS_DIR = pluginsDir;
 });
 
 afterEach(() => {

@@ -25,7 +25,7 @@ const { mockGetTicket, mockListTickets, mockAddTicketToSprint } = vi.hoisted(() 
 // `work` is captured at module load via lazyRequire("@zana-ai/work"); hand back
 // a controllable fake for that call and a harmless Proxy for the skillStore
 // factory form so module load doesn't blow up.
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (arg: any) => {
     if (arg === "@zana-ai/work") {
       return {

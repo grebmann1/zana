@@ -110,6 +110,27 @@ describe("probe-cache (T6-FU-2)", () => {
     expect(found!.probeId).toBe("v2");
   });
 
+  // The freshness check is `Date.now() - cachedAt > effective` — a STRICT
+  // greater-than, so an entry whose age is EXACTLY the TTL is still fresh
+  // (age > ttl is false → served). The existing suite brackets this edge with
+  // 4:59 (hit) and 5:00+1ms (miss) but never lands on the boundary itself.
+  // Pins the strict-`>` contract against a `>=` regression that would expire
+  // entries one tick early.
+  it("serves an entry whose age is EXACTLY the ttl (strict-greater boundary)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    recordProbeResult("profA:modX", fakeResult({ probeId: "on-the-boundary" }));
+    // Advance by exactly the TTL: elapsed === effective → age > ttl is false.
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z").getTime() + 5 * 60 * 1000);
+    const found = lookupProbeResult("profA:modX", 5 * 60 * 1000);
+    expect(found).not.toBeNull();
+    expect(found!.probeId).toBe("on-the-boundary");
+    // One ms past the boundary → miss, confirming the boundary is the last
+    // fresh instant rather than the first stale one.
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z").getTime() + 5 * 60 * 1000 + 1);
+    expect(lookupProbeResult("profA:modX", 5 * 60 * 1000)).toBeNull();
+  });
+
   // The legacy single-number `ttl` form is kind-agnostic: effectiveTtl returns
   // it verbatim (`if (typeof ttl === "number") return ttl`) WITHOUT consulting
   // the failure kind. So a transient (timeout) failure recorded and looked up

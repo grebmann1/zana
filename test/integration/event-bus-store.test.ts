@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 
 import * as eventBusStore from "@zana-ai/core/src/events/store.ts";
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 
 // Each test bootstraps a temp workspace so writes land inside the test's

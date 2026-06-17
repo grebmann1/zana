@@ -19,7 +19,7 @@ export function setConfigPath(p) {
 
 function getConfigPath() {
   if (!configPath) {
-    const workspace = require("../project/workspace-context");
+    const workspace = require("@zana-ai/contracts");
     configPath = path.join(workspace.getProjectDir(), "config.json");
   }
   return configPath;

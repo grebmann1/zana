@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import * as eventBusMod from "./bus";
+import * as eventBusMod from "@zana-ai/contracts";
 import * as eventBusStore from "./store";
 
 const bus = (eventBusMod as any).bus;

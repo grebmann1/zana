@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { lazyRequire } from "../../src/util/lazy-require.ts";
+import { lazyRequire } from "../src/lazy-require.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,6 +60,38 @@ describe("lazyRequire — string path overload", () => {
     }).not.toThrow();
     // require() fires (and fails) only when a property is read through a trap.
     expect(() => proxy!.anything).toThrow(/Cannot find module|definitely-not-a-real-module/);
+  });
+
+  // The string-path overload is otherwise only exercised through the `get` trap
+  // (path.join above). The remaining traps — `has` and `ownKeys` — each resolve
+  // the module via the SAME deferred require() but were only proven for the
+  // getter overload. A regression that wired a non-`get` trap on the string
+  // branch to the wrong target (or skipped resolution) would pass every other
+  // string-path test. This pins that the `in` operator and key enumeration both
+  // reflect into the real required module (built-in `path`, fully deterministic).
+  it("string-path overload reflects `in` and ownKeys into the required module", () => {
+    const path = lazyRequire<typeof import("path")>("path");
+    // `has` trap → `"join" in require("path")`
+    expect("join" in path).toBe(true);
+    expect("definitelyNotAPathExport" in path).toBe(false);
+    // `ownKeys` trap → Reflect.ownKeys(require("path"))
+    expect(Reflect.ownKeys(path)).toContain("join");
+  });
+
+  // The fourth trap — getOwnPropertyDescriptor — is the only one never
+  // exercised on the STRING branch (get/has/ownKeys are pinned above; the
+  // getter overload pins this trap separately). It must reflect into the
+  // deferred require() target like the others. A regression that left this
+  // trap pointing at the empty Proxy target (instead of resolve()) would
+  // return undefined for a real export yet pass every other string-path test.
+  // Built-in `path` keeps it fully deterministic.
+  it("string-path overload reflects getOwnPropertyDescriptor into the required module", () => {
+    const path = lazyRequire<typeof import("path")>("path");
+    const desc = Object.getOwnPropertyDescriptor(path, "join");
+    expect(desc).toBeDefined();
+    expect(typeof desc?.value).toBe("function");
+    // A non-existent export has no descriptor.
+    expect(Object.getOwnPropertyDescriptor(path, "definitelyNotAPathExport")).toBeUndefined();
   });
 });
 
@@ -154,6 +186,26 @@ describe("lazyRequire — getter overload", () => {
     Object.getOwnPropertyDescriptor(proxy, "foo"); // getOwnPropertyDescriptor trap
 
     expect(callCount()).toBe(1);
+  });
+
+  // The existing enumeration tests use Reflect.ownKeys, which calls ONLY the
+  // ownKeys trap. Object.keys() is stricter: it drives ownKeys AND then the
+  // getOwnPropertyDescriptor trap once per reported key to filter by the
+  // `enumerable` flag — and the result must satisfy the Proxy invariants (a key
+  // reported by ownKeys but absent from the empty target may not be described
+  // as non-configurable). Since the helper's target is `{}` while ownKeys
+  // reflects the real module's keys, a regression that pointed
+  // getOwnPropertyDescriptor at the empty target (instead of resolve()) would
+  // make Object.keys() silently drop every key or throw a TypeError, yet pass
+  // every Reflect.ownKeys-based test above. Pins that callers enumerating a
+  // lazily-required module (e.g. `Object.keys(core.events)`) see the real,
+  // enumerable own keys — and resolves the module exactly once doing so.
+  it("Object.keys() enumerates the module's enumerable own keys (ownKeys + descriptor traps)", () => {
+    const { getter, callCount } = fakeModule({ foo: 1, bar: 2 });
+    const proxy = lazyRequire<{ foo: number; bar: number }>(getter);
+    expect(callCount()).toBe(0); // untouched — still lazy
+    expect(Object.keys(proxy).sort()).toEqual(["bar", "foo"]);
+    expect(callCount()).toBe(1); // enumeration resolved the module just once
   });
 
   it("getOwnPropertyDescriptor returns the underlying descriptor", () => {

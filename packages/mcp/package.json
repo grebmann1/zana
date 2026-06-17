@@ -22,7 +22,8 @@
     "@zana-ai/extras": "0.3.0",
     "@zana-ai/intelligence": "0.3.0",
     "@zana-ai/swarm": "0.3.0",
-    "@zana-ai/server": "0.3.0"
+    "@zana-ai/server": "0.3.0",
+    "@zana-ai/contracts": "0.3.0"
   },
   "files": [
     "dist/",

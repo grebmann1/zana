@@ -2,7 +2,7 @@ import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as sseBroadcaster from "./sse-broadcaster";
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
 type ConnectionRegistry = typeof import("@zana-ai/core/dist/src/daemon/connection-registry");
 const connectionRegistry = lazyRequire<ConnectionRegistry>(

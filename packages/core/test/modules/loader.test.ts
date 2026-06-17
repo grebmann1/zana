@@ -68,6 +68,17 @@ describe("handleModuleRoute()", () => {
   it("returns false when the module-id segment is empty (/m//route)", () => {
     expect(loader.handleModuleRoute("/m//some-route", {}, {})).toBe(false);
   });
+
+  // The route regex (loader.ts line 546) is anchored with `^\/m\/`, so the
+  // `/m/<id>/<route>` shape must appear at the START of the pathname. A path
+  // that merely CONTAINS that shape as a substring (e.g. mounted behind an
+  // `/api` prefix) must NOT be treated as a module route — otherwise dropping
+  // the `^` anchor would let arbitrary nested paths index the route registry.
+  // The existing rejection cases all fail the structural shape; none pin the
+  // leading anchor against an embedded-but-well-formed `/m/.../...` substring.
+  it("returns false when a well-formed /m/<id>/<route> appears mid-path (anchor guard)", () => {
+    expect(loader.handleModuleRoute("/api/m/some-mod/some-route", {}, {})).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

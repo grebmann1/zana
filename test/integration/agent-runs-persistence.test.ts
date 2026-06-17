@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 
 const TEST_WORKSPACE = path.join(os.tmpdir(), `zana-test-runs-${Date.now()}`);
 // After the agents/manager split (worker-4), the spawn close-handler and

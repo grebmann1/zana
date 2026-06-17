@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { bus } from "@zana-ai/core/src/events/bus.ts";
+import { bus } from "@zana-ai/contracts";
 import * as registry from "@zana-ai/core/src/daemon/connection-registry.ts";
 
 // The registry stores state in a module-level Map.  We track registered ids

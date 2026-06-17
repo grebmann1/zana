@@ -22,7 +22,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContextTs from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 
 // IMPORTANT: this top-level import happens at module load time, BEFORE any

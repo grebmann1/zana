@@ -12,7 +12,7 @@ function _ctx() {
     // Prefer the facade so test and runtime see the same singleton.
     return require("@zana-ai/core").project.workspaceContext;
   } catch {
-    return require("../project/workspace-context");
+    return require("@zana-ai/contracts");
   }
 }
 

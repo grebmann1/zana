@@ -16,7 +16,7 @@ import { mkdtempSync, rmSync, existsSync, writeFileSync, utimesSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 
 describe("checkpoint store: sweepStale lock-orphan reclamation", () => {

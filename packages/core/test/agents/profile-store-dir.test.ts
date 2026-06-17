@@ -30,7 +30,7 @@ const { fakeHome, origHome } = vi.hoisted(() => {
 });
 
 import * as profileStore from "@zana-ai/core/src/agents/profile-store.ts";
-import config from "@zana-ai/core/src/config.ts";
+import { config } from "@zana-ai/contracts";
 
 afterAll(() => {
   process.env.HOME = origHome;

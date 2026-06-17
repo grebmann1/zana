@@ -108,7 +108,7 @@ describe("@zana-ai/work entry-point barrel", () => {
     it("is the same class as the one from @zana-ai/core directly", () => {
       const { WorkspaceNotInitializedError } = workIndex;
       // Resolve @zana-ai/core's dist entry to compare the canonical export.
-      const coreDist = path.resolve(__dirname, "../../core/dist/src/project/workspace-context.js");
+      const coreDist = path.resolve(__dirname, "../../contracts/dist/src/workspace-context.js");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const coreWc = require(coreDist) as any;
       expect(WorkspaceNotInitializedError).toBe(coreWc.WorkspaceNotInitializedError);

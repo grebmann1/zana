@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as db from "@zana-ai/work/src/tickets/db.ts";
 
 // The gate only applies when the SQLite backend is active. If better-sqlite3

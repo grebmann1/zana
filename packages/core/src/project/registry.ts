@@ -9,9 +9,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 
-import * as config from "../config";
+import * as config from "@zana-ai/contracts";
 import { initProjectDir, isProjectInitialized } from "./init";
-import { createForWorkspace } from "./workspace-context";
+import { createForWorkspace } from "@zana-ai/contracts";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 

@@ -5,8 +5,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
+// Redirect SKILLS_DIR via a partial mock of @zana-ai/contracts. Since contracts
+// now also exports lazyRequire (which skill-store imports), spread the real
+// module and override only SKILLS_DIR — otherwise lazyRequire goes missing.
 const configMock = vi.hoisted(() => ({ SKILLS_DIR: "" }));
-vi.mock("@zana-ai/core/dist/src/config", () => configMock);
+vi.mock("@zana-ai/contracts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@zana-ai/contracts")>();
+  return { ...actual, get SKILLS_DIR() { return configMock.SKILLS_DIR; } };
+});
 
 import {
   listSkills,

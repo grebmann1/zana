@@ -19,7 +19,7 @@
 
 import { describe, it, expect } from "vitest";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import { migrateIfNeeded } from "@zana-ai/work/src/tickets/migration.ts";
 
 // better-sqlite3 is a CJS native module; require() avoids ESM import issues.

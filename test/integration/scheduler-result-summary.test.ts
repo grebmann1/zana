@@ -19,7 +19,7 @@ describe("scheduler result-summary capture", () => {
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
     // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
     mkdirSync(join(tmpDir, ".zana"), { recursive: true });
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     ws.init(tmpDir);
     // Dual-init the dist instance — store.ts requires @zana-ai/core → dist.
     const core = await import("@zana-ai/core");
@@ -27,7 +27,7 @@ describe("scheduler result-summary capture", () => {
     if (wcDist && typeof wcDist.init === "function") wcDist.init(tmpDir);
     svc = await import("@zana-ai/work/src/scheduling/service.ts");
     store = await import("@zana-ai/work/src/scheduling/store.ts");
-    bus = (await import("@zana-ai/core/src/events/bus.ts")).bus;
+    bus = (await import("@zana-ai/contracts")).bus;
   });
 
   it("updates history entry with summary + stats when agent:terminated fires", async () => {

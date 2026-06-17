@@ -19,7 +19,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContextTs from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 import * as store from "@zana-ai/work/src/scheduling/store.ts";
 

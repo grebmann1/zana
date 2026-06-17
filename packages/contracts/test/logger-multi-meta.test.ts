@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getLogger } from "../../src/util/logger.ts";
+import { getLogger } from "../src/logger.ts";
 
 // Capture stderr writes without touching real I/O.
 function captureStderr() {

@@ -14,7 +14,7 @@ describe("scheduler command action — shell injection guard", () => {
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
     // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
     mkdirSync(join(tmpDir, ".zana"), { recursive: true });
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     ws.init(tmpDir);
     // The store.ts file resolves @zana-ai/core via require → dist. Dual-init
     // the dist instance too so the wave-1 tenant-isolation gate passes.

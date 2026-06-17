@@ -64,7 +64,7 @@ describe("events/log rotation", () => {
   });
 
   it("append() rotates when ZANA_EVENT_LOG_MAX_BYTES is small", async () => {
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     const tmpWs = mkdtempSync(join(tmpdir(), "elog-ws-"));
     // Pre-create .zana so resolveProjectDir() stops here and does not walk
     // up the tree to a pre-existing /tmp/.zana or ~/.zana directory.

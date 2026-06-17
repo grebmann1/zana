@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContextTs from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 import * as schedulerStore from "@zana-ai/work/src/scheduling/store.ts";
 

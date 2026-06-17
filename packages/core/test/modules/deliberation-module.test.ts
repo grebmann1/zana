@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 
 import * as moduleConfig from "@zana-ai/core/src/modules/config.ts";
 import * as probeConfigDirect from "@zana-ai/core/src/agents/probe-config.ts";
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import { resetRuntimeConfig, getRuntimeConfig } from "@zana-ai/work/src/deliberation/runtime-config.ts";
 
 // The module's index.js does `require("@zana-ai/core").agents.probeConfig` which

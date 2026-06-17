@@ -4,14 +4,14 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { bus, EVENTS } from "./events/bus";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import * as profileStore from "./agents/profile-store";
 import * as agentManager from "./agents/manager";
 import * as eventLog from "./events/log";
 import * as daemonRegistry from "./daemon/registry";
 import * as persistence from "./persistence";
 import * as eventBusService from "./events/service";
-import * as workspaceContext from "./project/workspace-context";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as moduleLoader from "./modules/loader";
 import * as moduleConfig from "./modules/config";
 

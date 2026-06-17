@@ -14,7 +14,7 @@
  * `backlog` is NEVER swept — those are real queued items.
  */
 
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 
 type Agent = { id: string; state: string };
 type Ticket = {

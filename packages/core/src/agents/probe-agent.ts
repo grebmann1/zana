@@ -16,7 +16,7 @@ import * as crypto from "node:crypto";
 import { getProbeConfig } from "./probe-config";
 import { lookupProbeResult, recordProbeResult } from "./probe-cache";
 import { spawnHeadlessAgent, getAgent, killAgent } from "./lifecycle";
-import { bus, EVENTS } from "../events/bus";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import type { ProbeFailure, ProbeFailureKind, AgentProbedPayload } from "../events/deliberation-events";
 
 export interface ProbeRequest {

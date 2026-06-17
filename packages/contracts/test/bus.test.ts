@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
-import { bus, EVENTS } from "../../src/events/bus.ts";
+import { bus, EVENTS } from "../src/bus.ts";
 
 // ─── EVENTS constants ────────────────────────────────────────────────────────
 
@@ -42,6 +42,15 @@ describe("EVENTS constants", () => {
   // (lifecycle.ts). Downstream consumers key off this exact string, so pin it.
   it("defines AGENT_ANOMALY as 'agent:anomaly'", () => {
     expect(EVENTS.AGENT_ANOMALY).toBe("agent:anomaly");
+  });
+
+  // AGENT_RETRYING is the only event name the bulk assertion above never pins
+  // (and the explicit AGENT_ANOMALY / deliberation pins skip it too). The retry
+  // orchestrator emits this exact string and downstream consumers subscribe by
+  // it, so a silent rename would slip past every other test here — the
+  // duplicate-value guard only checks uniqueness, not the literal value.
+  it("defines AGENT_RETRYING as 'agent:retrying'", () => {
+    expect(EVENTS.AGENT_RETRYING).toBe("agent:retrying");
   });
 
   // The deliberation-extension events are the newest additions to the map and

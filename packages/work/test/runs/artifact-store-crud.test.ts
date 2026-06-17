@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as artifactStore from "@zana-ai/work/src/runs/artifact-store.ts";
 import * as core from "@zana-ai/core";
 

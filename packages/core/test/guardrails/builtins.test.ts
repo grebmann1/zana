@@ -91,6 +91,18 @@ describe("jsonSchema", () => {
     expect(r.pass).toBe(true);
   });
 
+  // jsonSchema gates schema validation on `schema && typeof schema.validate
+  // === "function"` (builtins.ts line 22). The null case above covers the
+  // falsy arm; a TRUTHY schema object that simply has NO validate method is a
+  // distinct branch the suite never exercises. It must skip schema validation
+  // entirely — neither throwing (a regression calling schema.validate(...)
+  // unconditionally would TypeError) nor failing — and surface the parsed JSON.
+  it("skips schema validation for a truthy schema object lacking a validate() method", () => {
+    const r = jsonSchema({} as any).validate('{"a":1}');
+    expect(r.pass).toBe(true);
+    expect((r as any).parsedOutput).toEqual({ a: 1 });
+  });
+
   // jsonSchema carries its OWN markdown-fence extraction (builtins.ts line 10),
   // separate from jsonParse's copy. The existing jsonSchema tests only feed
   // bare JSON, so the fence-stripping branch — strip ```json … ``` BEFORE

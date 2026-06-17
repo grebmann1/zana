@@ -11,7 +11,7 @@
 // no fake timers — fully deterministic.
 
 import { describe, it, expect, afterEach } from "vitest";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import { emitTerminated } from "@zana-ai/core/src/agents/lifecycle.ts";
 
 // Collect every payload emitted during a test so assertions can inspect it.

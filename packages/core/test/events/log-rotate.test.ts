@@ -77,6 +77,41 @@ describe("rotateIfNeeded", () => {
     expect(entries.every((e) => e.startsWith("events."))).toBe(true);
   });
 
+  // The prune step filters rolled siblings by BOTH the `${stem}.` prefix AND
+  // the same extension (log.ts lines 91-92: `f.startsWith(prefix) && ... &&
+  // f.endsWith(ext)`). So rotating `events.ndjson` must only ever delete other
+  // `events.*.ndjson` rolls — a same-stem file with a DIFFERENT extension
+  // (e.g. an `events.*.json` metadata sidecar) and any unrelated file must be
+  // left untouched, even with an aggressive retainCount=0 that prunes every
+  // matching roll. The existing prune test only uses same-extension siblings,
+  // leaving this isolation invariant unpinned.
+  it("prunes only same-extension siblings, leaving other-ext and unrelated files intact", () => {
+    const dir = mkTmp();
+    const fp = path.join(dir, "events.ndjson");
+
+    const sameExtRoll = path.join(dir, "events.2024-01-01T00-00-00.ndjson"); // prunable
+    const otherExtSibling = path.join(dir, "events.2024-01-01T00-00-00.json"); // same stem, diff ext
+    const unrelated = path.join(dir, "other.ndjson"); // different stem
+    fs.writeFileSync(sameExtRoll, "old");
+    fs.writeFileSync(otherExtSibling, "meta");
+    fs.writeFileSync(unrelated, "unrelated");
+
+    // Large live file + retainCount=0 → every matching .ndjson roll is pruned
+    // (including the freshly-rolled one).
+    fs.writeFileSync(fp, "x".repeat(200));
+    rotateIfNeeded(fp, 100, 0);
+
+    expect(fs.existsSync(fp)).toBe(false); // live file rotated away
+    // No `events.*.ndjson` rolls remain — all matching siblings pruned.
+    expect(fs.readdirSync(dir).filter((f) => f.startsWith("events.") && f.endsWith(".ndjson")))
+      .toHaveLength(0);
+    // Different-extension same-stem sidecar is NOT swept up by rotation.
+    expect(fs.existsSync(otherExtSibling)).toBe(true);
+    expect(fs.readFileSync(otherExtSibling, "utf8")).toBe("meta");
+    // Unrelated-stem file is untouched.
+    expect(fs.existsSync(unrelated)).toBe(true);
+  });
+
   it("works with files that have no extension", () => {
     const dir = mkTmp();
     const fp = path.join(dir, "mylog");

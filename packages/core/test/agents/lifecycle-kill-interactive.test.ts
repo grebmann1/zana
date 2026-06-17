@@ -45,7 +45,7 @@ vi.mock("@zana-ai/core/src/agents/spawner.ts", () => ({
 }));
 
 import { spawnInteractive, killAgent, getAgent } from "@zana-ai/core/src/agents/lifecycle.ts";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import * as moduleConfig from "@zana-ai/core/src/modules/config.ts";
 
 beforeAll(() => {

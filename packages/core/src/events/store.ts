@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as workspaceContext from "../project/workspace-context";
+import * as workspaceContext from "@zana-ai/contracts";
 
 // FU-T2e — DO NOT snapshot the events directory at module load time.
 //

@@ -14,7 +14,7 @@ describe("scheduler mcp_tool action", () => {
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
     // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
     mkdirSync(join(tmpDir, ".zana"), { recursive: true });
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     ws.init(tmpDir);
     // Dual-init the dist instance — store.ts requires @zana-ai/core → dist.
     const core = await import("@zana-ai/core");

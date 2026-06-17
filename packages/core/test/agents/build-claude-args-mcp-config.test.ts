@@ -62,8 +62,15 @@ describe("buildClaudeArgs — mcpConfig", () => {
     expect(withStrict).toContain("--strict-mcp-config");
   });
 
-  it("does not emit --mcp-config when the profile has no mcpConfig", () => {
-    const args = buildClaudeArgs({ id: "no-mcp-profile" });
+  it("injects the default zana MCP config when a profile has no mcpConfig (opt-out, not opt-in)", () => {
+    // A headless worker gets the zana MCP server injected by default so it can
+    // report ticket progress back; only `noZanaMcp: true` suppresses it.
+    const args = buildClaudeArgs({ id: "default-mcp-profile" });
+    expect(args).toContain("--mcp-config");
+  });
+
+  it("does not emit --mcp-config when the profile opts out with noZanaMcp", () => {
+    const args = buildClaudeArgs({ id: "no-mcp-profile", noZanaMcp: true });
     expect(args).not.toContain("--mcp-config");
     expect(args).not.toContain("--strict-mcp-config");
   });

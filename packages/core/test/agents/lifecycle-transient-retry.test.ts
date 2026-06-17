@@ -274,4 +274,31 @@ describe("resumeHeadlessAgent — boot crash recovery", () => {
     expect(newId).toBeNull();
     expect(children.length).toBe(0);
   });
+
+  it("sends a continuation nudge, not the original prompt, on resume", () => {
+    // Documented invariant (lifecycle.ts): a --resume re-spawn replays the
+    // prior transcript from disk, so re-sending the ORIGINAL prompt would
+    // re-ask the whole task on top of existing progress. Resume must instead
+    // pass a short continuation nudge as the next turn.
+    const ORIGINAL_PROMPT = "finish the migration";
+    const newId = resumeHeadlessAgent({
+      id: "old-dead-id",
+      profileId: "tester",
+      profileName: "Tester",
+      mode: "headless",
+      claudeSessionId: "sess-boot-nudge",
+      prompt: ORIGINAL_PROMPT,
+      cwd: "/tmp/work",
+    });
+
+    expect(typeof newId).toBe("string");
+    expect(children.length).toBe(1);
+    // The child is spawned with the nudge, never the original task prompt.
+    expect(spawnOptions[0].prompt).not.toBe(ORIGINAL_PROMPT);
+    expect(spawnOptions[0].prompt).toBe(
+      "Continue the task from where you left off before the interruption.",
+    );
+    // The original prompt is still retained on the record for bookkeeping.
+    expect(getAgent(newId!).prompt).toBe(ORIGINAL_PROMPT);
+  });
 });

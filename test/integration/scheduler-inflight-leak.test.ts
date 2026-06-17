@@ -13,7 +13,7 @@ describe("scheduler inflightAgents TTL sweep", () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), "sched-inflight-leak-"));
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     ws.init(tmpDir);
     svc = await import("@zana-ai/work/src/scheduling/service.ts");
     // Drain anything that might have leaked over from prior suites in the

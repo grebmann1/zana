@@ -17,7 +17,7 @@ import * as path from "node:path";
 import Database from "better-sqlite3";
 import * as migration from "@zana-ai/work/src/tickets/migration.ts";
 
-import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContextTs from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 import * as db from "@zana-ai/work/src/tickets/db.ts";
 import * as store from "@zana-ai/work/src/tickets/store.ts";

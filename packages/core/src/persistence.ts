@@ -3,7 +3,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { PERSIST_DIR } from "./config";
+import { PERSIST_DIR } from "@zana-ai/contracts";
 const INBOX_FILE = path.join(PERSIST_DIR, "inboxes.ndjson");
 const AGENTS_FILE = path.join(PERSIST_DIR, "agents.json");
 const MAX_INBOX_FILE_LINES = 5000;

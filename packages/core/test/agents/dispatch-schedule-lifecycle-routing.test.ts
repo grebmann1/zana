@@ -24,7 +24,7 @@ const { mockScheduler } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (arg: any) => {
     if (arg === "@zana-ai/work") return { scheduling: { service: mockScheduler } };
     return new Proxy({}, { get: () => vi.fn(() => ({})) });

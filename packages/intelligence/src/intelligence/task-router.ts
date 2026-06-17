@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
 

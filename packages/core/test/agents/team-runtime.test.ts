@@ -63,7 +63,7 @@ vi.mock("@zana-ai/core/src/agents/profile-store.ts", () => ({
 // Mock lazyRequire so that team-runtime's `const work = lazyRequire("@zana-ai/work")`
 // returns our controlled stub. (The proxy's runtime require() call bypasses
 // Vite's module graph, so vi.mock("@zana-ai/work") has no effect here.)
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: vi.fn((target: string | (() => unknown)) => {
     const id = typeof target === "string" ? target : "__getter__";
     if (id === "@zana-ai/work") {

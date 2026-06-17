@@ -20,7 +20,7 @@
  *
  * // OUTSIDE @zana-ai/core — import via the dist subpath (see "Dist-path
  * // consumption" below for why the package root would defeat the helper):
- * import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+ * import { lazyRequire } from "@zana-ai/contracts";
  *
  * // Whole-module:
  * const work = lazyRequire<typeof import("@zana-ai/work")>("@zana-ai/work");
@@ -42,7 +42,7 @@
  * # Dist-path consumption (intentional)
  *
  * Consumers outside `@zana-ai/core` import this helper via
- * `"@zana-ai/core/dist/src/util/lazy-require"` — NOT from the package root
+ * `"@zana-ai/contracts"` — NOT from the package root
  * `"@zana-ai/core"`. Going through the package root would resolve the main
  * entry, evaluate the full core module graph at import-time, and re-trigger
  * the very cycle this helper exists to break. The dist-subpath import is

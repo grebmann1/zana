@@ -31,7 +31,7 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 // Import after vi.mock so production code binds the mocked fs.
-import { getLogger, _state } from "@zana-ai/core/src/util/logger.ts";
+import { getLogger, _state } from "../src/logger.ts";
 
 describe("logger — ZANA_LOG_FILE sink", () => {
   let counter = 0;

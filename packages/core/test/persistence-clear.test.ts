@@ -24,7 +24,7 @@ beforeEach(() => {
   persistDir = path.join(tmpDir, "persistence");
 
   vi.resetModules();
-  vi.doMock("../src/config.ts", () => ({
+  vi.doMock("@zana-ai/contracts", () => ({
     default: { PERSIST_DIR: persistDir },
     PERSIST_DIR: persistDir,
   }));

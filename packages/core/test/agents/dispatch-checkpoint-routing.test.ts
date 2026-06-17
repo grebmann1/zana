@@ -48,7 +48,7 @@ vi.mock("@zana-ai/core/src/agents/team-runtime.ts", () => ({
 
 vi.mock("@zana-ai/swarm", () => ({ router: {}, events: {}, spawner: {} }));
 
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (_factory: any) => new Proxy({}, { get: () => vi.fn(() => ({})) }),
 }));
 

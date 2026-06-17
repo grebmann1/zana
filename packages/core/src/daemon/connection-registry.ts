@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import { bus } from "../events/bus";
+import { bus } from "@zana-ai/contracts";
 
 const connections = new Map();
 

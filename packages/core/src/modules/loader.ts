@@ -20,7 +20,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
 
 function getLockPath() {
   if (lockPath) return lockPath;
-  const workspace = require("../project/workspace-context");
+  const workspace = require("@zana-ai/contracts");
   lockPath = path.join(workspace.getProjectDir(), "modules.lock");
   return lockPath;
 }
@@ -120,8 +120,8 @@ function topoSort(discovered) {
 
 function buildContext(moduleId, manifest) {
   const eventBusService = require("../events/service");
-  const workspace = require("../project/workspace-context");
-  const { ZANA_DIR } = require("../config");
+  const workspace = require("@zana-ai/contracts");
+  const { ZANA_DIR } = require("@zana-ai/contracts");
 
   const projectStoreDir = path.join(workspace.getProjectDir(), moduleId);
   const globalStoreDir = path.join(ZANA_DIR, "modules", moduleId);

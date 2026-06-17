@@ -5,7 +5,7 @@ import * as path from "node:path";
 
 function _core() { return require("@zana-ai/core"); }
 function _ctx() { return _core().project.workspaceContext; }
-import { ZANA_DIR } from "@zana-ai/core/dist/src/config";
+import { ZANA_DIR } from "@zana-ai/contracts";
 
 function getTicketsDir() {
   const ctx = _ctx();

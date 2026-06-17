@@ -15,7 +15,7 @@
 // Deterministic: pure object construction, no fs / network / clock.
 
 import { describe, it, expect } from "vitest";
-import { WorkspaceNotInitializedError } from "../../src/project/workspace-context.ts";
+import { WorkspaceNotInitializedError } from "../src/workspace-context.ts";
 
 describe("WorkspaceNotInitializedError — minimal options (no kind, no path)", () => {
   it("omits the kind and path fragments from the message when neither is supplied", () => {

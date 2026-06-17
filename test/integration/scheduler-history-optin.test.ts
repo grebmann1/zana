@@ -17,7 +17,7 @@ describe("scheduler — opt-in history", () => {
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
     // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
     mkdirSync(join(tmpDir, ".zana"), { recursive: true });
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     ws.init(tmpDir);
     // Also init the dist instance — service/store reach workspaceContext via
     // require("@zana-ai/core") which resolves to dist; otherwise the
@@ -33,7 +33,7 @@ describe("scheduler — opt-in history", () => {
   afterEach(async () => {
     try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     try {
-      const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+      const ws = await import("@zana-ai/contracts");
       (ws as any)._resetForTesting?.();
     } catch {}
     try {

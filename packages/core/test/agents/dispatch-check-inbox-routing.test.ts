@@ -39,7 +39,7 @@ vi.mock("@zana-ai/core/src/agents/team-runtime.ts", () => ({
 // Defer the cross-package proxies (@zana-ai/work, @zana-ai/extras) so the
 // require-cycle never loads at module-eval time. `check_inbox` touches none of
 // them; the direct `require("@zana-ai/swarm")` in dispatch stays real.
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (_factory: any) => new Proxy({}, { get: () => vi.fn(() => ({})) }),
 }));
 

@@ -16,8 +16,9 @@
   ],
   "scripts": {
     "install:bootstrap": "bash ./scripts/install.sh",
-    "clean:runtime": "rm -rf dist packages/core/dist packages/mcp/dist packages/work/dist packages/server/dist packages/swarm/dist packages/intelligence/dist packages/extras/dist",
-    "build:runtime": "npm run clean:runtime && npm run build:runtime:core && npm run build:runtime:swarm && npm run build:runtime:intelligence && npm run build:runtime:extras && npm run build:runtime:work && npm run build:runtime:server && npm run build:runtime:mcp && npm run build:runtime:bin && npm run build:runtime:scripts && node dist/scripts/copy-runtime-assets.js",
+    "clean:runtime": "rm -rf dist packages/contracts/dist packages/core/dist packages/mcp/dist packages/work/dist packages/server/dist packages/swarm/dist packages/intelligence/dist packages/extras/dist",
+    "build:runtime": "npm run clean:runtime && npm run build:runtime:contracts && npm run build:runtime:core && npm run build:runtime:swarm && npm run build:runtime:intelligence && npm run build:runtime:extras && npm run build:runtime:work && npm run build:runtime:server && npm run build:runtime:mcp && npm run build:runtime:bin && npm run build:runtime:scripts && node dist/scripts/copy-runtime-assets.js",
+    "build:runtime:contracts": "npm run build --workspace=@zana-ai/contracts",
     "build:runtime:core": "npm run build --workspace=@zana-ai/core",
     "build:runtime:swarm": "npm run build --workspace=@zana-ai/swarm",
     "build:runtime:intelligence": "npm run build --workspace=@zana-ai/intelligence",

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import config from "@zana-ai/core/src/config.ts";
+import * as config from "../src/config.ts";
 
 describe("config — static constants and global paths", () => {
   it("ZANA_DIR is ~/.zana", () => {

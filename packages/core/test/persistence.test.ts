@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.resetModules();
 
   // Redirect PERSIST_DIR to the temp directory BEFORE persistence.ts is imported.
-  vi.doMock("../src/config.ts", () => ({
+  vi.doMock("@zana-ai/contracts", () => ({
     default: { PERSIST_DIR: persistDir },
     PERSIST_DIR: persistDir,
   }));

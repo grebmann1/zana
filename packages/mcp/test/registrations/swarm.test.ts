@@ -8,7 +8,7 @@
 // Strategy: import the module directly; inject a fake callCore — no daemon,
 // no network, no real swarm processes.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { swarm } from "../../src/registrations/swarm.ts";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -52,6 +52,58 @@ describe("swarm tool visibility gating", () => {
     expect(swarm).toHaveProperty("handlers");
     expect(Array.isArray(swarm.tools)).toBe(true);
     expect(typeof swarm.handlers).toBe("object");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tool visibility — BOTH gates open (ZANA_MASTER_MODE + ZANA_SWARM_EXPERIMENTAL)
+//
+// Flags are read once at module load (see gating.ts), so to exercise the
+// gate-open path we set both env vars, reset the module cache, and re-import a
+// fresh copy. This covers the only branch swarm.ts has that the default
+// (gate-closed) tests above cannot reach.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("swarm tool visibility — both gates open", () => {
+  const ENV_KEYS = ["ZANA_MASTER_MODE", "ZANA_SWARM_EXPERIMENTAL"] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    vi.resetModules();
+  });
+
+  it("surfaces all 6 swarm tools when MASTER_MODE and SWARM_EXPERIMENTAL are both set", async () => {
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    process.env.ZANA_MASTER_MODE = "true";
+    process.env.ZANA_SWARM_EXPERIMENTAL = "1";
+
+    vi.resetModules();
+    const fresh = await import("../../src/registrations/swarm.ts");
+
+    expect(fresh.swarm.tools).toHaveLength(6);
+    expect(fresh.swarm.tools.map((t) => t.name)).toEqual([
+      "zana_swarm_spawn",
+      "zana_swarm_list",
+      "zana_swarm_instruct",
+      "zana_swarm_stop",
+      "zana_swarm_broadcast",
+      "zana_swarm_poll_events",
+    ]);
+  });
+
+  it("stays closed when only MASTER_MODE is set (SWARM_EXPERIMENTAL still off)", async () => {
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    process.env.ZANA_MASTER_MODE = "true";
+    delete process.env.ZANA_SWARM_EXPERIMENTAL;
+
+    vi.resetModules();
+    const fresh = await import("../../src/registrations/swarm.ts");
+
+    expect(fresh.swarm.tools).toHaveLength(0);
   });
 });
 

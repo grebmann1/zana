@@ -10,7 +10,7 @@
 // no PTY, no network — fully deterministic.
 
 import { describe, it, expect, afterEach } from "vitest";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import { updateAgentFromHook } from "@zana-ai/core/src/agents/lifecycle.ts";
 
 afterEach(() => {

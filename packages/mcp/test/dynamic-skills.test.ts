@@ -22,7 +22,7 @@ function writeSkill(dir: string, name: string, obj: any): void {
 
 // Grab the real core config object — same reference the module under test reads.
 const req = createRequire(import.meta.url);
-const coreConfig: Record<string, string> = req("@zana-ai/core").config;
+const coreConfig: Record<string, string> = req("@zana-ai/contracts/dist/src/config");
 
 // Import the module under test (after requiring core so the require cache is warm).
 const { loadToolSkills, handleScratchpad, isValidToolSchema } = await import(

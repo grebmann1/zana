@@ -67,6 +67,45 @@ describe("noSecrets — GitHub OAuth tokens (gho_)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// noSecrets — GitHub PAT (ghp_) false-positive avoidance
+//
+// The ghp_ rule is /(?:^|[^a-zA-Z0-9])(ghp_[a-zA-Z0-9]{36,})/. builtins.test.ts
+// pins only the POSITIVE case (a full 36-char ghp_ token is flagged), and the
+// sibling gho_ block here pins only an incidental-prose negative. The two guards
+// that keep the ghp_ rule from over-firing are otherwise unexercised — exactly
+// the false-positive surface the sk-/AKIA blocks below pin for their prefixes:
+//   1. a {36,} length floor, so a short "ghp_" fragment is NOT treated as a key
+//   2. a (?:^|[^a-zA-Z0-9]) left boundary, so a ghp_ run glued to a preceding
+//      alphanumeric char (mid-token) does NOT match
+// A regression touching just the ghp_ length/boundary would slip past every
+// other secret test. Pure value-in / {pass} out — no I/O.
+// ---------------------------------------------------------------------------
+describe("noSecrets — ghp_ (GitHub PAT) false-positive avoidance", () => {
+  const guard = noSecrets();
+
+  it("passes when a ghp_ run is shorter than the 36-char minimum", () => {
+    // 35 chars after the prefix — below the {36,} floor.
+    const r = guard.validate("token=ghp_" + "a".repeat(35));
+    expect(r.pass).toBe(true);
+  });
+
+  it("passes when a full-length ghp_ run is glued to a preceding alphanumeric char", () => {
+    // 'x' immediately precedes ghp_, so neither ^ nor the [^a-zA-Z0-9] boundary
+    // alternative matches — must not be flagged despite the 36-char body.
+    const r = guard.validate("prefixghp_" + "a".repeat(36));
+    expect(r.pass).toBe(true);
+  });
+
+  it("still fails a properly bounded, full-length ghp_ token", () => {
+    // Sanity anchor: the length/boundary guards above are about false positives,
+    // not a dead rule — a real, bounded PAT is still caught.
+    const r = guard.validate("token is ghp_" + "a".repeat(36));
+    expect(r.pass).toBe(false);
+    expect((r as any).feedback).toMatch(/secrets/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // noSecrets — sk- pattern false-positive avoidance
 //
 // The sk- rule is /(?:^|[^a-zA-Z0-9])(sk-[a-zA-Z0-9]{20,})/ — two guards the
@@ -97,6 +136,52 @@ describe("noSecrets — sk- false-positive avoidance", () => {
     // Sanity anchor: a properly bounded, full-length key is still caught,
     // so the two passes above are about boundaries — not a dead guard.
     const r = guard.validate("token is sk-" + "a".repeat(20));
+    expect(r.pass).toBe(false);
+    expect((r as any).feedback).toMatch(/secrets/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// noSecrets — AWS access-key id (AKIA) false-positive avoidance
+//
+// The AWS rule is /(?:^|[^a-zA-Z0-9])(AKIA[0-9A-Z]{16})/. builtins.test.ts pins
+// only the POSITIVE case (a bounded "AKIA…EXAMPLE" is flagged); the three
+// guards that keep it from over-firing are otherwise unexercised on this prefix
+// and a regression touching just the AKIA pattern would slip past every other
+// secret test:
+//   1. a (?:^|[^a-zA-Z0-9]) left boundary, so an AKIA run glued to a preceding
+//      alphanumeric char (mid-token, e.g. inside a hash) does NOT match
+//   2. an exactly-{16} body of [0-9A-Z], so a shorter run is NOT a key
+//   3. an UPPERCASE-only [0-9A-Z] body, so a lowercased look-alike does NOT match
+// All pure value-in / {pass} out — no I/O. The verified behavior: a bounded
+// 16-char uppercase run is flagged; the three variants below are not.
+// ---------------------------------------------------------------------------
+describe("noSecrets — AKIA (AWS access key) false-positive avoidance", () => {
+  const guard = noSecrets();
+  const body = "IOSFODNN7EXAMPL1"; // exactly 16 chars of [0-9A-Z]
+
+  it("passes when an AKIA run is glued to a preceding alphanumeric char", () => {
+    // 'x' immediately precedes AKIA, so neither ^ nor the [^a-zA-Z0-9] boundary
+    // alternative matches — must not be flagged.
+    const r = guard.validate("hashx" + "AKIA" + body);
+    expect(r.pass).toBe(true);
+  });
+
+  it("passes when the AKIA body is shorter than the required 16 chars", () => {
+    // 15 chars after the prefix — below the {16} floor.
+    const r = guard.validate("key AKIA" + "IOSFODNN7EXAMP1");
+    expect(r.pass).toBe(true);
+  });
+
+  it("passes when the AKIA body contains lowercase (charset is [0-9A-Z] only)", () => {
+    const r = guard.validate("key AKIA" + body.toLowerCase());
+    expect(r.pass).toBe(true);
+  });
+
+  it("still fails a properly bounded, full-length uppercase AKIA key", () => {
+    // Sanity anchor: the boundary/length/charset guards above are about false
+    // positives, not a dead rule — a real key is still caught.
+    const r = guard.validate("creds: AKIA" + body);
     expect(r.pass).toBe(false);
     expect((r as any).feedback).toMatch(/secrets/i);
   });

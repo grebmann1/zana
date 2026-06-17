@@ -1,6 +1,12 @@
+// The base layer (workspace-context, config, event bus, logger, lazyRequire)
+// now lives in @zana-ai/contracts — a dependency-free leaf (ADR 0010). core
+// re-exports each under its historical facade path so every existing
+// `require("@zana-ai/core").x` / `_core().x` call site is unchanged.
+const _contracts = require("@zana-ai/contracts");
+
 module.exports = {
   init: require("./core").init,
-  config: require("./config"),
+  config: _contracts.config,
 
   get swarm() {
     return require("@zana-ai/swarm");
@@ -42,7 +48,7 @@ module.exports = {
     migrate: require("./project/migrate"),
     registry: require("./project/registry"),
     watcher: require("./project/watcher"),
-    workspaceContext: require("./project/workspace-context"),
+    workspaceContext: _contracts.workspaceContext,
   },
   // Re-exported at top level so callers can do
   //   const { WorkspaceNotInitializedError } = require("@zana-ai/core");
@@ -50,7 +56,7 @@ module.exports = {
   // require("@zana-ai/core").project.workspaceContext.WorkspaceNotInitializedError
   // — both resolve to the singleton module.
   get WorkspaceNotInitializedError() {
-    return require("./project/workspace-context").WorkspaceNotInitializedError;
+    return _contracts.WorkspaceNotInitializedError;
   },
   daemon: {
     registry: require("./daemon/registry"),
@@ -69,8 +75,8 @@ module.exports = {
   events: {
     // Flat shape on purpose: bus IS the EventEmitter, EVENTS IS the constants.
     // Don't access .bus.bus — that's the wrong (legacy) shape.
-    bus: require("./events/bus").bus,
-    EVENTS: require("./events/bus").EVENTS,
+    bus: _contracts.bus,
+    EVENTS: _contracts.EVENTS,
     service: require("./events/service"),
     store: require("./events/store"),
     log: require("./events/log"),
@@ -97,7 +103,7 @@ module.exports = {
   persistence: require("./persistence"),
   guardrails: require("./guardrails/index"),
   util: {
-    logger: require("./util/logger"),
-    lazyRequire: require("./util/lazy-require").lazyRequire,
+    logger: _contracts.logger,
+    lazyRequire: _contracts.lazyRequire,
   },
 };

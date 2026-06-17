@@ -1,0 +1,23 @@
+{
+  "name": "@zana-ai/contracts",
+  "version": "0.3.0",
+  "description": "Dependency-free base layer — workspace-context, config, event bus, logger, lazyRequire. The leaf everyone (incl. core) consumes.",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grebmann1/zana.git",
+    "directory": "packages/contracts"
+  },
+  "homepage": "https://github.com/grebmann1/zana#readme"
+}

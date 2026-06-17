@@ -71,6 +71,24 @@ describe("computeOverview", () => {
     expect(computeOverview(events).eventCount).toBe(2);
   });
 
+  // computeOverview tracks distinct agents via `agents.add(ev.payload?.agentId)`
+  // (stats-engine.ts). When agent:spawned events carry NO agentId, optional
+  // chaining yields `undefined`, and Set semantics collapse EVERY such spawn to
+  // a single `undefined` member — so N id-less spawns count as exactly one
+  // distinct agent, not N (and not zero). The sibling breakdown tests pin the
+  // "unknown" fallback for missing tool_name/profileId, but the overview's Set
+  // has no missing-agentId case: this pins that id-less spawns don't inflate
+  // totalAgents and that a real agentId alongside them adds exactly one more.
+  it("collapses agent:spawned events with no agentId into a single distinct agent", () => {
+    const events = [
+      makeEvent("agent:spawned", {}),               // no agentId → undefined
+      makeEvent("agent:spawned", {}),               // no agentId → same undefined member
+      makeEvent("agent:spawned", { agentId: "a1" }), // a real, distinct agent
+    ];
+    // {undefined, "a1"} → size 2, NOT 3 (id-less spawns don't each count).
+    expect(computeOverview(events).totalAgents).toBe(2);
+  });
+
   // Every test above isolates a single field. This pins the single-pass switch
   // (stats-engine.ts) accumulating ALL counters at once from one interleaved
   // stream — distinct agents (with a duplicate), only PostToolUse hooks counted,
@@ -144,6 +162,25 @@ describe("computeProfileBreakdown", () => {
   it("buckets missing profileId under 'unknown'", () => {
     const events = [makeEvent("agent:spawned", { agentId: "a1" })];
     expect(computeProfileBreakdown(events)).toEqual({ unknown: 1 });
+  });
+
+  // computeProfileBreakdown (stats-engine.ts) tallies profileId ONLY from
+  // `agent:spawned` events. The sibling computeToolBreakdown pins its event-type
+  // filter (a PreToolUse hook is ignored), but the profile breakdown's filter is
+  // otherwise unpinned: every non-empty test above feeds exclusively spawned
+  // events, so a regression that also counted a profileId carried on some OTHER
+  // event type (e.g. agent:terminated) would pass them all. This pins that only
+  // spawns contribute — a terminated/ticket event bearing a profileId must NOT
+  // inflate the breakdown.
+  it("counts profileId only from agent:spawned, ignoring other event types", () => {
+    const events = [
+      makeEvent("agent:spawned",    { agentId: "a1", profileId: "coder" }),
+      makeEvent("agent:terminated", { agentId: "a1", profileId: "coder" }), // ignored
+      makeEvent("ticket:created",   { profileId: "reviewer" }),             // ignored
+      makeEvent("agent:spawned",    { agentId: "a2", profileId: "coder" }),
+    ];
+    // Only the two spawns count; the termination/ticket profileIds are dropped.
+    expect(computeProfileBreakdown(events)).toEqual({ coder: 2 });
   });
 });
 
@@ -268,6 +305,26 @@ describe("computeTicketFlow", () => {
     expect(flow[1]).toMatchObject({ ts: 200, created: 2, completed: 0 });
     expect(flow[2]).toMatchObject({ ts: 300, created: 2, completed: 1 });
   });
+
+  // The ticket:completed branch (stats-engine.ts) increments `completed`
+  // unconditionally — there is no `created >= completed` guard and no clamp
+  // (unlike computeAgentTimeline's Math.max(0, …)). A ticket created BEFORE the
+  // stats window opened can therefore complete inside it, yielding a point with
+  // completed > created. The existing suite only feeds created-then-completed in
+  // monotonic order, so it never reaches the completed-without-prior-created
+  // path. This pins that the series faithfully records such out-of-window
+  // completions rather than dropping or zero-flooring them.
+  it("records a completed point with no prior created (completed may exceed created)", () => {
+    const events = [
+      { type: "ticket:completed", timestamp: 100 }, // created outside the window
+      { type: "ticket:created",   timestamp: 200 },
+    ];
+    const flow = computeTicketFlow(events);
+    expect(flow).toEqual([
+      { ts: 100, created: 0, completed: 1 }, // completed > created — not clamped
+      { ts: 200, created: 1, completed: 1 },
+    ]);
+  });
 });
 
 // ─── computeThroughput ───────────────────────────────────────────────────────
@@ -314,6 +371,28 @@ describe("computeThroughput", () => {
       { ts: 1000, count: 0 },
       { ts: 2000, count: 0 },
       { ts: 3000, count: 1 },
+    ]);
+  });
+
+  // Every test above overrides bucketMs with 1000, so the function's DEFAULT
+  // bucket width (stats-engine.ts: `bucketMs = 30000`) is never exercised — yet
+  // that 30-second window is the granularity real throughput charts render at.
+  // Called with no bucketMs, two tool calls inside one 30s window must collapse
+  // into a single bucket, and a third at exactly 30000 must open the next one.
+  // Pins the default-argument value against an accidental change to the chart
+  // bucket size.
+  it("uses a default 30000ms bucket window when bucketMs is omitted", () => {
+    const events = [
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Read" }, 0),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Bash" }, 29999),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Edit" }, 30000),
+    ];
+    // No bucketMs argument → default 30000. start=0, end=30000, step=30000.
+    // Bucket [0, 30000): the 0 and 29999 events → count 2.
+    // Bucket [30000, 60000): the 30000 event → count 1.
+    expect(computeThroughput(events)).toEqual([
+      { ts: 0, count: 2 },
+      { ts: 30000, count: 1 },
     ]);
   });
 

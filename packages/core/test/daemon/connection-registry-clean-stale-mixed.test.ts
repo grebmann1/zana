@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { bus } from "@zana-ai/core/src/events/bus.ts";
+import { bus } from "@zana-ai/contracts";
 import * as registry from "@zana-ai/core/src/daemon/connection-registry.ts";
 
 // Focused coverage for cleanStale()'s SELECTIVE behavior over a MIXED set.

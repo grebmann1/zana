@@ -14,7 +14,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as core from "@zana-ai/core";
-import * as workspaceContextTs from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContextTs from "@zana-ai/contracts";
 import * as runsStore from "@zana-ai/work/src/runs/store.ts";
 
 const wcDist: any = (core as any).project.workspaceContext;

@@ -205,8 +205,13 @@ describe("GET/POST /settings", () => {
   });
 
   it("read() recovers from corrupt settings.json by returning {}", async () => {
-    const settingsPath = path.join(tmpHome, ".zana", "settings.json");
-    const snapshot = fs.readFileSync(settingsPath, "utf8");
+    // Use the store's ACTUAL settings path (config.SETTINGS_PATH), not a path
+    // reconstructed from tmpHome: config captures os.homedir() at module load,
+    // which — depending on import ordering — may not equal tmpHome. The sibling
+    // permission test above uses require("@zana-ai/core").config.ZANA_DIR too.
+    const settingsPath: string = require("@zana-ai/core").config.SETTINGS_PATH;
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    const snapshot = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : "{}";
     fs.writeFileSync(settingsPath, "{not valid json", "utf8");
     try {
       const get = await request("GET");

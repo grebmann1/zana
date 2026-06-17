@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as crypto from "node:crypto";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as artifactStore from "@zana-ai/work/src/runs/artifact-store.ts";
 // artifact-store reads workspace state via require("@zana-ai/core").project.workspaceContext.
 // Under vitest's TS resolver that may end up as a different module instance than the

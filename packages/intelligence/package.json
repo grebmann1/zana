@@ -11,7 +11,8 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/core": "0.3.0"
+    "@zana-ai/core": "0.3.0",
+    "@zana-ai/contracts": "0.3.0"
   },
   "files": [
     "dist/"

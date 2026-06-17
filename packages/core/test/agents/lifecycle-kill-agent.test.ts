@@ -14,7 +14,7 @@
 // lifecycle-spawn-overload.test.ts — import from the .ts source path.
 
 import { describe, it, expect, afterEach } from "vitest";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import { killAgent } from "@zana-ai/core/src/agents/lifecycle.ts";
 
 afterEach(() => {

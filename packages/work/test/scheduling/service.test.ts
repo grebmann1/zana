@@ -14,7 +14,7 @@ import { mkdtempSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSyn
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import * as workspaceContext from "@zana-ai/core/src/project/workspace-context.ts";
+import * as workspaceContext from "@zana-ai/contracts";
 import * as core from "@zana-ai/core";
 
 // Service module is loaded after workspace init so its require() of

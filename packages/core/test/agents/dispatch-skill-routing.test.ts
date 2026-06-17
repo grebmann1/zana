@@ -49,7 +49,7 @@ vi.mock("@zana-ai/swarm", () => ({ router: {}, events: {}, spawner: {} }));
 
 // Front every lazyRequire'd module with a Proxy. Skill methods resolve to our
 // controllable mocks; anything else (e.g. @zana-ai/work) is a harmless no-op.
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (_factory: any) =>
     new Proxy(
       {},

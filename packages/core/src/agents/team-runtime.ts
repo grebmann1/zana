@@ -4,7 +4,7 @@
 // All cross-package access uses lazyRequire to keep the core ↔ work cycle
 // from biting at module-load time (see CLAUDE.md cycle paragraph).
 
-import { lazyRequire } from "../util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 import * as profileStore from "./profile-store";
 import { spawnHeadlessAgent, getAgent, checkSystemResources } from "./lifecycle";
 

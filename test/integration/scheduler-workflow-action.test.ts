@@ -15,7 +15,7 @@ describe("scheduler workflow action", () => {
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
     // up to /tmp/.zana/ (the real workspace), which is sandbox-blocked.
     mkdirSync(join(tmpDir, ".zana"), { recursive: true });
-    const ws = await import("@zana-ai/core/src/project/workspace-context.ts");
+    const ws = await import("@zana-ai/contracts");
     ws.init(tmpDir);
     // The workflow engine reaches workspace-context via @zana-ai/core's facade.
     // Make sure it's the same singleton by reading via the same path.

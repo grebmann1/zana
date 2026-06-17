@@ -209,6 +209,24 @@ describe("spawnValidatedAgent — failing guardrail", () => {
     expect((res as any).error).toBe("nope");
   });
 
+  // The existing failure test only proves DEFAULT_MAX_RETRIES=2 acts as a FLOOR
+  // (guard.maxRetries=1 → still capped at 2 → 3 attempts). The other half of the
+  // `Math.max(...guards.map(maxRetries), DEFAULT)` is untested: a guard asking
+  // for MORE than the default should RAISE the cap. With guard.maxRetries=4 the
+  // effective cap is max(4,2)=4 → 5 total attempts (attempt 0..4), and each
+  // attempt spawns a fresh agent.
+  it("honors a guard's maxRetries when it exceeds the default floor", async () => {
+    const alwaysFail = { id: "bad", maxRetries: 4, validate: () => ({ pass: false, feedback: "still no" }) };
+    const mgr = makeAgentManager(Array(5).fill("terminated"), "bad");
+    const p = spawnValidatedAgent(mgr, { id: "p3b" }, { prompt: "go" }, [alwaysFail]);
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.guardrailsPassed).toBe(false);
+    expect(res.attempts).toBe(5);
+    expect((res as any).failedGuardrail).toBe("bad");
+    expect(mgr.spawnHeadlessAgent).toHaveBeenCalledTimes(5);
+  });
+
   it("returns immediately (no retry) when the agent itself errored", async () => {
     const alwaysFail = { id: "bad", maxRetries: 2, validate: () => ({ pass: false, feedback: "nope" }) };
     const mgr = makeAgentManager(["errored"]);
@@ -253,6 +271,37 @@ describe("spawnValidatedAgent — multiple guardrails", () => {
     expect(first.validate).toHaveBeenCalledTimes(3);
     expect(second.validate).toHaveBeenCalledTimes(3);
     expect(third.validate).not.toHaveBeenCalled();
+  });
+
+  // When EVERY guard passes, spawnValidatedAgent (index.ts lines 114-125) does
+  // NOT break — it runs the whole guard loop and accumulates parsedOutput with
+  // last-writer-wins semantics, but ONLY for checks whose parsedOutput is not
+  // undefined (the `!== undefined` guard on line 122). The existing multi-guard
+  // test only covers the failing/short-circuit path, and the retry-recovery
+  // test uses a single guard — so the all-pass accumulation is otherwise
+  // unpinned. This pins that (a) all guards are evaluated on a single passing
+  // attempt, (b) a later guard's parsedOutput overrides an earlier one, and
+  // (c) an intervening guard that returns NO parsedOutput does not clobber the
+  // value already captured (the C result wins, B's undefined is skipped).
+  it("evaluates all guards when all pass and lets the last non-undefined parsedOutput win", async () => {
+    const a = { id: "a", maxRetries: 2, validate: vi.fn(() => ({ pass: true, parsedOutput: { from: "a" } })) };
+    const b = { id: "b", maxRetries: 2, validate: vi.fn(() => ({ pass: true })) }; // no parsedOutput
+    const c = { id: "c", maxRetries: 2, validate: vi.fn(() => ({ pass: true, parsedOutput: { from: "c" } })) };
+
+    const mgr = makeAgentManager(["terminated"], "out");
+    const p = spawnValidatedAgent(mgr, { id: "p7" }, { prompt: "go" }, [a, b, c]);
+    await vi.runAllTimersAsync();
+    const res = await p;
+
+    expect(res.guardrailsPassed).toBe(true);
+    expect(res.attempts).toBe(1);
+    // Single passing attempt → exactly one spawn, every guard evaluated once.
+    expect(mgr.spawnHeadlessAgent).toHaveBeenCalledTimes(1);
+    expect(a.validate).toHaveBeenCalledTimes(1);
+    expect(b.validate).toHaveBeenCalledTimes(1);
+    expect(c.validate).toHaveBeenCalledTimes(1);
+    // Last guard with a defined parsedOutput wins; b's undefined did not clobber a's.
+    expect((res as any).parsedOutput).toEqual({ from: "c" });
   });
 });
 

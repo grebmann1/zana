@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as manager from "@zana-ai/core/src/agents/manager.ts";
 import * as probeConfig from "@zana-ai/core/src/agents/probe-config.ts";
 import * as probeCache from "@zana-ai/core/src/agents/probe-cache.ts";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import type { AgentProbedPayload } from "@zana-ai/core/src/events/deliberation-events.ts";
 
 /**

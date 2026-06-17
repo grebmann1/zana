@@ -45,6 +45,18 @@ describe("model-router — selectModel", () => {
     expect(selectModel(longHaikuPrompt)).toBe(TIERS.OPUS);
   });
 
+  // ── precedence: length fast path wins over a category hint ──────────────
+  // The `len > 2000` OPUS fast path (model-router.ts line 20) runs BEFORE
+  // category routing (lines 29-31). A >2000-char prompt must therefore route to
+  // OPUS even when profileHints carry a cheaper SONNET category — a big task
+  // must not be downgraded by a category hint. The sibling length-precedence
+  // test pins length-vs-HAIKU-keyword only; this pins length-vs-category, the
+  // arm that would silently misroute if category were reordered ahead of length.
+  it("routes a >2000-char prompt to OPUS even with a SONNET category hint", () => {
+    const longPrompt = "x".repeat(2001);
+    expect(selectModel(longPrompt, { category: "code-review" })).toBe(TIERS.OPUS);
+  });
+
   // ── Opus keyword matching ───────────────────────────────────────────────
   it.each(["design", "architect", "refactor across", "security"])(
     "returns OPUS when prompt contains keyword '%s'",

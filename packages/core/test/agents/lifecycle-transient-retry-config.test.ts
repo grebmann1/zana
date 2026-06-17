@@ -92,4 +92,14 @@ describe("getTransientRetryBackoffMs", () => {
     fakeConfig = { system: { transientRetryBackoffMs: [-5] } };
     expect(getTransientRetryBackoffMs(0)).toBe(DEFAULT_LADDER[DEFAULT_LADDER.length - 1]);
   });
+
+  it("falls back to the last default rung for a negative attempt index", () => {
+    // Math.min(-1, len-1) = -1 → ladder[-1] is undefined (not a number),
+    // so the guard returns the last default rung rather than NaN/undefined.
+    fakeConfig = null;
+    expect(getTransientRetryBackoffMs(-1)).toBe(DEFAULT_LADDER[DEFAULT_LADDER.length - 1]);
+    // Same defensive path holds against a configured ladder.
+    fakeConfig = { system: { transientRetryBackoffMs: [10, 20] } };
+    expect(getTransientRetryBackoffMs(-3)).toBe(DEFAULT_LADDER[DEFAULT_LADDER.length - 1]);
+  });
 });

@@ -43,7 +43,7 @@ import {
   updateAgentFromHook,
   getAgent,
 } from "@zana-ai/core/src/agents/lifecycle.ts";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import * as moduleConfig from "@zana-ai/core/src/modules/config.ts";
 
 beforeAll(() => {

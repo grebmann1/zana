@@ -5,10 +5,14 @@ import { execSync } from "node:child_process";
 // Lazy access to @zana-ai/core — avoids load-order issues when this module is
 // required during core initialization.
 function _core() { return require("@zana-ai/core"); }
-import { SKILLS_DIR } from "@zana-ai/core/dist/src/config";
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import * as contracts from "@zana-ai/contracts";
+import { lazyRequire } from "@zana-ai/contracts";
+// Read SKILLS_DIR dynamically (not a static destructured import) so tests can
+// redirect it by overriding the config value, and so a future config change is
+// reflected without a stale snapshot.
+const SKILLS_DIR = () => (contracts as any).SKILLS_DIR;
 type ProfileStoreModule = typeof import("@zana-ai/core/dist/src/agents/profile-store");
-type WorkspaceContextModule = typeof import("@zana-ai/core/dist/src/project/workspace-context");
+type WorkspaceContextModule = typeof import("@zana-ai/contracts/dist/src/workspace-context");
 const profileStoreMod = lazyRequire<ProfileStoreModule>(
   () => require("@zana-ai/core").agents.profileStore
 );
@@ -22,7 +26,7 @@ const SHELL_METACHARACTERS = /&&|\|\||;|\||`|\$\(|>|</;
 const BUILT_IN_SKILLS_DIR = path.join(__dirname, "..", "skills");
 
 function ensureDir() {
-  fs.mkdirSync(SKILLS_DIR, { recursive: true });
+  fs.mkdirSync(SKILLS_DIR(), { recursive: true });
 }
 
 function loadSkillsFromDir(dir, opts = {}) {
@@ -58,7 +62,7 @@ function loadSkillsFromDir(dir, opts = {}) {
 export function listSkills() {
   ensureDir();
   const builtIn = loadSkillsFromDir(BUILT_IN_SKILLS_DIR, { builtIn: true });
-  const user = loadSkillsFromDir(SKILLS_DIR);
+  const user = loadSkillsFromDir(SKILLS_DIR());
   // User skills override built-in if same id
   const idSet = new Set(user.map((s) => s.id));
   const merged = [...user];
@@ -73,12 +77,12 @@ export function getSkill(id) {
   ensureDir();
   const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, "");
   // Try flat file first
-  const filePath = path.join(SKILLS_DIR, `${sanitized}.json`);
+  const filePath = path.join(SKILLS_DIR(), `${sanitized}.json`);
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
   } catch {}
   // Try directory format
-  const dirPath = path.join(SKILLS_DIR, sanitized, "skill.json");
+  const dirPath = path.join(SKILLS_DIR(), sanitized, "skill.json");
   try {
     const skill = JSON.parse(fs.readFileSync(dirPath, "utf8"));
     skill._dirName = sanitized;
@@ -113,7 +117,7 @@ export function saveSkill(skill) {
 
   if (supportingFiles && supportingFiles.length > 0) {
     const dirName = skill.id.replace(/[^a-zA-Z0-9\-_]/g, "");
-    const skillDir = path.join(SKILLS_DIR, dirName);
+    const skillDir = path.join(SKILLS_DIR(), dirName);
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, "skill.json"), JSON.stringify(skill, null, 2) + "\n", "utf8");
     const filesToWrite = supportingFiles.slice(0, MAX_SUPPORTING_FILES);
@@ -124,7 +128,7 @@ export function saveSkill(skill) {
       fs.writeFileSync(path.join(skillDir, safeName), content, "utf8");
     }
   } else {
-    const filePath = path.join(SKILLS_DIR, `${skill.id}.json`);
+    const filePath = path.join(SKILLS_DIR(), `${skill.id}.json`);
     fs.writeFileSync(filePath, JSON.stringify(skill, null, 2) + "\n", "utf8");
   }
   return skill;
@@ -134,10 +138,10 @@ export function deleteSkill(id) {
   if (!id) return false;
   const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, "");
   // Try flat file
-  const filePath = path.join(SKILLS_DIR, `${sanitized}.json`);
+  const filePath = path.join(SKILLS_DIR(), `${sanitized}.json`);
   try { fs.unlinkSync(filePath); return true; } catch {}
   // Try directory
-  const dirPath = path.join(SKILLS_DIR, sanitized);
+  const dirPath = path.join(SKILLS_DIR(), sanitized);
   try { fs.rmSync(dirPath, { recursive: true }); return true; } catch {}
   return false;
 }
@@ -155,7 +159,7 @@ export function resolveSkillContent(skill) {
 
   // Resolve {{file:filename}} templates from skill directory
   if (skill._dirName && content) {
-    const baseDir = skill._baseDir || SKILLS_DIR;
+    const baseDir = skill._baseDir || SKILLS_DIR();
     content = content.replace(/\{\{file:([^}]+)\}\}/g, (_, filename) => {
       const safeName = filename.trim().replace(/[^a-zA-Z0-9.\-_]/g, "");
       const filePath = path.join(baseDir, skill._dirName, safeName);

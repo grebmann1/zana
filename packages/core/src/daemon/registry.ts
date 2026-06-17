@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import { DAEMONS_DIR } from "../config";
+import { DAEMONS_DIR } from "@zana-ai/contracts";
 
 export const HEARTBEAT_INTERVAL_MS = 10_000; // 10 seconds
 export const STALE_THRESHOLD_MS = 30_000;    // 30 seconds

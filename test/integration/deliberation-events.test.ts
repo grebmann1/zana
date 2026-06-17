@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bus, EVENTS } from "@zana-ai/core/src/events/bus.ts";
+import { bus, EVENTS } from "@zana-ai/contracts";
 import type {
   DeliberationProposedPayload,
   DeliberationVotePayload,
