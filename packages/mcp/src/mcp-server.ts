@@ -12,6 +12,7 @@ export {};
 const path = require("node:path");
 
 import { ZANA_DAEMON_TOOLS, DAEMON_GATED_TOOL_NAMES, isFrozen, EXPERIMENTAL_TOOL_NAMES } from "./gating";
+import { isForwardable, forwardToDaemon, DaemonAuthError, authorityPortFor } from "./daemon-client";
 import type { ToolDefinition, ToolContext } from "./types";
 import { collectStaticTools, collectHandlers } from "./registrations";
 import { loadToolSkills, handleScratchpad, isValidToolSchema } from "./dynamic-skills";
@@ -97,7 +98,47 @@ async function ensureDaemonRunning(): Promise<void> {
   return bootstrapPromise;
 }
 
-function callCore(action: string, params: Record<string, unknown> = {}) {
+// ADR 0006: forward agent-lifecycle actions to a standalone HTTP daemon when
+// one is running for this workspace, so it is the single authority for live
+// agent state. Returns that daemon's apiPort, or null to use in-process core.
+// "Co-workspace daemon" = a registered, alive entry with an apiPort that is NOT
+// this MCP server's own in-process core (which registers without an apiPort,
+// since it boots with skipApiServer:true). Cached; invalidated on a connection
+// failure so a daemon dying mid-session falls back cleanly.
+let cachedAuthorityPort: number | null | undefined; // undefined = not yet resolved
+function resolveAgentAuthorityPort(): number | null {
+  if (cachedAuthorityPort !== undefined) return cachedAuthorityPort;
+  try {
+    const registry = require("@zana-ai/core").daemon.registry;
+    const ws = localDaemon?.workspace;
+    const entry = registry.findRunningDaemon(ws);
+    cachedAuthorityPort = authorityPortFor(entry, process.pid);
+  } catch {
+    cachedAuthorityPort = null;
+  }
+  return cachedAuthorityPort;
+}
+
+async function callCore(action: string, params: Record<string, unknown> = {}) {
+  // Lifecycle actions forward to a co-workspace daemon if one exists (ADR 0006).
+  if (isForwardable(action)) {
+    const apiPort = resolveAgentAuthorityPort();
+    if (apiPort) {
+      try {
+        return await forwardToDaemon(apiPort, action, params as Record<string, any>);
+      } catch (err: any) {
+        if (err instanceof DaemonAuthError) {
+          // Do NOT silently fall back — that would re-fragment the registry
+          // with a second authority. Surface the misconfiguration.
+          return { error: `daemon authority unreachable: ${err.message}. Fix the auth token or stop the stale daemon.` };
+        }
+        // Unreachable (daemon died / no token): invalidate cache and fall back
+        // to in-process core so the action still completes.
+        cachedAuthorityPort = undefined;
+        process.stderr.write(`[zana-mcp] daemon forward failed (${err?.message || err}); using in-process core\n`);
+      }
+    }
+  }
   return localDaemon.agentManager.handleOrchestratorCommand(
     { action, ...params },
     () => localDaemon.workspace,

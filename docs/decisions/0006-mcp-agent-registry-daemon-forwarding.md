@@ -1,15 +1,30 @@
 # ADR 0006 — Single agent-registry authority: MCP server forwards lifecycle to the daemon when one exists
 
-- **Status:** Proposed (design accepted; implementation not yet landed — tracks
-  ticket `9cd85e67`, labelled `needs-decision`/`design-ready`)
+- **Status:** Accepted (implemented — closes ticket `9cd85e67`)
 - **Date:** 2026-06-17
 - **Relates to:** ADR 0005 (daemon path first-class), ADR 0002/0003 (tenant
   isolation / workspace resolution)
+- **Code:** `packages/mcp/src/daemon-client.ts` (HTTP client + decision helper),
+  `packages/mcp/src/mcp-server.ts` (`callCore` forwarding in `resolveAgentAuthorityPort`)
 
-> Promoted from a design artifact (`.zana/artifacts/registry-design-9cd85e67.md`,
-> which is gitignored workspace state) so the rationale lives in the durable
-> decision record rather than throwaway state. One open item remains before
-> coding: confirm the daemon auth-token source file for the HTTP client.
+> Promoted from a design artifact and now implemented. The open item — the
+> daemon auth-token source — is resolved: the API server reads/creates a
+> host-global token at `~/.zana/auth.json` (`server/src/api/auth-middleware.ts`);
+> the MCP server reads the same file to authenticate (`daemon-client.ts
+> readAuthToken`). Any host process can read it, which is how a sibling MCP
+> server reaches a daemon it didn't start.
+>
+> Implementation notes vs. the original design:
+> - Forwarding is gated by `isForwardable(action)` (the 7 lifecycle actions) and
+>   `authorityPortFor(entry, selfPid)` — forward only to a SEPARATE registered
+>   daemon that exposes an `apiPort`; never to our own in-process core (which
+>   boots `skipApiServer:true`, so it has no apiPort) nor our own pid.
+> - Error policy per the ADR: a connection failure / missing token →
+>   `DaemonUnreachableError` → fall back to in-process (cache invalidated). A
+>   401/403 → `DaemonAuthError` → surfaced, NOT silently fallen back (that would
+>   re-fragment the registry with a second authority).
+> - `spawn_agent_validated` / `spawn_oneshot` collapse onto `POST /agents` — the
+>   daemon owns the live process regardless of the spawn variant.
 
 ## Context
 
