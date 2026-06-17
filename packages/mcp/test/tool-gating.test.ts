@@ -51,6 +51,9 @@ const SWARM_GATED = [
   "zana_swarm_poll_events",
 ];
 
+// Frozen subsystems (ADR 0009): hidden by default, re-enabled by their flag.
+const FROZEN_TOOLS = ["zana_plan_create", "zana_memory_store", "zana_memory_search"];
+
 // Read newline-delimited JSON-RPC frames until we get the response with the
 // requested id. Some responses (e.g. tools/list with the full surface) are
 // larger than a single chunk, so we accumulate until we see a parseable line.
@@ -160,19 +163,23 @@ describe("mcp-server: ZANA_DAEMON_TOOLS / ZANA_MASTER_MODE gating", () => {
       for (const n of DAEMON_GATED) {
         expect(present.has(n), `expected '${n}' to be VISIBLE by default (ZANA_DAEMON_TOOLS on)`).toBe(true);
       }
-      // Swarm stays opt-in (ZANA_MASTER_MODE), even with the daemon surface on.
+      // Swarm stays opt-in (ZANA_MASTER_MODE + ZANA_SWARM_EXPERIMENTAL).
       for (const n of SWARM_GATED) {
-        expect(present.has(n), `expected '${n}' to be HIDDEN when ZANA_MASTER_MODE is unset`).toBe(false);
+        expect(present.has(n), `expected '${n}' to be HIDDEN when swarm flags unset`).toBe(false);
+      }
+      // Frozen subsystems (ADR 0009) are hidden by default.
+      for (const n of FROZEN_TOOLS) {
+        expect(present.has(n), `expected frozen '${n}' to be HIDDEN by default`).toBe(false);
       }
 
       // Sanity: a representative ungated tool is still visible.
       expect(present.has("zana_ticket_create")).toBe(true);
-      expect(present.has("zana_memory_store")).toBe(true);
+      // route_task is the KEPT intelligence tool (not frozen).
+      expect(present.has("zana_route_task")).toBe(true);
 
-      // Full daemon surface (no swarm) — gives early warning if a future
-      // commit accidentally drops one of these. Band, not exact, so unrelated
-      // tool additions don't break it.
-      expect(names.length).toBeGreaterThanOrEqual(84);
+      // Full daemon surface (no swarm, no frozen) — gives early warning if a
+      // future commit accidentally drops one of these. Band, not exact.
+      expect(names.length).toBeGreaterThanOrEqual(80);
       expect(names.length).toBeLessThan(100);
     },
     20000,
@@ -189,40 +196,54 @@ describe("mcp-server: ZANA_DAEMON_TOOLS / ZANA_MASTER_MODE gating", () => {
         expect(present.has(n), `expected '${n}' to be HIDDEN under ZANA_DAEMON_TOOLS=0`).toBe(false);
       }
       for (const n of SWARM_GATED) {
-        expect(present.has(n), `expected '${n}' to be HIDDEN when ZANA_MASTER_MODE is unset`).toBe(false);
+        expect(present.has(n), `expected '${n}' to be HIDDEN when swarm flags unset`).toBe(false);
+      }
+      for (const n of FROZEN_TOOLS) {
+        expect(present.has(n), `expected frozen '${n}' to be HIDDEN by default`).toBe(false);
       }
 
       // Ungated tools remain.
       expect(present.has("zana_ticket_create")).toBe(true);
-      expect(present.has("zana_memory_store")).toBe(true);
+      expect(present.has("zana_route_task")).toBe(true);
 
       // Leaner band when opted out.
-      expect(names.length).toBeGreaterThanOrEqual(60);
+      expect(names.length).toBeGreaterThanOrEqual(58);
       expect(names.length).toBeLessThan(80);
     },
     20000,
   );
 
   it(
-    "ZANA_MASTER_MODE=true adds 6 swarm tools on top of the daemon surface",
+    "ZANA_MASTER_MODE + ZANA_SWARM_EXPERIMENTAL adds the 6 swarm tools (ADR 0009)",
     async () => {
       if (!ensureDist()) return;
-      // This test spawns two server processes back-to-back; use a generous
-      // per-RPC timeout (12 s) so that each initialize handshake has room to
-      // complete even under load, and a total test timeout (50 s) that covers
-      // two full spawn+initialize+tools/list round-trips.
+      // Two server processes back-to-back; generous per-RPC + total timeouts.
       const namesDaemon = await listTools({ ZANA_DAEMON_TOOLS: "1" }, 12000);
       const namesAll = await listTools({
         ZANA_DAEMON_TOOLS: "1",
         ZANA_MASTER_MODE: "true",
+        ZANA_SWARM_EXPERIMENTAL: "1",
       }, 12000);
       const present = new Set(namesAll);
 
       for (const n of SWARM_GATED) {
-        expect(present.has(n), `expected '${n}' to be VISIBLE under ZANA_MASTER_MODE=true`).toBe(true);
+        expect(present.has(n), `expected '${n}' VISIBLE under MASTER_MODE+SWARM_EXPERIMENTAL`).toBe(true);
       }
       expect(namesAll.length).toBe(namesDaemon.length + SWARM_GATED.length);
     },
     50000,
+  );
+
+  it(
+    "ZANA_MASTER_MODE alone (without ZANA_SWARM_EXPERIMENTAL) does NOT surface swarm (ADR 0009 freeze)",
+    async () => {
+      if (!ensureDist()) return;
+      const names = await listTools({ ZANA_DAEMON_TOOLS: "1", ZANA_MASTER_MODE: "true" }, 12000);
+      const present = new Set(names);
+      for (const n of SWARM_GATED) {
+        expect(present.has(n), `expected '${n}' HIDDEN — swarm is frozen without ZANA_SWARM_EXPERIMENTAL`).toBe(false);
+      }
+    },
+    20000,
   );
 });

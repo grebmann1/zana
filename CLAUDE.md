@@ -1,17 +1,23 @@
 # Zana — Claude Code Configuration
 
-Zana is a multi-agent orchestrator for Claude Code, with two paths:
+Zana is a persistent multi-agent orchestrator for Claude Code. The product is
+the **daemon** — a long-lived process that persists state, schedules work, runs
+autopilot loops, and does replayable deliberation (the things a single chat
+can't). Two ways to drive it:
 
-- **Native** (default in chat) — a thin layer of slash commands and skills that
-  drive Claude Code's first-class `Agent` + `SendMessage` primitives. Spawn,
-  coordinate, and synthesize many specialized subagents from a single
-  conversation, with no daemon involved.
-- **Daemon** (headless / CI / cron) — a long-lived process exposing an MCP
-  server (`mcp__zana__zana_*`) for scheduled tasks, autopilot loops, and
-  multi-daemon swarms that must outlive any chat.
+- **Daemon** (the engine — headless / CI / cron) — a long-lived process exposing
+  an MCP server (`mcp__zana__zana_*`) for scheduled tasks, autopilot loops, and
+  persistent state that must outlive any chat. This is where the moat is.
+- **Native** (a convenience driver, in chat) — a thin layer of slash commands +
+  skills that drive Claude Code's first-class `Agent` + `SendMessage`
+  primitives, no daemon involved. It is a *driver*, not a re-implementation:
+  native variants are deliberately simplified and do NOT promise daemon parity
+  (e.g. `/zana:council` runs one round with no replayable audit). For the full
+  machinery use the daemon.
 
-Templates, profiles, tickets, sprints, artifacts, and deliberation work the
-same on both paths.
+Tickets, profiles, sprints, and artifacts are shared substrate. Multi-daemon
+swarm, the GOAP planner, and vector-memory are **frozen** (ADR 0009) — dormant
+behind `ZANA_*_EXPERIMENTAL` flags, not default features.
 
 ## Rules
 
@@ -221,6 +227,7 @@ Schema doc: `plugins/zana/loop/skills/scheduler/SKILL.md`.
   `docs/decisions/` (0001 require-cycle, 0002 tenant isolation, 0003 MCP
   workspace resolution, 0004 deliberation convergence, 0005 daemon-tools-by-default,
   0006 MCP→daemon agent-registry forwarding, 0007 profile model tiering, 0008
-  ticket-automation pipeline). See `docs/decisions/README.md` for the index.
+  ticket-automation pipeline, 0009 freeze swarm/GOAP/vector-memory). See
+  `docs/decisions/README.md` for the index.
   Read them before changing an invariant; add a new ADR when you make a decision
   a future reader would question.

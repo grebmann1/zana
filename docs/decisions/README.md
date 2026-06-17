@@ -58,3 +58,4 @@ add a new ADR and mark the old one `Superseded by ADR-XXXX`.
 | [0006](0006-mcp-agent-registry-daemon-forwarding.md) | MCP server forwards agent lifecycle to the daemon when one exists | Proposed |
 | [0007](0007-profile-model-tiering.md) | Cost-appropriate model tiering for agent profiles | Accepted |
 | [0008](0008-ticket-automation-pipeline.md) | The ticket-automation pipeline (watcher rules, verdicts, escalation) | Accepted |
+| [0009](0009-freeze-swarm-goap-vector-memory.md) | Freeze multi-daemon swarm, GOAP planner, and vector-memory | Accepted |

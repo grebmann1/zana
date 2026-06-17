@@ -1,11 +1,27 @@
 # Zana
 
-Zana is a multi-agent orchestrator for Claude Code, available on **two paths**:
+Zana is a persistent multi-agent orchestrator for Claude Code. Its core is a
+long-lived **daemon** that does the things a single chat session can't: outlive
+the conversation, persist tickets/sprints/runs, drive scheduled and autopilot
+work, and run replayable deliberation. That persistence is the product.
 
-- **Native** (default in chat) — install the plugin (`/plugin install zana@zana-marketplace`), then type `/zana:team`, `/zana:council`, `/zana:autopilot`, etc. Slash commands drive Claude Code's first-class `Agent` + `SendMessage` primitives. No daemon required.
-- **Daemon** (headless / CI / cron) — a long-lived process exposing an MCP server (`mcp__zana__zana_*`) for scheduled tasks, autopilot loops, and multi-daemon swarms that must outlive any chat.
+Two ways to drive it:
 
-Templates, profiles, tickets, sprints, artifacts, and deliberation work the same on both paths.
+- **Daemon** (the engine) — a long-lived process exposing an MCP server
+  (`mcp__zana__zana_*`). This is where the durable value lives: state that
+  survives restarts, cron/scheduled work, autopilot loops, content-addressed
+  deliberation audit trails. Use it for headless / CI / cron and any work that
+  must outlast a chat.
+- **Native** (a convenience driver) — install the plugin
+  (`/plugin install zana@zana-marketplace`), then type `/zana:team`,
+  `/zana:council`, `/zana:autopilot`, etc. Slash commands drive Claude Code's
+  first-class `Agent` + `SendMessage` primitives, no daemon required. This is a
+  thin in-chat driver, not a full re-implementation: native variants are
+  simplified (e.g. council runs a single round, no replayable audit) and do
+  **not** promise daemon parity. For the full machinery, use the daemon path.
+
+Tickets, profiles, sprints, and artifacts are shared substrate; the daemon adds
+persistence, scheduling, autopilot, and deliberation on top.
 
 ## Install
 

@@ -11,7 +11,7 @@ export {};
 
 const path = require("node:path");
 
-import { ZANA_DAEMON_TOOLS, DAEMON_GATED_TOOL_NAMES } from "./gating";
+import { ZANA_DAEMON_TOOLS, DAEMON_GATED_TOOL_NAMES, isFrozen, EXPERIMENTAL_TOOL_NAMES } from "./gating";
 import type { ToolDefinition, ToolContext } from "./types";
 import { collectStaticTools, collectHandlers } from "./registrations";
 import { loadToolSkills, handleScratchpad, isValidToolSchema } from "./dynamic-skills";
@@ -144,9 +144,13 @@ function getAllTools(): ToolDefinition[] {
     process.stderr.write(`[zana-mcp] dropping malformed tool from tools/list: ${JSON.stringify(t?.name)}\n`);
     return false;
   });
-  if (ZANA_DAEMON_TOOLS) return valid;
+  // Frozen subsystems (ADR 0009): GOAP planner + vector-memory tools are hidden
+  // unless their ZANA_*_EXPERIMENTAL flag is set. Applied regardless of the
+  // daemon-tools gate.
+  const surfaced = valid.filter((t) => !isFrozen(t.name));
+  if (ZANA_DAEMON_TOOLS) return surfaced;
   // Default install: hide daemon-only duplicates of native Claude Code flows.
-  return valid.filter((t) => !DAEMON_GATED_TOOL_NAMES.has(t.name));
+  return surfaced.filter((t) => !DAEMON_GATED_TOOL_NAMES.has(t.name));
 }
 
 // --- JSON-RPC framing ---
@@ -179,6 +183,15 @@ async function handleToolCall(name: string, args: any, callerAgentId: string | n
   if (!ZANA_DAEMON_TOOLS && DAEMON_GATED_TOOL_NAMES.has(name)) {
     return {
       error: `Tool '${name}' is daemon-only. Set ZANA_DAEMON_TOOLS=1 in the MCP server env to enable, or use the native Claude Code primitive (Agent + SendMessage, /zana:autopilot, /zana:council, /zana:team).`,
+    };
+  }
+
+  // Frozen subsystems (ADR 0009): reject a call to a frozen tool when its flag
+  // is off — mirrors the visibility filter so a client can't bypass tools/list.
+  if (isFrozen(name)) {
+    const flag = EXPERIMENTAL_TOOL_NAMES.get(name);
+    return {
+      error: `Tool '${name}' is part of a frozen/experimental subsystem and is not enabled. Set ${flag}=1 in the MCP server env to enable it.`,
     };
   }
 

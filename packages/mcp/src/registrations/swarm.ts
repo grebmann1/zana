@@ -1,10 +1,15 @@
-// Multi-daemon swarm control — gated by ZANA_MASTER_MODE=true.
+// Multi-daemon swarm control — FROZEN (ADR 0009). Requires BOTH
+// ZANA_MASTER_MODE=true AND ZANA_SWARM_EXPERIMENTAL=1 to surface. Multi-daemon
+// coordination is dormant code kept for a future call, not a default feature.
 //
 // When the gate is closed the `tools` array is empty, so these tools never
 // appear in `tools/list`. Handlers are still registered (and will work for
 // internal callers) but the visibility filter prevents external invocation.
+// NOTE: this freezes only the swarm SPAWNER surface (zana_swarm_*). The swarm
+// package's router/events (the single-daemon agent P2P inbox powering
+// zana_send_message / zana_check_inbox) are unaffected — they are core plumbing.
 
-import { ZANA_MASTER_MODE } from "../gating";
+import { ZANA_MASTER_MODE, ZANA_SWARM_EXPERIMENTAL } from "../gating";
 import type { ToolDomain } from "../types";
 
 const SWARM_TOOLS = [
@@ -81,7 +86,7 @@ const SWARM_TOOLS = [
 ];
 
 export const swarm: ToolDomain = {
-  tools: ZANA_MASTER_MODE ? SWARM_TOOLS : [],
+  tools: ZANA_MASTER_MODE && ZANA_SWARM_EXPERIMENTAL ? SWARM_TOOLS : [],
 
   handlers: {
     zana_swarm_spawn: (args, { callCore }) =>
