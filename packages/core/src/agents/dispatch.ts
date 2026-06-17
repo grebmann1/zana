@@ -2,7 +2,7 @@
 // MCP/orchestrator action strings to lifecycle / team-runtime / work / swarm
 // helpers. Extracted from agents/manager.ts.
 
-import { lazyRequire } from "../util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 import * as profileStore from "./profile-store";
 import {
   spawnHeadlessAgent,
@@ -218,7 +218,7 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
         params.ticketId, params.verdict, params.reason, params.reportedBy, params.profileLabel);
     }
     case "ticket_complete": {
-      return _ticketService().completeTicket(params.ticketId, params.resultSummary, params.completedBy);
+      return _ticketService().completeTicket(params.ticketId, params.resultSummary, params.completedBy, params.evidence);
     }
     case "ticket_edit": {
       const { ticketId, updatedBy, ...fields } = params;
@@ -236,7 +236,7 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
       const ticketStore = _ticketStore();
       const fs = require("node:fs");
       const path = require("node:path");
-      const workspaceContext = require("../project/workspace-context");
+      const workspaceContext = require("@zana-ai/contracts");
 
       const ticket = ticketService.getTicket(params.ticketId);
       if (!ticket) return { error: "ticket not found" };
@@ -244,6 +244,15 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
       const ticketsDir = workspaceContext.getProjectPaths().ticketsDir;
       const ticketDir = path.join(ticketsDir, params.ticketId);
       fs.mkdirSync(ticketDir, { recursive: true });
+
+      // Record where the implementation landed so the reviewer isn't blind to
+      // work committed on a different branch/worktree than the checked-out HEAD.
+      // Persisted on the ticket (workRef) and surfaced to reviewer prompts.
+      if (params.workRef && typeof params.workRef === "object") {
+        ticket.workRef = params.workRef;
+        ticket.updatedAt = new Date().toISOString();
+        ticketStore.saveTicket(ticket);
+      }
 
       if (params.progress) {
         ticketService.addComment(params.ticketId, params.agentId || "worker", params.agentName || "Worker", params.progress);

@@ -20,8 +20,18 @@ export function buildTemplateContext(
   ticket: any,
 ): TemplateContext {
   const p = payload || {};
+  // Human-readable work location for reviewer prompts. When a worker recorded
+  // where it committed (branch/worktree), surface it so the reviewer inspects
+  // the right tree instead of blindly grepping HEAD. Falls back to a sentinel
+  // so the prompt reads cleanly when no hint was recorded.
+  const wr = ticket?.workRef;
+  const workRefSummary = wr && typeof wr === "object"
+    ? [wr.branch && `branch ${wr.branch}`, wr.worktree && `worktree ${wr.worktree}`, wr.commitRange && `commits ${wr.commitRange}`]
+        .filter(Boolean).join(", ") || "recorded but empty"
+    : "not recorded — inspect the checked-out tree, and if you cannot find the work there, record INCONCLUSIVE rather than FAIL";
   return {
     ...(ticket || {}),
+    workRefSummary,
     event: eventType,
     oldStatus: p.oldStatus ?? null,
     newStatus: p.newStatus ?? ticket?.status ?? null,

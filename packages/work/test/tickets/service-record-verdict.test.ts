@@ -83,6 +83,13 @@ describe("service.recordVerdict", () => {
     expect(emitted).toHaveLength(0);
   });
 
+  it("accepts INCONCLUSIVE — the not-found-on-inspected-tree verdict", () => {
+    const t = seed();
+    const res: any = svc.recordVerdict(t.id, "inconclusive", "not on HEAD", "code-reviewer");
+    expect(res).toMatchObject({ ok: true, verdict: "INCONCLUSIVE", reason: "not on HEAD" });
+    expect(emitted.at(-1)).toMatchObject({ ticketId: t.id, kind: "INCONCLUSIVE", reason: "not on HEAD" });
+  });
+
   it("defaults reason to null and profileLabel to reportedBy then 'reviewer'", () => {
     const t = seed();
     svc.recordVerdict(t.id, "READY", undefined, "agent-7");

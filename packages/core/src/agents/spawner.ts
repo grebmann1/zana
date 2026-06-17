@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as fs from "node:fs";
-import * as configMod from "../config";
-import * as workspaceContext from "../project/workspace-context";
-import { lazyRequire } from "../util/lazy-require";
+import * as configMod from "@zana-ai/contracts";
+import * as workspaceContext from "@zana-ai/contracts";
+import { lazyRequire } from "@zana-ai/contracts";
 type SkillStoreModule = typeof import("@zana-ai/extras/dist/src/settings/skill-store");
 type SettingsStoreModule = typeof import("@zana-ai/extras/dist/src/settings/store");
 const skillStore = lazyRequire<SkillStoreModule>(() => require("@zana-ai/extras").settings.skillStore);
@@ -44,6 +44,42 @@ function sanitizeArg(value) {
   return value.replace(/[\x00-\x1f\x7f]/g, "");
 }
 
+// Orchestrator-shaped profiles already carry the full ticket workflow (and an
+// mcp__zana__* wildcard); every other spawned worker gets the lifecycle preamble
+// AND the matching tool capability injected. The two must stay in lockstep —
+// telling a worker to call a tool its allowlist forbids was the root of the
+// "agent faked the lifecycle via zana_ticket_update" audit-trail bug.
+function isLifecycleManagedProfile(profile) {
+  const id = profile?.id || "";
+  return !(id.includes("orchestrator") || id === "swarm-master");
+}
+
+// The ticket-lifecycle MCP tools a managed worker/reviewer is instructed to
+// call. SINGLE SOURCE OF TRUTH: the preamble below names these, and
+// buildClaudeArgs() ensures they are present in the spawned agent's
+// --allowed-tools so instruction ⊇ capability. Reviewers also need _verdict.
+const TICKET_LIFECYCLE_TOOLS = [
+  "mcp__zana__zana_ticket_claim",
+  "mcp__zana__zana_ticket_complete",
+  "mcp__zana__zana_ticket_update_status",
+  "mcp__zana__zana_ticket_update",
+  "mcp__zana__zana_ticket_comment",
+  "mcp__zana__zana_ticket_get",
+  "mcp__zana__zana_ticket_verdict",
+];
+
+// Returns true when `allowedTools` already grants `tool`, honoring `mcp__zana__*`
+// and `mcp__*` wildcards so a profile that opts into the whole surface isn't
+// needlessly expanded into explicit entries.
+function allowlistGrants(allowedTools: string[], tool: string): boolean {
+  return allowedTools.some((t) =>
+    t === tool ||
+    t === "mcp__zana__*" ||
+    t === "mcp__*" ||
+    (t.endsWith("*") && tool.startsWith(t.slice(0, -1)))
+  );
+}
+
 // Worker profiles need to know how to interact with the ticket lifecycle when
 // the orchestrator hands them a ticketId in their prompt. Without this, only
 // orchestrator profiles ever call zana_ticket_claim/complete, so when the
@@ -51,8 +87,7 @@ function sanitizeArg(value) {
 // ticket in the backlog as of 2026-06-04 was such an orphan). Skip
 // orchestrator-shaped profiles — they already document the full workflow.
 function ticketLifecyclePreamble(profile) {
-  const id = profile?.id || "";
-  if (id.includes("orchestrator") || id === "swarm-master") return "";
+  if (!isLifecycleManagedProfile(profile)) return "";
   return [
     "--- TICKET LIFECYCLE ---",
     "If your prompt includes a ticketId, you are responsible for the ticket's status:",
@@ -140,8 +175,23 @@ export function buildClaudeArgs(profile, options = {}) {
     args.push("--permission-mode", profile.permissionMode);
   }
 
+  // An explicit allowlist RESTRICTS the agent to exactly those tools. Since the
+  // lifecycle preamble (above) instructs managed workers to call ticket tools,
+  // those tools must be in the allowlist or the calls fail and the worker falls
+  // back to faking the lifecycle. When a profile has NO allowlist it can already
+  // call everything, so there is nothing to add. Never re-add a tool the profile
+  // explicitly disallowed.
   if (profile.allowedTools && profile.allowedTools.length > 0) {
-    args.push("--allowed-tools", ...profile.allowedTools);
+    let allowed = [...profile.allowedTools];
+    if (isLifecycleManagedProfile(profile)) {
+      const disallowed = new Set(profile.disallowedTools || []);
+      for (const tool of TICKET_LIFECYCLE_TOOLS) {
+        if (!allowlistGrants(allowed, tool) && !disallowed.has(tool)) {
+          allowed.push(tool);
+        }
+      }
+    }
+    args.push("--allowed-tools", ...allowed);
   }
 
   if (profile.disallowedTools && profile.disallowedTools.length > 0) {

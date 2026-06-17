@@ -1,7 +1,15 @@
 # Review-pipeline false-`rework` bug — investigation + fix plan
 
-Status: **awaiting review** (do not implement until approved). Cited line numbers
-are as of the investigation on this branch.
+Status: **IMPLEMENTED & GREEN** (full monorepo sweep: 4192 passed / 3 skipped /
+7 todo). Approved scope for defect #1 was INCONCLUSIVE + workRef. Cited line
+numbers are as of the investigation on this branch.
+
+> Coordination note: a peer agent on this same working tree extracted
+> `@zana-ai/contracts` concurrently. By agreement it commits its
+> contracts-extraction set first (new package + all import repoints); my logic
+> changes (the files listed below) commit separately. The `@zana-ai/contracts`
+> import lines now present in my touched files are the peer's and are kept
+> intentionally — do not revert them to `../project/workspace-context`.
 
 ## What actually happens (confirmed against source)
 

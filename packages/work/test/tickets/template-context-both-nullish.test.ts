@@ -33,9 +33,11 @@ describe("buildTemplateContext — both payload and ticket nullish", () => {
     expect(ctx.event).toBe("ticket:updated");
     expect(ctx.newStatus).toBeNull();
     expect(ctx.updatedBy).toBe("system");
-    // No ticket was spread in, so only the seven reserved keys exist.
+    // No ticket was spread in, so only the reserved keys exist. `workRefSummary`
+    // is always added (collapsing to the "not recorded" sentinel when ticket is
+    // nullish), so it belongs to the reserved set alongside the other seven.
     expect(Object.keys(ctx).sort()).toEqual(
-      ["event", "newPhase", "newStatus", "oldPhase", "oldStatus", "timestamp", "updatedBy"].sort(),
+      ["event", "newPhase", "newStatus", "oldPhase", "oldStatus", "timestamp", "updatedBy", "workRefSummary"].sort(),
     );
   });
 });

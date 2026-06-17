@@ -29,7 +29,7 @@ const { svc } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@zana-ai/core/src/util/lazy-require.ts", () => ({
+vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (arg: any) => {
     if (arg === "@zana-ai/work") {
       return { tickets: { service: svc } };
@@ -103,12 +103,24 @@ describe("handleOrchestratorCommand — ticket lifecycle routing", () => {
     expect(svc.updateStatus).toHaveBeenCalledWith("T-1", "blocked", "a1");
   });
 
-  it("ticket_complete forwards (ticketId, resultSummary, completedBy) in order", async () => {
+  it("ticket_complete forwards (ticketId, resultSummary, completedBy, evidence) in order", async () => {
     await call("ticket_complete", {
       ticketId: "T-1",
       resultSummary: "done",
       completedBy: "a1",
     });
-    expect(svc.completeTicket).toHaveBeenCalledWith("T-1", "done", "a1");
+    // evidence is the optional attestation arg (defect #3) — undefined when omitted.
+    expect(svc.completeTicket).toHaveBeenCalledWith("T-1", "done", "a1", undefined);
+  });
+
+  it("ticket_complete forwards evidence when supplied", async () => {
+    const evidence = { branch: "0.8.3", testResult: "1289 passed" };
+    await call("ticket_complete", {
+      ticketId: "T-1",
+      resultSummary: "done",
+      completedBy: "a1",
+      evidence,
+    });
+    expect(svc.completeTicket).toHaveBeenCalledWith("T-1", "done", "a1", evidence);
   });
 });

@@ -144,9 +144,22 @@ export function migrateIfNeeded(db) {
   migrate();
 }
 
-// Schema migration: rename legacy `hiveId` column on sprints to `daemonId`.
-// Idempotent — safe to run on every getDb().
+// Schema migration. Idempotent — safe to run on every getDb().
+//   1. Additive `workRef` column on tickets (where the implementation landed:
+//      branch / commit range / worktree). Older DBs predate the CREATE TABLE
+//      column, so add it with ALTER TABLE when missing.
+//   2. Rename legacy `hiveId` column on sprints to `daemonId`.
 export function migrateSchemaIfNeeded(db) {
+  try {
+    const ticketCols = db.prepare("PRAGMA table_info(tickets)").all();
+    if (ticketCols.length > 0 && !ticketCols.some((c) => c.name === "workRef")) {
+      db.exec("ALTER TABLE tickets ADD COLUMN workRef TEXT");
+    }
+  } catch {
+    // tickets table may not exist yet on a brand-new DB — CREATE TABLE already
+    // carries the column, so there's nothing to migrate.
+  }
+
   let cols;
   try {
     cols = db.prepare("PRAGMA table_info(sprints)").all();

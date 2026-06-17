@@ -110,12 +110,22 @@ export const tickets: ToolDomain = {
     },
     {
       name: "zana_ticket_complete",
-      description: "Mark a ticket as done with a result summary describing what was accomplished.",
+      description: "Mark a ticket as done with a result summary describing what was accomplished. Optionally attach evidence (branch, commit range, test result) — this is the authorized attestation path: it lets an orchestrator or human assert a ticket is verified-done on a specific branch and reconcile a stale/wrong review WITHOUT re-entering the reviewer. Works from any status.",
       inputSchema: {
         type: "object",
         properties: {
           ticketId: { type: "string" },
           resultSummary: { type: "string", description: "Summary of what was done" },
+          evidence: {
+            type: "object",
+            description: "Proof the work is verified-done, recorded on the audit trail and folded into the ticket's workRef.",
+            properties: {
+              branch: { type: "string", description: "Git branch the work is on" },
+              commitRange: { type: "string", description: "Commit sha or range, e.g. 'abc123' or 'main..0.8.3'" },
+              testResult: { type: "string", description: "Test outcome, e.g. '1289 passed'" },
+              attestedBy: { type: "string", description: "Who attested (orchestrator/human)" },
+            },
+          },
         },
         required: ["ticketId", "resultSummary"],
       },
@@ -160,6 +170,15 @@ export const tickets: ToolDomain = {
           planification: { type: "string", description: "Implementation plan (written before coding)" },
           resultSummary: { type: "string", description: "Final result summary" },
           filesChanged: { type: "array", items: { type: "string" }, description: "File paths modified/created" },
+          workRef: {
+            type: "object",
+            description: "Where the implementation landed, so a reviewer isn't blind to work on a non-HEAD branch/worktree. Record this when you move a ticket to review.",
+            properties: {
+              branch: { type: "string", description: "Git branch the work was committed on" },
+              commitRange: { type: "string", description: "Commit or range, e.g. 'abc123' or 'main..feature'" },
+              worktree: { type: "string", description: "Path to the git worktree, if not the main checkout" },
+            },
+          },
         },
         required: ["ticketId"],
       },
@@ -167,17 +186,17 @@ export const tickets: ToolDomain = {
     {
       name: "zana_ticket_verdict",
       description:
-        "Record a structured review verdict on a ticket. Preferred over ending your output with a 'VERDICT:' line — this is deterministic and not affected by surrounding text. PASS advances the review phase (qa→architecture) or completes the ticket; FAIL sends it to rework; READY (after rework) re-opens review; BLOCKED marks it blocked. Used by reviewer/rework agents spawned by the ticket automation pipeline.",
+        "Record a structured review verdict on a ticket. Preferred over ending your output with a 'VERDICT:' line — this is deterministic and not affected by surrounding text. PASS advances the review phase (qa→architecture) or completes the ticket; FAIL sends it to rework; READY (after rework) re-opens review; BLOCKED marks it blocked. INCONCLUSIVE leaves the ticket in review without transitioning — use it when you cannot LOCATE the implementation on the tree you inspected (e.g. it is on a different branch or worktree). Never report FAIL for work you simply could not find. Used by reviewer/rework agents spawned by the ticket automation pipeline.",
       inputSchema: {
         type: "object",
         properties: {
           ticketId: { type: "string", description: "Ticket ID being reviewed" },
           verdict: {
             type: "string",
-            enum: ["PASS", "FAIL", "READY", "BLOCKED"],
-            description: "PASS/FAIL for a review; READY/BLOCKED for a rework cycle",
+            enum: ["PASS", "FAIL", "READY", "BLOCKED", "INCONCLUSIVE"],
+            description: "PASS/FAIL for a review; READY/BLOCKED for a rework cycle; INCONCLUSIVE when the work could not be located on the inspected tree",
           },
-          reason: { type: "string", description: "One-line reason (required for FAIL/BLOCKED)" },
+          reason: { type: "string", description: "One-line reason (required for FAIL/BLOCKED/INCONCLUSIVE)" },
         },
         required: ["ticketId", "verdict"],
       },
@@ -270,6 +289,7 @@ export const tickets: ToolDomain = {
         planification: args.planification,
         resultSummary: args.resultSummary,
         filesChanged: args.filesChanged,
+        workRef: args.workRef,
         agentId: env("ZANA_TERMINAL_ID", "agent"),
         agentName: env("ZANA_AGENT_NAME", "Agent"),
       }),
@@ -291,6 +311,7 @@ export const tickets: ToolDomain = {
         ticketId: args.ticketId,
         resultSummary: args.resultSummary,
         completedBy: env("ZANA_TERMINAL_ID", "agent"),
+        evidence: args.evidence,
       });
       // Slim payload — full ticket (description + audit + comments) is large
       // and the caller already knows what they completed. Hosts that need

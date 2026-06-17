@@ -254,12 +254,12 @@ const DEFAULT_RULES = [
     name: "auto-implement",
     trigger: { event: "ticket:claimed" },
     action: { spawnProfile: "{{assigneeProfileId}}", expectVerdict: false, skipLabels: ["awaiting-decision"] },
-    promptTemplate: "Implement ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nDo the work end to end: read the relevant files, make the change, build, and run the tests for the affected package(s). Keep the change minimal and idiomatic to the surrounding code.\n\nWhen the implementation is complete and tests pass, call the MCP tool zana_ticket_update with status \"review\" and a progress note listing the files you changed. If you cannot complete it, call zana_ticket_update with status \"blocked\" and explain why in the progress note.\n\nDo not over-build — nothing more than the ticket asks for.",
+    promptTemplate: "Implement ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nDo the work end to end: read the relevant files, make the change, build, and run the tests for the affected package(s). Keep the change minimal and idiomatic to the surrounding code.\n\nWhen the implementation is complete and tests pass, call the MCP tool zana_ticket_update with status \"review\", a progress note listing the files you changed, AND a workRef object recording where the work landed: { \"branch\": <git branch you committed on>, \"commitRange\": <commit sha or range>, \"worktree\": <worktree path if not the main checkout> }. This lets the reviewer inspect the correct tree instead of blindly grepping HEAD. If you cannot complete it, call zana_ticket_update with status \"blocked\" and explain why in the progress note.\n\nDo not over-build — nothing more than the ticket asks for.",
   },
   {
     trigger: { status: "review", reviewPhase: "qa" },
     action: { spawnProfile: "code-reviewer", expectVerdict: true },
-    promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nPREFERRED: record your verdict by calling the MCP tool zana_ticket_verdict with verdict PASS or FAIL (and a one-line reason on FAIL).\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = issues remain; ticket should go to rework with your findings as the reason.\n\nBe terse. Lead with the verdict reasoning.",
+    promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nWork location: {{workRefSummary}}. If a branch/worktree is named, inspect THAT tree (e.g. `git log <branch>`, `git diff <commitRange>`), not just the checked-out HEAD.\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nPREFERRED: record your verdict by calling the MCP tool zana_ticket_verdict with verdict PASS, FAIL, or INCONCLUSIVE (and a one-line reason on FAIL/INCONCLUSIVE).\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\nVERDICT: INCONCLUSIVE — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = the implementation IS present and has real defects; ticket goes to rework with your findings as the reason.\nINCONCLUSIVE = you could NOT locate the implementation on the tree you inspected (likely on a different branch/worktree). Never report FAIL for work you simply could not find — that is a false negative. The ticket stays in review for a re-review against the correct tree.\n\nBe terse. Lead with the verdict reasoning.",
   },
   {
     // The qa→architecture advance happens via updateReviewPhase(), which emits
@@ -269,7 +269,7 @@ const DEFAULT_RULES = [
     // phase-change event so the architect actually spawns.
     trigger: { event: "ticket:reviewPhaseChanged", reviewPhase: "architecture" },
     action: { spawnProfile: "architect", expectVerdict: true },
-    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nPREFERRED: record your verdict by calling the MCP tool zana_ticket_verdict with verdict PASS or FAIL.\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = ticket is done.\nFAIL = architectural issues; ticket should go to rework.\n\nBe terse.",
+    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nWork location: {{workRefSummary}}. If a branch/worktree is named, inspect THAT tree, not just the checked-out HEAD.\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nPREFERRED: record your verdict by calling the MCP tool zana_ticket_verdict with verdict PASS, FAIL, or INCONCLUSIVE.\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\nVERDICT: INCONCLUSIVE — <one-line reason>\n\nPASS = ticket is done.\nFAIL = the implementation IS present and has architectural issues; ticket goes to rework.\nINCONCLUSIVE = you could NOT locate the implementation on the inspected tree; the ticket stays in review for re-review. Never FAIL work you could not find.\n\nBe terse.",
   },
   {
     trigger: { status: "rework" },
@@ -658,9 +658,10 @@ function executeWorkflowAction(rule, ticket) {
 //   "VERDICT: FAIL — reason"    → set status=rework with reason
 //   "VERDICT: READY"            → set status=review (rework finished, re-review)
 //   "VERDICT: BLOCKED — reason" → set status=blocked with reason
+//   "VERDICT: INCONCLUSIVE — …" → no transition (work not found on inspected tree)
 // Match the LAST occurrence on its own line (anchored end of text or line)
 // to avoid being fooled by example/quoted verdicts earlier in the body.
-const VERDICT_RE = /^VERDICT:\s*(PASS|FAIL|READY|BLOCKED)\b\s*(?:[—–-]\s*(.+?))?\s*$/im;
+const VERDICT_RE = /^VERDICT:\s*(PASS|FAIL|READY|BLOCKED|INCONCLUSIVE)\b\s*(?:[—–-]\s*(.+?))?\s*$/im;
 
 export function parseVerdict(text: string): { kind: string; reason: string | null } | null {
   if (!text || typeof text !== "string") return null;
@@ -669,7 +670,7 @@ export function parseVerdict(text: string): { kind: string; reason: string | nul
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
     if (!line) continue;
-    const m = /^VERDICT:\s*(PASS|FAIL|READY|BLOCKED)\b\s*(?:[—–-]\s*(.+))?$/i.exec(line);
+    const m = line.match(/^VERDICT:\s*(PASS|FAIL|READY|BLOCKED|INCONCLUSIVE)\b\s*(?:[—–-]\s*(.+))?$/i);
     if (m) return { kind: m[1].toUpperCase(), reason: (m[2] || "").trim() || null };
     // Stop scanning once we hit a non-blank, non-verdict line — the contract
     // says the verdict must be the last line.
@@ -737,6 +738,23 @@ function applyParsedVerdict(
   // no-op instead of a double transition. (The `ticket` arg is the stale
   // snapshot captured at spawn time; trust the store, not it.)
   const current = ticketService.getTicket(ticket.id) || ticket;
+
+  // INCONCLUSIVE: the reviewer could not locate the work on the tree it
+  // inspected (commonly because it was committed on a different branch/worktree
+  // than the one checked out). This is NOT a failure — record the finding and
+  // leave the ticket in review for a re-review against the correct tree. Forcing
+  // it to rework here is exactly the branch-blind false-negative we are fixing.
+  if (verdict.kind === "INCONCLUSIVE") {
+    log(`Inconclusive review for ticket ${ticket.id}${verdict.reason ? " — " + verdict.reason : ""} — leaving in review`);
+    ticketService.addComment(
+      ticket.id,
+      actor,
+      profileLabel,
+      `**INCONCLUSIVE**${verdict.reason ? `: ${verdict.reason}` : ""}\n\nThe reviewer could not locate the implementation on the inspected tree. The work may be on a different branch or worktree. The ticket stays in review — re-run the reviewer against the correct tree (record a \`workRef\` via zana_ticket_update) or attest completion with evidence via zana_ticket_complete.\n\n---\n\n${(detail || verdict.reason || "").slice(0, 4000)}`
+    );
+    return;
+  }
+
   const PASS_OR_FAIL = verdict.kind === "PASS" || verdict.kind === "FAIL";
   if (PASS_OR_FAIL && current.status !== "review") {
     log(`Ignoring ${verdict.kind} for ticket ${ticket.id}: no longer in review (status=${current.status}) — already resolved`);

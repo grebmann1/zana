@@ -2,9 +2,9 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as ticketStoreFallback from "./store";
 import * as migration from "./migration";
-import { lazyRequire } from "@zana-ai/core/dist/src/util/lazy-require";
+import { lazyRequire } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
-type WorkspaceContextModule = typeof import("@zana-ai/core/dist/src/project/workspace-context");
+type WorkspaceContextModule = typeof import("@zana-ai/contracts/dist/src/workspace-context");
 const workspaceContext = lazyRequire<WorkspaceContextModule>(
   () => require("@zana-ai/core").project.workspaceContext
 );
@@ -61,7 +61,8 @@ function getDb() {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       closedAt TEXT,
-      resultSummary TEXT
+      resultSummary TEXT,
+      workRef TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_tickets_sprint ON tickets(sprintId);
@@ -96,6 +97,10 @@ function rowToTicket(row) {
     comments: JSON.parse(row.comments || "[]"),
     audit: JSON.parse(row.audit || "[]"),
     reworkCount: row.reworkCount || 0,
+    // workRef is a small JSON object ({ branch?, commitRange?, worktree? }) or
+    // null. Tolerate a legacy/corrupt value by falling back to null rather than
+    // throwing on read.
+    workRef: row.workRef ? (() => { try { return JSON.parse(row.workRef); } catch { return null; } })() : null,
   };
 }
 
@@ -153,11 +158,13 @@ function _saveTicket(ticket) {
     INSERT OR REPLACE INTO tickets (
       id, title, description, status, priority, assigneeId, assigneeName,
       assigneeProfileId, reviewPhase, reworkCount, sprintId, labels, blockedBy,
-      type, comments, audit, createdBy, createdAt, updatedAt, closedAt, resultSummary
+      type, comments, audit, createdBy, createdAt, updatedAt, closedAt, resultSummary,
+      workRef
     ) VALUES (
       @id, @title, @description, @status, @priority, @assigneeId, @assigneeName,
       @assigneeProfileId, @reviewPhase, @reworkCount, @sprintId, @labels, @blockedBy,
-      @type, @comments, @audit, @createdBy, @createdAt, @updatedAt, @closedAt, @resultSummary
+      @type, @comments, @audit, @createdBy, @createdAt, @updatedAt, @closedAt, @resultSummary,
+      @workRef
     )
   `);
 
@@ -183,6 +190,7 @@ function _saveTicket(ticket) {
     updatedAt: ticket.updatedAt,
     closedAt: ticket.closedAt || null,
     resultSummary: ticket.resultSummary || null,
+    workRef: ticket.workRef ? JSON.stringify(ticket.workRef) : null,
   });
 
   return ticket;

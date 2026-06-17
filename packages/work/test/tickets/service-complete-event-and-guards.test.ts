@@ -81,9 +81,11 @@ describe("completeTicket — event emission, guards, and defaults", () => {
     const res = svc.completeTicket(id, "shipped it", "agent-7") as any;
 
     expect(res.ok).toBe(true);
-    expect(captured).toEqual([
-      { ticketId: id, completedBy: "agent-7", resultSummary: "shipped it" },
-    ]);
+    // evidence is an additive attestation field (defect #3) — null when the
+    // caller passes none. Match on the core fields rather than the exact shape.
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({ ticketId: id, completedBy: "agent-7", resultSummary: "shipped it" });
+    expect(captured[0].evidence).toBeNull();
   });
 
   it("returns { error: 'ticket not found' } for an unknown id without saving or emitting", () => {

@@ -301,7 +301,16 @@ export function updateStatus(ticketId, newStatus, updatedBy) {
   return { ok: true, ticket };
 }
 
-export function completeTicket(ticketId, resultSummary, completedBy) {
+// Mark a ticket done. This is a FORCED terminal — it sets status="done" from
+// ANY current status without consulting STATUS_TRANSITIONS (e.g. backlog→done,
+// which updateStatus rejects). That is intentional: it is the authorized
+// reconciliation path out of a stale/wrong review. When `evidence` is supplied
+// ({ branch?, commitRange?, testResult?, attestedBy? }) it is recorded on the
+// `completed` audit entry and folded into the ticket's workRef, so an
+// orchestrator or human can attest "verified-done on branch X, tests pass"
+// instead of re-entering the (possibly branch-blind) reviewer. Optional —
+// existing 3-arg callers are unchanged.
+export function completeTicket(ticketId, resultSummary, completedBy, evidence?) {
   const ticket = ticketStore.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };
 
@@ -311,10 +320,22 @@ export function completeTicket(ticketId, resultSummary, completedBy) {
   ticket.closedAt = new Date().toISOString();
   ticket.updatedAt = ticket.closedAt;
 
+  const ev = evidence && typeof evidence === "object" ? evidence : null;
+  if (ev && (ev.branch || ev.commitRange || ev.worktree)) {
+    // Preserve any existing workRef fields the implementer recorded; attested
+    // evidence wins on the keys it carries.
+    ticket.workRef = {
+      ...(ticket.workRef && typeof ticket.workRef === "object" ? ticket.workRef : {}),
+      ...(ev.branch ? { branch: ev.branch } : {}),
+      ...(ev.commitRange ? { commitRange: ev.commitRange } : {}),
+      ...(ev.worktree ? { worktree: ev.worktree } : {}),
+    };
+  }
+
   addAuditEntry(ticket, "status_changed", completedBy, { from: oldStatus, to: "done" });
-  addAuditEntry(ticket, "completed", completedBy, { resultSummary });
+  addAuditEntry(ticket, "completed", completedBy, { resultSummary, evidence: ev });
   ticketStore.saveTicket(ticket);
-  _bus().emit("ticket:completed", { ticketId, completedBy, resultSummary });
+  _bus().emit("ticket:completed", { ticketId, completedBy, resultSummary, evidence: ev });
   return { ok: true, ticket };
 }
 
@@ -527,7 +548,12 @@ export function updateReviewPhase(ticketId, phase, updatedBy) {
 // PASS/FAIL/READY/BLOCKED state transition. Validates the kind but does NOT
 // itself mutate the ticket — the watcher owns the transition so both the
 // structured and legacy text paths converge on one implementation.
-const VALID_VERDICTS = ["PASS", "FAIL", "READY", "BLOCKED"];
+// INCONCLUSIVE: the reviewer inspected the tree but could not locate the work
+// (e.g. it was committed on a different branch/worktree than the one checked
+// out). It is NOT a failure — the watcher leaves the ticket in review rather
+// than forcing it to rework. A reviewer must never assert "unimplemented" when
+// it only knows "not present on the one tree I looked at".
+const VALID_VERDICTS = ["PASS", "FAIL", "READY", "BLOCKED", "INCONCLUSIVE"];
 export function recordVerdict(ticketId, kind, reason, reportedBy, profileLabel?) {
   const ticket = ticketStore.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };

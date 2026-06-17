@@ -2357,7 +2357,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:57`
+- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:62`
 
 ---
 
@@ -2375,7 +2375,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:35`
+- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:40`
 
 ---
 
@@ -2390,7 +2390,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:30`
+- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:35`
 
 ---
 
@@ -2407,7 +2407,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:68`
+- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:73`
 
 ---
 
@@ -2426,7 +2426,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:11`
+- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:16`
 
 ---
 
@@ -2443,7 +2443,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:48`
+- MCP wrapper: `packages/mcp/src/registrations/swarm.ts:53`
 
 ---
 
@@ -2560,7 +2560,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:185`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:204`
 - Handler: `packages/work/src/tickets/service.ts:addTicketToSprint`
 
 ---
@@ -2684,12 +2684,13 @@ _No input parameters._
 
 ## zana_ticket_complete
 
-**Description:** Mark a ticket as done with a result summary describing what was accomplished.
+**Description:** Mark a ticket as done with a result summary describing what was accomplished. Optionally attach evidence (branch, commit range, test result) — this is the authorized attestation path: it lets an orchestrator or human assert a ticket is verified-done on a specific branch and reconcile a stale/wrong review WITHOUT re-entering the reviewer. Works from any status.
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
+| evidence | object | no | Proof the work is verified-done, recorded on the audit trail and folded into the ticket's workRef. — fields: attestedBy, branch, commitRange, testResult |
 | resultSummary | string | yes | Summary of what was done |
 | ticketId | string | yes |  |
 
@@ -2868,7 +2869,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:123`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:133`
 - Handler: `packages/work/src/tickets/service.ts:updateTicket`
 
 **Common pitfalls:**
@@ -3032,6 +3033,7 @@ _No input parameters._
 | reviewPhase | string | no | `qa` \| `architecture` — Advance the review phase (QA reviewer sets 'architecture' on pass) |
 | status | string | no | `in-progress` \| `review` \| `rework` \| `blocked` \| `done` — Transition to new status |
 | ticketId | string | yes | Ticket ID to update |
+| workRef | object | no | Where the implementation landed, so a reviewer isn't blind to work on a non-HEAD branch/worktree. Record this when you move a ticket to review. — fields: branch, commitRange, worktree |
 
 **Output shape:**
 
@@ -3075,7 +3077,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:141`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:151`
 - Handler: `packages/core/src/agents/manager.ts case 'ticket_update'`
 
 **Common pitfalls:**
@@ -3152,20 +3154,20 @@ _No input parameters._
 
 ## zana_ticket_verdict
 
-**Description:** Record a structured review verdict on a ticket. Preferred over ending your output with a 'VERDICT:' line — this is deterministic and not affected by surrounding text. PASS advances the review phase (qa→architecture) or completes the ticket; FAIL sends it to rework; READY (after rework) re-opens review; BLOCKED marks it blocked. Used by reviewer/rework agents spawned by the ticket automation pipeline.
+**Description:** Record a structured review verdict on a ticket. Preferred over ending your output with a 'VERDICT:' line — this is deterministic and not affected by surrounding text. PASS advances the review phase (qa→architecture) or completes the ticket; FAIL sends it to rework; READY (after rework) re-opens review; BLOCKED marks it blocked. INCONCLUSIVE leaves the ticket in review without transitioning — use it when you cannot LOCATE the implementation on the tree you inspected (e.g. it is on a different branch or worktree). Never report FAIL for work you simply could not find. Used by reviewer/rework agents spawned by the ticket automation pipeline.
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
-| reason | string | no | One-line reason (required for FAIL/BLOCKED) |
+| reason | string | no | One-line reason (required for FAIL/BLOCKED/INCONCLUSIVE) |
 | ticketId | string | yes | Ticket ID being reviewed |
-| verdict | string | yes | `PASS` \| `FAIL` \| `READY` \| `BLOCKED` — PASS/FAIL for a review; READY/BLOCKED for a rework cycle |
+| verdict | string | yes | `PASS` \| `FAIL` \| `READY` \| `BLOCKED` \| `INCONCLUSIVE` — PASS/FAIL for a review; READY/BLOCKED for a rework cycle; INCONCLUSIVE when the work could not be located on the inspected tree |
 
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:167`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:186`
 
 ---
 
