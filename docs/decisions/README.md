@@ -59,3 +59,4 @@ add a new ADR and mark the old one `Superseded by ADR-XXXX`.
 | [0007](0007-profile-model-tiering.md) | Cost-appropriate model tiering for agent profiles | Accepted |
 | [0008](0008-ticket-automation-pipeline.md) | The ticket-automation pipeline (watcher rules, verdicts, escalation) | Accepted |
 | [0009](0009-freeze-swarm-goap-vector-memory.md) | Freeze multi-daemon swarm, GOAP planner, and vector-memory | Accepted |
+| [0010](0010-contracts-base-layer.md) | Extract the dependency-free base layer into @zana-ai/contracts | Accepted |
