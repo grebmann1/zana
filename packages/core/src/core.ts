@@ -208,40 +208,54 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   // service tags the ticket `needs-triage` for a human. An already-bound
   // profile (explicit human intent) is never overridden by the service.
   try {
-    const onTicketCreated = (msg: any) => {
+    // Shared routing for a ticket that has no bound profile yet. Runs on
+    // creation AND on update (so a ticket relabeled `architecture` *later* still
+    // escalates — escalation isn't a create-time-only decision). Idempotent: an
+    // already-assigned or already-parked ticket short-circuits.
+    const routeTicket = (ticketId: string, reason: string) => {
       try {
         const sys = moduleConfig.getModuleConfig("system") || {};
         if (sys.autoAssignProfile === false) return;
-        if (!msg?.ticketId) return;
+        if (!ticketId) return;
         const ticketService = require("@zana-ai/work").tickets.service;
-        const ticket = ticketService.getTicket(msg.ticketId);
+        const ticket = ticketService.getTicket(ticketId);
         if (!ticket || ticket.assigneeProfileId) return;
-        const ranked = taskRouter.route(ticket) || [];
-        const floor = typeof sys.autoAssignConfidence === "number" ? sys.autoAssignConfidence : 0.15;
-        const top = ranked[0];
+        const labels = Array.isArray(ticket.labels) ? ticket.labels : [];
+        // Already parked for a human — don't re-route.
+        if (labels.includes("awaiting-decision")) return;
 
         // Escalation gate (#6): a ticket that changes a core invariant goes to
         // the design-only lane (architect + ADR, parked for a human) instead of
-        // straight to an implementer. This is driven by EXPLICIT escalation
-        // labels only — low router confidence is NOT escalation (it usually
-        // just means "no routing history yet"), so that path falls through to
-        // assignProfile, which tags it needs-triage rather than burning an
-        // architect on a routine ticket.
-        const labels = Array.isArray(ticket.labels) ? ticket.labels : [];
-        const ESCALATION_LABELS = ["architecture", "needs-decision", "invariant"];
-        if (labels.some((l: string) => ESCALATION_LABELS.includes(l))) {
-          ticketService.escalateForDesign(msg.ticketId, "escalation label", "auto-router");
+        // straight to an implementer. EXPLICIT escalation labels only — low
+        // router confidence is NOT escalation (usually just "no history yet"),
+        // so that falls through to assignProfile/needs-triage. Labels are
+        // configurable via system.escalationLabels.
+        const escalationLabels = Array.isArray(sys.escalationLabels)
+          ? sys.escalationLabels
+          : ["architecture", "needs-decision", "invariant"];
+        if (labels.some((l: string) => escalationLabels.includes(l))) {
+          ticketService.escalateForDesign(ticketId, `escalation label (${reason})`, "auto-router");
           return;
         }
 
         // Otherwise bind the best-fit profile if confident, else needs-triage.
+        const ranked = taskRouter.route(ticket) || [];
+        const floor = typeof sys.autoAssignConfidence === "number" ? sys.autoAssignConfidence : 0.15;
+        const top = ranked[0];
         const profileId = top && top.score >= floor ? top.profileId : null;
-        ticketService.assignProfile(msg.ticketId, profileId, "auto-router");
+        ticketService.assignProfile(ticketId, profileId, "auto-router");
       } catch (err: any) {
-        console.warn("[core] auto-assign profile failed:", err?.message || err);
+        console.warn("[core] auto-route failed:", err?.message || err);
       }
     };
-    bus.on("ticket:created", onTicketCreated);
+    bus.on("ticket:created", (msg: any) => routeTicket(msg?.ticketId, "created"));
+    // Late-label escalation: only react to label edits, and only to escalate
+    // (never to re-route a routine update). assignProfile/escalateForDesign are
+    // both idempotent + no-op on an already-assigned ticket, so this is safe.
+    bus.on("ticket:updated", (msg: any) => {
+      const fields = Array.isArray(msg?.fields) ? msg.fields : [];
+      if (fields.includes("labels")) routeTicket(msg?.ticketId, "relabeled");
+    });
   } catch (err: any) {
     console.warn("[core] auto-router wiring failed:", err?.message || err);
   }

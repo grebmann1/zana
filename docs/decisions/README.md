@@ -55,3 +55,6 @@ add a new ADR and mark the old one `Superseded by ADR-XXXX`.
 | [0003](0003-mcp-workspace-resolution.md) | MCP server workspace resolution (`ZANA_WORKSPACE` → cwd) | Accepted |
 | [0004](0004-deliberation-convergence-rule.md) | Deliberation convergence: unanimity-within-latest-round | Accepted |
 | [0005](0005-surface-daemon-tools-by-default.md) | Surface the daemon-path MCP tools by default | Accepted |
+| [0006](0006-mcp-agent-registry-daemon-forwarding.md) | MCP server forwards agent lifecycle to the daemon when one exists | Proposed |
+| [0007](0007-profile-model-tiering.md) | Cost-appropriate model tiering for agent profiles | Accepted |
+| [0008](0008-ticket-automation-pipeline.md) | The ticket-automation pipeline (watcher rules, verdicts, escalation) | Accepted |

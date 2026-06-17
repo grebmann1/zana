@@ -78,7 +78,7 @@ describe("applyVerdict — PASS on an unexpected reviewPhase is a no-op (audit c
           {
             name: "review-any-phase",
             trigger: { event: "ticket:statusChanged", to: "review" },
-            action: { spawnProfile: "code-reviewer" },
+            action: { spawnProfile: "code-reviewer", expectVerdict: true },
             promptTemplate: "Review {{id}}",
           },
         ],

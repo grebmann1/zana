@@ -169,11 +169,13 @@ into native `Agent`+`SendMessage` calls (no daemon round-trip).
 
 Rows tagged **daemon-only** are surfaced by default — the daemon path is
 first-class (see ADR `docs/decisions/0005`). The default `npx -y @zana-ai/mcp`
-install registers all 90 tools. Set `ZANA_DAEMON_TOOLS=0` in the MCP server
-env for the lean native-only surface (66 tools), where these flows are covered
-by `Agent`+`SendMessage` and the slash commands. `ZANA_MASTER_MODE=true` adds
-the 6 swarm tools on top (still opt-in — multi-daemon / headless only), for 96
-in all — the full set documented in `docs/MCP-TOOL-REFERENCE.md`.
+install registers the 91 non-swarm tools. Set `ZANA_DAEMON_TOOLS=0` in the MCP
+server env for the lean native-only surface (67 tools — the 91 default minus the
+24 daemon-gated), where these flows are covered by `Agent`+`SendMessage` and the
+slash commands. `ZANA_MASTER_MODE=true` adds the 6 swarm tools on top (still
+opt-in — multi-daemon / headless only), for 97 in all. These counts drift with
+every release; the authoritative, generated list is `docs/MCP-TOOL-REFERENCE.md`
+(via `npm run docs:mcp-ref`) — trust it over any hand-written number here.
 
 | Domain | Representative tools | Path |
 |---|---|---|
@@ -216,6 +218,9 @@ Schema doc: `plugins/zana/loop/skills/scheduler/SKILL.md`.
 - `scripts/diagnostics/run-real-deliberation*.js` calls real Claude and costs
   real money — don't run unless explicitly asked
 - Consequential design decisions and their rationale live as ADRs in
-  `docs/decisions/` (require-cycle, tenant isolation, MCP workspace resolution,
-  deliberation convergence). Read them before changing an invariant; add a new
-  ADR when you make a decision a future reader would question.
+  `docs/decisions/` (0001 require-cycle, 0002 tenant isolation, 0003 MCP
+  workspace resolution, 0004 deliberation convergence, 0005 daemon-tools-by-default,
+  0006 MCP→daemon agent-registry forwarding, 0007 profile model tiering, 0008
+  ticket-automation pipeline). See `docs/decisions/README.md` for the index.
+  Read them before changing an invariant; add a new ADR when you make a decision
+  a future reader would question.

@@ -54,6 +54,11 @@ const DEBOUNCE_MS = 150;
 const MAX_CONCURRENT = 3;
 const MAX_REWORK_CYCLES = 3;
 const DEDUP_TTL_MS = 2000;
+// Backstop for the concurrency slot: a slot is normally freed on the agent's
+// `agent:terminated` event. If that event is lost (crash, dropped emit), free
+// the slot after this long so the automation queue can't wedge permanently.
+// Generous because real review/implement agents run for minutes.
+const SLOT_BACKSTOP_MS = 15 * 60 * 1000;
 
 const TICKET_EVENTS = [
   "ticket:created",
@@ -89,6 +94,11 @@ let busSubscriptions = [];
 // agent:terminated event fires for one of these, we parse its output for a
 // VERDICT line and apply the corresponding ticket state transition.
 let inFlightSpawns = new Map();
+// Map agentId → release() for the concurrency slot the spawn is holding. The
+// slot is freed when the agent terminates (real backpressure) or by the
+// wall-clock backstop. Separate from inFlightSpawns because EVERY spawn holds a
+// slot, but only expectVerdict rules are tracked for applyVerdict.
+let slotByAgent = new Map<string, () => void>();
 // Short-lived dedup keyed by `(ruleKey, eventType, ticketId, oldStatus, newStatus)`
 // to swallow duplicate emits within DEDUP_TTL_MS.
 let recentlyFired = new Map<string, number>();
@@ -147,8 +157,15 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
   // agents we spawned and apply the resulting ticket state transitions.
   const onAgentTerminated = (msg: any) => {
     if (!msg || !msg.agentId) return;
+    // Free the concurrency slot this agent was holding (real backpressure —
+    // slots are held for the agent's whole lifetime, not a fixed timer).
+    const releaseSlot = slotByAgent.get(msg.agentId);
+    if (releaseSlot) {
+      slotByAgent.delete(msg.agentId);
+      releaseSlot();
+    }
     const tracked = inFlightSpawns.get(msg.agentId);
-    if (!tracked) return; // not one of ours
+    if (!tracked) return; // not one of ours (or fire-and-forget)
     inFlightSpawns.delete(msg.agentId);
     let result: string = msg.output || "";
     if (!result) {
@@ -564,36 +581,53 @@ function executeAutomation(rule, eventType, payload, ticket) {
 
   log(`Auto-spawning ${profileId} for ticket ${ticket.id} on ${eventType} (status=${ticket.status}, phase=${ticket.reviewPhase})`);
 
+  // Slot accounting: the slot is held until the spawned agent actually
+  // TERMINATES (real backpressure), not a fixed timer. A prior version released
+  // after 2000ms regardless of the agent's lifetime, so MAX_CONCURRENT was
+  // fiction — a creation burst could fan out far past the cap into many live
+  // claude children. We release on `agent:terminated` (see releaseSlot, wired in
+  // the terminated handler) with a generous wall-clock backstop so a lost
+  // terminated event can't leak a slot forever.
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    activeAutomations--;
+    processQueue();
+  };
+
   try {
     Promise.resolve(spawnFn(profileId, prompt, ticket.id))
       .then((result) => {
         if (result && result.error) {
           log(`Spawn for ticket ${ticket.id} returned error: ${result.error}`);
-          // Don't track — there's no agent to wait for.
+          release(); // nothing to wait for
         } else if (result && result.agentId) {
           log(`Spawn for ticket ${ticket.id} → agent ${result.agentId}`);
+          // Hold the slot until this agent terminates.
+          slotByAgent.set(result.agentId, release);
           // Track spawns whose terminal output decides a ticket transition so
-          // applyVerdict runs on agent:terminated. Default is to track (every
-          // pre-existing review rule and user automation.json relies on this);
-          // only fire-and-forget rules (implement, triage, design) opt OUT with
-          // `expectVerdict: false` — they drive their own transitions via MCP
-          // tools, so tracking them would emit a spurious "no VERDICT" comment.
-          if (rule.action?.expectVerdict !== false) {
+          // applyVerdict runs on agent:terminated. Default is fire-and-forget;
+          // only review/rework rules opt IN with `expectVerdict: true`.
+          if (rule.action?.expectVerdict === true) {
             inFlightSpawns.set(result.agentId, { ticket, rule });
           }
+        } else {
+          release(); // unexpected shape — don't leak the slot
         }
       })
       .catch((err) => {
         log(`Spawn failed for ticket ${ticket.id}: ${err.message || err}`);
+        release();
       });
   } catch (err) {
     log(`Spawn failed (sync): ${err.message}`);
+    release();
   }
 
-  setTimeout(() => {
-    activeAutomations--;
-    processQueue();
-  }, 2000);
+  // Wall-clock backstop: if the agent never emits agent:terminated (crash, lost
+  // event), free the slot after SLOT_BACKSTOP_MS so the queue can't wedge.
+  setTimeout(release, SLOT_BACKSTOP_MS);
 }
 
 function executeWorkflowAction(rule, ticket) {
@@ -695,6 +729,24 @@ function applyParsedVerdict(
   const actor = "ticket-watcher";
   const profileLabel = action?.spawnProfile || "Automation";
 
+  // Idempotency / race guard. The structured-verdict path (ticket:verdict) and
+  // the text-fallback path (agent:terminated) are independent, unordered bus
+  // events, and a reviewer may call zana_ticket_verdict more than once. Re-read
+  // the CURRENT ticket and only transition if it's still in a state the verdict
+  // applies to — a second verdict for an already-moved ticket becomes a logged
+  // no-op instead of a double transition. (The `ticket` arg is the stale
+  // snapshot captured at spawn time; trust the store, not it.)
+  const current = ticketService.getTicket(ticket.id) || ticket;
+  const PASS_OR_FAIL = verdict.kind === "PASS" || verdict.kind === "FAIL";
+  if (PASS_OR_FAIL && current.status !== "review") {
+    log(`Ignoring ${verdict.kind} for ticket ${ticket.id}: no longer in review (status=${current.status}) — already resolved`);
+    return;
+  }
+  if (verdict.kind === "READY" && current.status !== "rework") {
+    log(`Ignoring READY for ticket ${ticket.id}: not in rework (status=${current.status})`);
+    return;
+  }
+
   log(`Verdict for ticket ${ticket.id}: ${verdict.kind}${verdict.reason ? " — " + verdict.reason : ""}`);
 
   // Add a comment with the agent's output / reason for the audit trail.
@@ -706,12 +758,12 @@ function applyParsedVerdict(
   );
 
   if (verdict.kind === "PASS") {
-    if (ticket.reviewPhase === "qa") {
+    if (current.reviewPhase === "qa") {
       ticketService.updateReviewPhase(ticket.id, "architecture", actor);
-    } else if (ticket.reviewPhase === "architecture") {
+    } else if (current.reviewPhase === "architecture") {
       ticketService.completeTicket(ticket.id, "Approved by automated review pipeline.", actor);
     } else {
-      log(`Unexpected reviewPhase ${ticket.reviewPhase} on PASS for ticket ${ticket.id}`);
+      log(`Unexpected reviewPhase ${current.reviewPhase} on PASS for ticket ${ticket.id}`);
     }
   } else if (verdict.kind === "FAIL") {
     // updateStatus("rework") increments reworkCount and emits the bus event.
@@ -764,6 +816,7 @@ export function stop() {
   if (configWatcher) { try { fs.unwatchFile(configWatcher); } catch {} configWatcher = null; }
   configPathTracked = null;
   inFlightSpawns.clear();
+  slotByAgent.clear();
   recentlyFired.clear();
   structuredVerdictSeen.clear();
   queue = [];

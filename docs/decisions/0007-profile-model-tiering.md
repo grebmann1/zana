@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-06-17
-- **Relates to:** the ticket-orchestration enhancements (auto-implement, triage gate, structured verdicts)
+- **Relates to:** ADR 0008 (the ticket-automation pipeline — auto-implement, triage gate, structured verdicts)
 
 ## Context
 

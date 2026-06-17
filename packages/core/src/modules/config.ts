@@ -4,7 +4,7 @@ import * as crypto from "node:crypto";
 
 const DEFAULTS = {
   modules: {},
-  system: { initTimeout: 10000, suspendTimeout: 5000, hotReload: false, maxConcurrentAgents: 10, cpuGateEnabled: false, cpuLoadThreshold: 0.8, cpuLoadHardCap: 2.0, agentTimeoutMinutes: 10, spawnThrottleStreakLimit: 5, zombieReaperEnabled: true, zombieReaperIntervalMs: 60000, zombieReaperGraceMs: 300000, ticketSweeperEnabled: true, ticketSweeperIntervalMs: 3600000, ticketStaleThresholdMs: 86400000, transientRetryMaxAttempts: 3, transientRetryBackoffMs: [30000, 120000, 480000], autoAssignProfile: true, autoAssignConfidence: 0.15, autoCloseStale: false },
+  system: { initTimeout: 10000, suspendTimeout: 5000, hotReload: false, maxConcurrentAgents: 10, cpuGateEnabled: false, cpuLoadThreshold: 0.8, cpuLoadHardCap: 2.0, agentTimeoutMinutes: 10, spawnThrottleStreakLimit: 5, zombieReaperEnabled: true, zombieReaperIntervalMs: 60000, zombieReaperGraceMs: 300000, ticketSweeperEnabled: true, ticketSweeperIntervalMs: 3600000, ticketStaleThresholdMs: 86400000, transientRetryMaxAttempts: 3, transientRetryBackoffMs: [30000, 120000, 480000], autoAssignProfile: true, autoAssignConfidence: 0.15, autoCloseStale: false, escalationLabels: ["architecture", "needs-decision", "invariant"] },
 };
 
 let configPath = null;

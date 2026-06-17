@@ -9,6 +9,21 @@ function getArtifactsDir() {
   return path.join(core.config.ZANA_DIR, "artifacts");
 }
 
+// Tenant isolation gate for artifact WRITES (mirrors storeContentAddressed
+// below, ADR 0002). The ~/.zana/artifacts fallback is shared across every
+// workspace on this host — writing an artifact record there would mix one
+// workspace's planning docs/specs into another's. Refuse rather than fall back.
+// Reads stay tolerant (listArtifacts/getArtifact) so prior global-scope state
+// remains inspectable.
+function assertWorkspaceForWrite(operation) {
+  const core = require("@zana-ai/core");
+  const ctx = core.project.workspaceContext;
+  if (!ctx.isInitialized()) {
+    const ErrCtor = ctx.WorkspaceNotInitializedError;
+    throw new ErrCtor({ operation, path: path.join(core.config.ZANA_DIR, "artifacts") });
+  }
+}
+
 function ensureDir() {
   fs.mkdirSync(getArtifactsDir(), { recursive: true });
 }
@@ -68,6 +83,7 @@ function sanitizeArtifactId(id) {
 }
 
 export function createArtifact(artifact) {
+  assertWorkspaceForWrite("createArtifact");
   ensureDir();
   const now = new Date().toISOString();
   let id;
@@ -96,6 +112,7 @@ export function createArtifact(artifact) {
 }
 
 export function updateArtifact(id, updates) {
+  assertWorkspaceForWrite("updateArtifact");
   const sanitized = sanitizeArtifactId(id);
   if (!sanitized) return null;
   const existing = getArtifact(sanitized);
@@ -113,6 +130,7 @@ export function updateArtifact(id, updates) {
 }
 
 export function deleteArtifact(id) {
+  assertWorkspaceForWrite("deleteArtifact");
   if (!id) return false;
   const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, "");
   const filePath = path.join(getArtifactsDir(), `${sanitized}.json`);

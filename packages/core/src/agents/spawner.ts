@@ -152,15 +152,28 @@ export function buildClaudeArgs(profile, options = {}) {
     args.push("--max-budget-usd", String(profile.maxBudgetUsd));
   }
 
-  if (profile.mcpConfig) {
-    const configPath = writeTempMcpConfig(profile, {
+  // MCP wiring. A profile may carry an explicit `mcpConfig`; otherwise — unless
+  // it opts out with `noZanaMcp: true` — a headless worker gets the zana MCP
+  // server injected by default so it can report ticket progress back
+  // (zana_ticket_update / _verdict / _comment). Without this the auto-implement
+  // loop silently stalls: the worker is TOLD to call zana_ticket_* but the tools
+  // aren't registered in the child, so the ticket sits in-progress forever with
+  // no error. Opt-out (not opt-in) because forgetting it fails silently.
+  const effectiveProfile =
+    profile.mcpConfig || profile.noZanaMcp
+      ? profile
+      : { ...profile, mcpConfig: defaultZanaMcpConfig() };
+
+  if (effectiveProfile.mcpConfig) {
+    const configPath = writeTempMcpConfig(effectiveProfile, {
       terminalId: options.terminalId,
       agentName: options.name,
+      profileId: profile.id,
     });
     if (configPath) {
       args.push("--mcp-config", configPath);
     }
-    if (profile.strictMcpConfig) {
+    if (effectiveProfile.strictMcpConfig) {
       args.push("--strict-mcp-config");
     }
   }
@@ -168,8 +181,33 @@ export function buildClaudeArgs(profile, options = {}) {
   return args;
 }
 
+// The zana MCP server stanza injected by default into headless workers. Points
+// at the orchestrator-mcp shim (packages/server), which delegates to the full
+// MCP server and talks to THIS daemon over the hook port. writeTempMcpConfig
+// resolves the __ORCHESTRATOR_MCP_PATH__ placeholder and stamps the
+// ZANA_PORT / ZANA_TERMINAL_ID / ZANA_AGENT_NAME / ZANA_PROFILE_ID env.
+function defaultZanaMcpConfig() {
+  return {
+    zana: {
+      command: process.execPath,
+      args: ["__ORCHESTRATOR_MCP_PATH__"],
+    },
+  };
+}
+
 function sanitizePathSegment(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+}
+
+// The orchestrator-mcp shim lives in @zana-ai/server (NOT core). Resolve it via
+// the package so it works regardless of the consumer's dist layout; fall back to
+// the on-disk monorepo path if the package entry can't be resolved.
+function resolveOrchestratorMcpPath() {
+  try {
+    return require.resolve("@zana-ai/server/dist/src/api/orchestrator-mcp.js");
+  } catch {
+    return path.join(__dirname, "..", "..", "..", "..", "server", "dist", "src", "api", "orchestrator-mcp.js");
+  }
 }
 
 function writeTempMcpConfig(profile, options = {}) {
@@ -181,7 +219,7 @@ function writeTempMcpConfig(profile, options = {}) {
 
   // Resolve placeholders in MCP config
   const resolved = JSON.parse(JSON.stringify(profile.mcpConfig));
-  const orchestratorMcpPath = path.join(__dirname, "..", "api", "orchestrator-mcp.js");
+  const orchestratorMcpPath = resolveOrchestratorMcpPath();
   for (const [, server] of Object.entries(resolved)) {
     if (server.args) {
       server.args = server.args.map((arg) =>

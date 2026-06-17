@@ -16,7 +16,7 @@ In a Claude Code session:
 
 ```
 /plugin marketplace add grebmann1/zana
-/plugin install zana@zana-marketplace        # orchestrator (28 commands, 2 skills)
+/plugin install zana@zana-marketplace        # orchestrator (29 commands, 2 skills)
 /plugin install zana-loop@zana-marketplace   # lightweight /loop scheduling (3 cmds, 1 skill)
 ```
 
@@ -40,8 +40,8 @@ Step-by-step incl. troubleshooting: [INSTALL.md](./INSTALL.md).
 ## What Zana is
 
 - Multi-agent orchestrator for Claude Code — native plugin first, daemon for headless
-- 31 slash commands across two plugins (`zana@zana-marketplace`, `zana-loop@zana-marketplace`)
-- 94 MCP `zana_*` tools (daemon path) for spawning agents, managing tickets/sprints, scheduling, and deliberation
+- 32 slash commands across two plugins (`zana@zana-marketplace`, `zana-loop@zana-marketplace`)
+- 97 MCP `zana_*` tools (full set; 91 registered by default, 67 in the lean native-only surface) for spawning agents, managing tickets/sprints, scheduling, and deliberation — see [`docs/MCP-TOOL-REFERENCE.md`](docs/MCP-TOOL-REFERENCE.md) (generated, authoritative)
 - A standalone CLI (`zana …`) for the daemon path — same primitives, different surface
 - Pluggable module system for adding new capabilities without forking the core
 
@@ -80,7 +80,7 @@ The default surface. After installing the plugin, in any workspace:
 /zana:loop:start                   # daemon-free /loop scheduling
 ```
 
-31 slash commands across two plugins. See
+32 slash commands across two plugins. See
 [plugins/zana/core/commands/](plugins/zana/core/commands/) and
 [plugins/zana/loop/commands/](plugins/zana/loop/commands/).
 

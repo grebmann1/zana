@@ -380,4 +380,57 @@ describe("core.init()", { timeout: 30000 }, () => {
       }
     },
   );
+
+  // ── auto-router kill-switch (core.ts onTicketCreated) ───────────────────────
+  // The handler's FIRST decision is the opt-out gate:
+  //   const sys = moduleConfig.getModuleConfig("system") || {};
+  //   if (sys.autoAssignProfile === false) return;
+  // When `autoAssignProfile` is set to false on the "system" module config, the
+  // handler must short-circuit BEFORE any routing/assignment — the ticket stays
+  // exactly as created: no `needs-triage`, no `awaiting-decision`, and the
+  // assigneeProfileId left null. Every other auto-router test runs with the gate
+  // at its default (enabled), so the disabled branch — the user's kill-switch —
+  // is otherwise unexercised; a regression that dropped the `=== false` guard
+  // would silently auto-assign tickets a human asked it to leave alone.
+  //
+  // The handler reads the BUILT core's config singleton, so we toggle it through
+  // the same instance ((core as any).modules.config) and restore it in finally
+  // to avoid leaking the disabled state into the process-wide config cache.
+  // Deterministic: no timers/network; createTicket emits "ticket:created"
+  // synchronously, so the handler has run by the time createTicket() returns.
+  it(
+    "auto-router leaves the ticket untouched when autoAssignProfile is disabled",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      const moduleConfig = (core as any).modules.config;
+      try {
+        // Flip the kill-switch AFTER init() (so init's config load can't clobber
+        // it) and BEFORE createTicket() fires the synchronous handler.
+        moduleConfig.setModuleConfig("system", { autoAssignProfile: false });
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+        const created = ticketService.createTicket({
+          title: "Tweak the xyzzy widget margins",
+          labels: [],
+          createdBy: "core-test",
+        });
+        expect(created.error).toBeUndefined();
+
+        const after = ticketService.getTicket(created.id);
+        // Gate fired first → handler returned → ticket is pristine.
+        expect(after.labels).not.toContain("needs-triage");
+        expect(after.labels).not.toContain("awaiting-decision");
+        expect(after.assigneeProfileId).toBeNull();
+      } finally {
+        // Re-enable so the disabled state never leaks to later runs.
+        moduleConfig.setModuleConfig("system", { autoAssignProfile: true });
+        await result.shutdown();
+      }
+    },
+  );
 });

@@ -35,8 +35,13 @@ async function boot() {
     ticketsDirectory: ticketsDir,
     configPath: path.join(tmpDir, "config.json"),
     spawnAgent: (profileId: string, _p: string, ticketId: string) => {
+      const agentId = `a-${spawns.length + 1}`;
       spawns.push({ profileId, ticketId, at: spawns.length });
-      return Promise.resolve({ agentId: `a-${spawns.length}` });
+      // Model a real (fast) agent: it runs, then terminates — which is what
+      // releases the concurrency slot now (C2). Without emitting this the queue
+      // would correctly wedge after MAX_CONCURRENT spawns until the backstop.
+      setTimeout(() => bus.emit("agent:terminated", { agentId, reason: "completed", exitCode: 0, output: "" }), 10);
+      return Promise.resolve({ agentId });
     },
   });
   return { bus, spawns };

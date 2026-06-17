@@ -108,6 +108,26 @@ describe("structured verdict path (#4)", () => {
     expect(svc.calls.some((c: any) => c[0] === "completeTicket")).toBe(true);
   });
 
+  it("idempotency: a stale verdict after the ticket left review is a no-op (M6 race guard)", async () => {
+    // Models the terminated-vs-verdict ordering race: a FAIL moves the ticket to
+    // rework; a stale PASS for the same review then arrives. applyParsedVerdict
+    // re-reads current state — the ticket is no longer in review — so the PASS
+    // must NOT advance/complete it.
+    const ticket: any = { id: "t-sv-idem-" + Date.now(), title: "x", status: "review", reviewPhase: "qa", labels: [], reworkCount: 0 };
+    const { bus, svc } = await setup(ticket);
+
+    bus.emit("ticket:verdict", { ticketId: ticket.id, kind: "FAIL", reason: "broken" });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(ticket.status).toBe("rework");
+
+    bus.emit("ticket:verdict", { ticketId: ticket.id, kind: "PASS" });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(svc.calls.some((c: any) => c[0] === "updateReviewPhase" && c[2] === "architecture")).toBe(false);
+    expect(svc.calls.some((c: any) => c[0] === "completeTicket")).toBe(false);
+    expect(ticket.status).toBe("rework");
+  });
+
   it("text-fallback does NOT double-apply after a structured verdict for the same ticket", async () => {
     const ticket: any = { id: "t-sv-dedup-" + Date.now(), title: "x", status: "review", reviewPhase: "qa", labels: [], reworkCount: 0 };
     const { bus, svc } = await setup(ticket);
