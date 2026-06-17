@@ -28,6 +28,7 @@ const fs = require("fs");
 const arg = process.argv[1];
 const pkgs = [
   "package.json",
+  "packages/contracts/package.json",
   "packages/core/package.json",
   "packages/work/package.json",
   "packages/mcp/package.json",

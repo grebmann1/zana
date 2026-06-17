@@ -15,6 +15,7 @@
  */
 
 import { lazyRequire } from "@zana-ai/contracts";
+import type { IAgentManager } from "@zana-ai/contracts";
 
 type Agent = { id: string; state: string };
 type Ticket = {
@@ -30,9 +31,9 @@ type StatusUpdateResult = { ok?: boolean; error?: string; ticket?: Ticket };
 interface ModuleConfigShape {
   get(): { system?: any } | null;
 }
-interface AgentManagerShape {
-  listAgents(): Agent[];
-}
+// Agent registry is consumed through the published IAgentManager contract
+// (@zana-ai/contracts), not an ad-hoc local shape — so work depends on the
+// interface, not core's internal module layout. We only call listAgents() here.
 interface BusShape {
   emit(type: string, payload: any): void;
 }
@@ -43,7 +44,7 @@ interface TicketServiceShape {
 }
 
 const moduleConfig = lazyRequire<ModuleConfigShape>(() => require("@zana-ai/core").modules.config);
-const agentManager = lazyRequire<AgentManagerShape>(() => require("@zana-ai/core").agents.manager);
+const agentManager = lazyRequire<IAgentManager>(() => require("@zana-ai/core").agents.manager);
 const coreEvents = lazyRequire<{ bus: BusShape }>(() => require("@zana-ai/core").events);
 // `service` lives in this same package — direct relative require, no cycle.
 function _ticketSvc(): TicketServiceShape { return require("./service"); }

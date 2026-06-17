@@ -50,6 +50,10 @@ module.exports = {
     watcher: require("./project/watcher"),
     workspaceContext: _contracts.workspaceContext,
   },
+  // Host detection (isClaudeHost / getHostType). Surfaced on the public API so
+  // consumers (server hook installer, mcp bootstrap) reach it via the package
+  // root instead of a brittle "@zana-ai/core/dist/src/host/detect" deep import.
+  host: require("./host/detect"),
   // Re-exported at top level so callers can do
   //   const { WorkspaceNotInitializedError } = require("@zana-ai/core");
   // without reaching into project.* internals. Same class identity as
@@ -66,6 +70,7 @@ module.exports = {
   agents: {
     manager: require("./agents/manager"),
     spawner: require("./agents/spawner"),
+    subagentProvisioner: require("./agents/subagent-provisioner"),
     profileStore: require("./agents/profile-store"),
     ptyHost: require("./agents/pty-host"),
     modelRouter: require("./agents/model-router"),

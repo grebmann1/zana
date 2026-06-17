@@ -43,12 +43,10 @@ let localDaemon: any = null;
 let bootstrapPromise: Promise<void> | null = null;
 
 function getProjectInitModule() {
-  try {
-    return require("@zana-ai/core/dist/src/project/init.js");
-  } catch {
-    const appRoot = path.resolve(__dirname, "..", "..", "..", "..");
-    return require(path.join(appRoot, "packages", "core", "dist", "src", "project", "init.js"));
-  }
+  // Reach project-init via the package root (core exposes it as `project.init`),
+  // not a "@zana-ai/core/dist/src/..." deep import + monorepo-path fallback that
+  // binds to core's internal file layout.
+  return require("@zana-ai/core").project.init;
 }
 
 async function ensureDaemonRunning(): Promise<void> {
