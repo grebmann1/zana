@@ -7,13 +7,16 @@ import { execSync } from "node:child_process";
 function _core() { return require("@zana-ai/core"); }
 import * as contracts from "@zana-ai/contracts";
 import { lazyRequire } from "@zana-ai/contracts";
+import type { IProfileStore } from "@zana-ai/contracts";
 // Read SKILLS_DIR dynamically (not a static destructured import) so tests can
 // redirect it by overriding the config value, and so a future config change is
 // reflected without a stale snapshot.
 const SKILLS_DIR = () => (contracts as any).SKILLS_DIR;
-type ProfileStoreModule = typeof import("@zana-ai/core/dist/src/agents/profile-store");
 type WorkspaceContextModule = typeof import("@zana-ai/contracts/dist/src/workspace-context");
-const profileStoreMod = lazyRequire<ProfileStoreModule>(
+// Consume the profile library through the published IProfileStore contract,
+// not a `typeof import("@zana-ai/core/dist/src/…")` alias bound to core's
+// internal layout. Only getProfile() is used here.
+const profileStoreMod = lazyRequire<IProfileStore>(
   () => require("@zana-ai/core").agents.profileStore
 );
 const workspaceCtxMod = lazyRequire<WorkspaceContextModule>(
