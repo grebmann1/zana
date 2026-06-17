@@ -208,6 +208,59 @@ describe("core.init()", { timeout: 30000 }, () => {
     }
   });
 
+  // core.ts:209-246 wires an auto-assign-profile listener onto the bus for
+  // "ticket:created". The whole handler body runs inside a try/catch that
+  // swallows any internal failure with a "[core] auto-assign profile failed"
+  // warning — `bus` is a raw Node EventEmitter (events/bus.ts), so without that
+  // guard a throwing listener would propagate straight out of `bus.emit(...)`
+  // and crash whichever code path created the ticket. This pins that
+  // fault-isolation contract: emitting "ticket:created" (here with an unknown
+  // ticketId) must never throw out of emit(), no matter what the handler does
+  // internally. None of the other tests fire this event, so the listener and
+  // its guard are otherwise unexercised. Deterministic: no fs/timers/network,
+  // and an unknown ticketId can never resolve to a real ticket.
+  it("isolates the ticket:created auto-assign handler — emit never throws", async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+    fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+    tmpDirs.push(ws);
+
+    const result = await init({ workspace: ws, headless: false });
+    try {
+      expect(() =>
+        bus.emit("ticket:created", { ticketId: "core-test-unknown-ticket-xyz" }),
+      ).not.toThrow();
+      // The daemon stays usable after a swallowed auto-assign failure.
+      expect(typeof result.shutdown).toBe("function");
+    } finally {
+      await result.shutdown();
+    }
+  });
+
+  // Companion to the unknown-ticketId isolation test above. That one fires a
+  // well-formed payload carrying a ticketId that simply doesn't resolve; this
+  // pins the handler against MALFORMED / EMPTY payloads — undefined, null, a
+  // bare {} with no ticketId, and a non-object primitive. The handler's
+  // `if (!msg?.ticketId) return` guard plus the outer try/catch must absorb all
+  // of these so emitting on the shared bus never throws out of emit() and the
+  // daemon stays usable. None of the other tests fire these shapes, so this
+  // edge class is otherwise unpinned. Deterministic: no fs/timers/network.
+  it("tolerates malformed/empty ticket:created payloads — emit never throws", async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+    fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+    tmpDirs.push(ws);
+
+    const result = await init({ workspace: ws, headless: false });
+    try {
+      for (const payload of [undefined, null, {}, { ticketId: "" }, 42, "nope"]) {
+        expect(() => bus.emit("ticket:created", payload as any)).not.toThrow();
+      }
+      // The daemon remains usable after every swallowed malformed emit.
+      expect(typeof result.shutdown).toBe("function");
+    } finally {
+      await result.shutdown();
+    }
+  });
+
   it("shutdown() emits ZANA_SHUTDOWN exactly once and is idempotent on repeat calls", async () => {
     const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
     // Pre-create .zana/ so resolveProjectDir anchors here and doesn't walk
@@ -234,4 +287,97 @@ describe("core.init()", { timeout: 30000 }, () => {
       bus.off(EVENTS.ZANA_SHUTDOWN, onShutdown);
     }
   });
+
+  // ── REGRESSION TRIPWIRE: auto-router escalation gate (core.ts:209-246) ──────
+  // core.ts wires an onTicketCreated listener that, for a ticket carrying an
+  // escalation label ("architecture" | "needs-decision" | "invariant") with no
+  // bound profile, routes it to the design-only lane via
+  // ticketService.escalateForDesign(), which stamps the "awaiting-decision"
+  // label and binds the "architect" profile (work/src/tickets/service.ts:181).
+  //
+  // BUG: the handler's first statement is `moduleConfig.getModuleConfig(...)`,
+  // but `moduleConfig` is never imported in core.ts (only `moduleLoader` is).
+  // At runtime that throws a ReferenceError which the handler's own try/catch
+  // swallows ("[core] auto-assign profile failed"), so the ENTIRE auto-assign
+  // and escalation path is dead code — an escalation-labeled ticket is never
+  // escalated. This test pins the INTENDED behavior, so it is expected to FAIL
+  // The missing `import * as moduleConfig from "./modules/config"` has since been
+  // restored in core.ts (found independently by a Claude-Unleashed review pass +
+  // a runtime boot probe, 2026-06-17), so this now passes as a normal regression
+  // guard. Deterministic: no timers / network; createTicket emits "ticket:created"
+  // synchronously on the shared core bus, so the handler has run by the time
+  // createTicket() returns.
+  it(
+    "auto-router escalates an escalation-labeled ticket to the design lane",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+        const created = ticketService.createTicket({
+          title: "Change a core invariant",
+          labels: ["architecture"],
+          createdBy: "core-test",
+        });
+        expect(created.error).toBeUndefined();
+
+        const after = ticketService.getTicket(created.id);
+        // Intended outcome of the escalation gate: parked for a human + architect bound.
+        expect(after.labels).toContain("awaiting-decision");
+        expect(after.assigneeProfileId).toBe("architect");
+      } finally {
+        await result.shutdown();
+      }
+    },
+  );
+
+  // ── REGRESSION TRIPWIRE: auto-router needs-triage fall-through (core.ts) ─────
+  // Companion to the escalation tripwire above. core.ts's onTicketCreated bridge
+  // documents that LOW router confidence is NOT escalation: a routine ticket
+  // carrying no escalation label ("architecture"|"needs-decision"|"invariant")
+  // falls through to ticketService.assignProfile(). With no routing history in a
+  // fresh workspace the router has no confident pick (score < the 0.15 floor), so
+  // assignProfile is called with a null profileId and tags the ticket
+  // `needs-triage` for a human (work/src/tickets/service.ts:165-174) — it must
+  // NOT burn an architect on the design lane.
+  //
+  // BUG (same root cause as the escalation tripwire): core.ts references
+  // `moduleConfig` without importing it, so the handler throws a swallowed
+  // ReferenceError and this fall-through never ran. The missing moduleConfig
+  // import has since been restored in core.ts, so this now passes as a normal
+  // regression guard. Deterministic: no timers/network; createTicket emits
+  // "ticket:created" synchronously, and a routine low-signal title yields no
+  // confident route.
+  it(
+    "auto-router tags a routine, unroutable ticket needs-triage (not escalated)",
+    async () => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "zana-core-test-ws-"));
+      fs.mkdirSync(path.join(ws, ".zana"), { recursive: true });
+      tmpDirs.push(ws);
+
+      const result = await init({ workspace: ws, headless: false });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const ticketService = require("@zana-ai/work").tickets.service;
+        const created = ticketService.createTicket({
+          title: "Tweak the xyzzy widget margins",
+          labels: [], // no escalation label → fall through to assignProfile
+          createdBy: "core-test",
+        });
+        expect(created.error).toBeUndefined();
+
+        const after = ticketService.getTicket(created.id);
+        // Intended outcome: flagged for human triage, NOT routed to the design lane.
+        expect(after.labels).toContain("needs-triage");
+        expect(after.labels).not.toContain("awaiting-decision");
+        expect(after.assigneeProfileId).not.toBe("architect");
+      } finally {
+        await result.shutdown();
+      }
+    },
+  );
 });

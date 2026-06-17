@@ -13,6 +13,7 @@ import * as persistence from "./persistence";
 import * as eventBusService from "./events/service";
 import * as workspaceContext from "./project/workspace-context";
 import * as moduleLoader from "./modules/loader";
+import * as moduleConfig from "./modules/config";
 
 // Lazy thunks for cross-package modules. Sibling packages depend on @zana-ai/core,
 // so eager top-level requires here would deadlock during cross-package init.

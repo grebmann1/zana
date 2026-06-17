@@ -734,7 +734,10 @@ function applyParsedVerdict(
 
 function markBlocked(ticket) {
   try {
-    const ticketService = require("./service");
+    // Honor the test service override (same as applyVerdict/applyParsedVerdict).
+    // Using a hardcoded require here would bypass an injected stub and, worse,
+    // write to the real SQLite store from a context that expected the override.
+    const ticketService = serviceOverride || require("./service");
     ticketService.updateStatus(ticket.id, "blocked", "ticket-watcher");
     ticketService.addComment(
       ticket.id,
