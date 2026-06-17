@@ -143,6 +143,58 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
   return ticket;
 }
 
+// Bind a profile to a ticket out of band (e.g. the auto-router at creation
+// time). Never overrides an already-bound profile — human/explicit intent wins.
+// When profileId is null/empty, the ticket is left unassigned and tagged
+// `needs-triage` so a human knows the router wasn't confident. Returns
+// { ok, assigned } so callers can tell whether a binding happened.
+export function assignProfile(ticketId, profileId, assignedBy?) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  if (ticket.assigneeProfileId) {
+    return { ok: true, assigned: false, reason: "already_assigned" };
+  }
+  if (profileId) {
+    ticket.assigneeProfileId = profileId;
+    ticket.updatedAt = new Date().toISOString();
+    addAuditEntry(ticket, "profile_assigned", assignedBy || "auto-router", { profileId });
+    ticketStore.saveTicket(ticket);
+    _bus().emit("ticket:updated", { ticketId, fields: ["assigneeProfileId"], updatedBy: assignedBy || "auto-router" });
+    return { ok: true, assigned: true, profileId };
+  }
+  // No confident profile — flag for human triage (idempotent).
+  if (!Array.isArray(ticket.labels)) ticket.labels = [];
+  if (!ticket.labels.includes("needs-triage")) {
+    ticket.labels.push("needs-triage");
+    ticket.updatedAt = new Date().toISOString();
+    addAuditEntry(ticket, "updated", assignedBy || "auto-router", { fields: ["labels"], added: "needs-triage" });
+    ticketStore.saveTicket(ticket);
+    _bus().emit("ticket:updated", { ticketId, fields: ["labels"], updatedBy: assignedBy || "auto-router" });
+  }
+  return { ok: true, assigned: false, reason: "no_confident_profile" };
+}
+
+// Escalate a ticket to the design-only lane: park it with the
+// `awaiting-decision` label (which the auto-implement rule skips), bind the
+// architect profile, and emit "ticket:escalated" so the watcher spawns a
+// design-only architect. Idempotent — re-escalating a parked ticket is a no-op.
+export function escalateForDesign(ticketId, reason, escalatedBy?) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  if (!Array.isArray(ticket.labels)) ticket.labels = [];
+  if (ticket.labels.includes("awaiting-decision")) {
+    return { ok: true, escalated: false, reason: "already_parked" };
+  }
+  ticket.labels.push("awaiting-decision");
+  // Bind architect for the design pass unless a profile is already chosen.
+  if (!ticket.assigneeProfileId) ticket.assigneeProfileId = "architect";
+  ticket.updatedAt = new Date().toISOString();
+  addAuditEntry(ticket, "escalated", escalatedBy || "auto-router", { reason: reason || null });
+  ticketStore.saveTicket(ticket);
+  _bus().emit("ticket:escalated", { ticketId, reason: reason || null, escalatedBy: escalatedBy || "auto-router" });
+  return { ok: true, escalated: true };
+}
+
 export function claimTicket(ticketId, agentId, agentName, profileId?) {
   const ticket = ticketStore.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };
@@ -467,6 +519,30 @@ export function updateReviewPhase(ticketId, phase, updatedBy) {
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:reviewPhaseChanged", { ticketId, oldPhase, newPhase: phase, updatedBy });
   return { ok: true, ticket };
+}
+
+// Record a structured review verdict. This is the preferred path over the
+// watcher parsing a "VERDICT:" text line out of agent output. Emits
+// "ticket:verdict" which the ticket-watcher consumes to apply the
+// PASS/FAIL/READY/BLOCKED state transition. Validates the kind but does NOT
+// itself mutate the ticket — the watcher owns the transition so both the
+// structured and legacy text paths converge on one implementation.
+const VALID_VERDICTS = ["PASS", "FAIL", "READY", "BLOCKED"];
+export function recordVerdict(ticketId, kind, reason, reportedBy, profileLabel?) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  const normalized = String(kind || "").toUpperCase();
+  if (!VALID_VERDICTS.includes(normalized)) {
+    return { error: `invalid verdict: ${kind}. Must be one of: ${VALID_VERDICTS.join(", ")}` };
+  }
+  _bus().emit("ticket:verdict", {
+    ticketId,
+    kind: normalized,
+    reason: reason || null,
+    profileLabel: profileLabel || reportedBy || "reviewer",
+    reportedBy: reportedBy || "agent",
+  });
+  return { ok: true, ticketId, verdict: normalized, reason: reason || null };
 }
 
 export const listTickets = (ticketStore as any).listTickets;

@@ -165,6 +165,24 @@ export const tickets: ToolDomain = {
       },
     },
     {
+      name: "zana_ticket_verdict",
+      description:
+        "Record a structured review verdict on a ticket. Preferred over ending your output with a 'VERDICT:' line — this is deterministic and not affected by surrounding text. PASS advances the review phase (qa→architecture) or completes the ticket; FAIL sends it to rework; READY (after rework) re-opens review; BLOCKED marks it blocked. Used by reviewer/rework agents spawned by the ticket automation pipeline.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ticketId: { type: "string", description: "Ticket ID being reviewed" },
+          verdict: {
+            type: "string",
+            enum: ["PASS", "FAIL", "READY", "BLOCKED"],
+            description: "PASS/FAIL for a review; READY/BLOCKED for a rework cycle",
+          },
+          reason: { type: "string", description: "One-line reason (required for FAIL/BLOCKED)" },
+        },
+        required: ["ticketId", "verdict"],
+      },
+    },
+    {
       name: "zana_ticket_add_to_sprint",
       description: "Add a ticket to a sprint.",
       inputSchema: {
@@ -295,6 +313,14 @@ export const tickets: ToolDomain = {
         type: args.type,
         sprintId: args.sprintId,
         updatedBy: env("ZANA_TERMINAL_ID", "agent"),
+      }),
+    zana_ticket_verdict: (args, { callCore }) =>
+      callCore("ticket_verdict", {
+        ticketId: args.ticketId,
+        verdict: args.verdict,
+        reason: args.reason,
+        reportedBy: env("ZANA_TERMINAL_ID", "agent"),
+        profileLabel: process.env.ZANA_PROFILE_ID || env("ZANA_AGENT_NAME", "reviewer"),
       }),
     zana_ticket_add_to_sprint: (args, { callCore }) =>
       callCore("ticket_add_to_sprint", { ticketId: args.ticketId, sprintId: args.sprintId }),

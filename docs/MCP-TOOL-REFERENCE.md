@@ -102,6 +102,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 - [`zana_ticket_list_ready`](#zana_ticket_list_ready)
 - [`zana_ticket_update`](#zana_ticket_update)
 - [`zana_ticket_update_status`](#zana_ticket_update_status)
+- [`zana_ticket_verdict`](#zana_ticket_verdict)
 - [`zana_toggle_skill`](#zana_toggle_skill)
 - [`zana_workers_list`](#zana_workers_list)
 - [`zana_workflow_get_run`](#zana_workflow_get_run)
@@ -2559,7 +2560,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:167`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:185`
 - Handler: `packages/work/src/tickets/service.ts:addTicketToSprint`
 
 ---
@@ -3146,6 +3147,25 @@ _No input parameters._
 
 - Transitions are validated against an explicit table — see STATUS_TRANSITIONS in service.ts. Invalid transitions return `{ error }`.
 - Moving to `review` auto-sets `reviewPhase: 'qa'`. Moving to `rework` clears it and increments `reworkCount`.
+
+---
+
+## zana_ticket_verdict
+
+**Description:** Record a structured review verdict on a ticket. Preferred over ending your output with a 'VERDICT:' line — this is deterministic and not affected by surrounding text. PASS advances the review phase (qa→architecture) or completes the ticket; FAIL sends it to rework; READY (after rework) re-opens review; BLOCKED marks it blocked. Used by reviewer/rework agents spawned by the ticket automation pipeline.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| reason | string | no | One-line reason (required for FAIL/BLOCKED) |
+| ticketId | string | yes | Ticket ID being reviewed |
+| verdict | string | yes | `PASS` \| `FAIL` \| `READY` \| `BLOCKED` — PASS/FAIL for a review; READY/BLOCKED for a rework cycle |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:167`
 
 ---
 

@@ -199,6 +199,52 @@ export async function init({ workspace, headless = false, onHook, preferredPort,
   vectorMemory.init();
   backgroundWorkers.init();
 
+  // Auto-assign a profile on ticket creation. `work` deliberately does not
+  // depend on `intelligence` (it would deepen the require-cycle), so the
+  // routing bridge lives here in core where both the task router and the
+  // ticket service are already in scope. The router picks the best-fit
+  // profile; if it clears the confidence floor we bind it, otherwise the
+  // service tags the ticket `needs-triage` for a human. An already-bound
+  // profile (explicit human intent) is never overridden by the service.
+  try {
+    const onTicketCreated = (msg: any) => {
+      try {
+        const sys = moduleConfig.getModuleConfig("system") || {};
+        if (sys.autoAssignProfile === false) return;
+        if (!msg?.ticketId) return;
+        const ticketService = require("@zana-ai/work").tickets.service;
+        const ticket = ticketService.getTicket(msg.ticketId);
+        if (!ticket || ticket.assigneeProfileId) return;
+        const ranked = taskRouter.route(ticket) || [];
+        const floor = typeof sys.autoAssignConfidence === "number" ? sys.autoAssignConfidence : 0.15;
+        const top = ranked[0];
+
+        // Escalation gate (#6): a ticket that changes a core invariant goes to
+        // the design-only lane (architect + ADR, parked for a human) instead of
+        // straight to an implementer. This is driven by EXPLICIT escalation
+        // labels only — low router confidence is NOT escalation (it usually
+        // just means "no routing history yet"), so that path falls through to
+        // assignProfile, which tags it needs-triage rather than burning an
+        // architect on a routine ticket.
+        const labels = Array.isArray(ticket.labels) ? ticket.labels : [];
+        const ESCALATION_LABELS = ["architecture", "needs-decision", "invariant"];
+        if (labels.some((l: string) => ESCALATION_LABELS.includes(l))) {
+          ticketService.escalateForDesign(msg.ticketId, "escalation label", "auto-router");
+          return;
+        }
+
+        // Otherwise bind the best-fit profile if confident, else needs-triage.
+        const profileId = top && top.score >= floor ? top.profileId : null;
+        ticketService.assignProfile(msg.ticketId, profileId, "auto-router");
+      } catch (err: any) {
+        console.warn("[core] auto-assign profile failed:", err?.message || err);
+      }
+    };
+    bus.on("ticket:created", onTicketCreated);
+  } catch (err: any) {
+    console.warn("[core] auto-router wiring failed:", err?.message || err);
+  }
+
   // Reap orphaned headless claude processes from earlier daemon runs.
   // (See packages/core/src/agents/zombie-reaper.ts for the heuristic.)
   const zombieReaper = require("./agents/zombie-reaper");

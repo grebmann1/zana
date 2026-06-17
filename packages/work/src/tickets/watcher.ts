@@ -63,6 +63,7 @@ const TICKET_EVENTS = [
   "ticket:commented",
   "ticket:completed",
   "ticket:updated",
+  "ticket:escalated",
 ] as const;
 
 // Events that drive the legacy status/phase dedup map. Other event types
@@ -91,6 +92,11 @@ let inFlightSpawns = new Map();
 // Short-lived dedup keyed by `(ruleKey, eventType, ticketId, oldStatus, newStatus)`
 // to swallow duplicate emits within DEDUP_TTL_MS.
 let recentlyFired = new Map<string, number>();
+// ticketId → timestamp of the last STRUCTURED verdict (via zana_ticket_verdict).
+// When a reviewer used the tool, the agent:terminated text-fallback must NOT
+// re-apply the verdict. Entries are swept on read past STRUCTURED_VERDICT_TTL_MS.
+let structuredVerdictSeen = new Map<string, number>();
+const STRUCTURED_VERDICT_TTL_MS = 60_000;
 
 // Hot-reload: watch automation.json so rule edits take effect without a
 // daemon restart. Edits apply to events emitted after reload; in-flight
@@ -163,14 +169,80 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
   bus.on("agent:terminated", onAgentTerminated);
   busSubscriptions.push(() => bus.off("agent:terminated", onAgentTerminated));
 
+  // Structured verdict path (preferred over parsing the VERDICT: text line).
+  // A reviewer calls the zana_ticket_verdict MCP tool → service.recordVerdict
+  // → emits "ticket:verdict" with { ticketId, kind, reason }. We apply the same
+  // state transition applyVerdict would, and remember it so the text-fallback
+  // on agent:terminated doesn't double-apply for the same ticket.
+  const onVerdict = (msg: any) => {
+    if (!msg || !msg.ticketId || !msg.kind) return;
+    const ticket = readTicket(msg.ticketId);
+    if (!ticket) return;
+    structuredVerdictSeen.set(msg.ticketId, Date.now());
+    try {
+      applyParsedVerdict(ticket, { spawnProfile: msg.profileLabel || "reviewer" },
+        { kind: String(msg.kind).toUpperCase(), reason: msg.reason || null },
+        msg.detail || "");
+    } catch (err: any) {
+      log(`structured verdict apply failed for ticket ${msg.ticketId}: ${err.message || err}`);
+    }
+  };
+  bus.on("ticket:verdict", onVerdict);
+  busSubscriptions.push(() => bus.off("ticket:verdict", onVerdict));
+
   log(`Subscribed to ticket bus events (${rules.length} rules loaded)`);
 }
 
+// Rule shape note — `action.expectVerdict`:
+//   true  → this spawn is a reviewer/worker whose terminal output decides a
+//           ticket transition; track it in inFlightSpawns and run applyVerdict
+//           on agent:terminated (PASS/FAIL/READY/BLOCKED).
+//   false → fire-and-forget spawn (the worker drives its own ticket transition
+//           via MCP tools, e.g. an implementer moving the ticket to review, or
+//           a triage scout that just comments/labels). NOT tracked, so a
+//           missing VERDICT never produces a "manual intervention needed" note.
+// Omitted defaults to false. The three legacy review rules set it true.
 const DEFAULT_RULES = [
   {
+    // Triage gate: when a bug ticket is created, run a CHEAP read-only scout
+    // that verifies the bug still reproduces against current code before any
+    // expensive worker is dispatched. Fire-and-forget — the scout comments its
+    // finding (and, if enabled, labels stale tickets) via MCP tools; there is
+    // no VERDICT to parse. Label-gated to "bug" so feature/chore tickets skip
+    // it (staleness is a bug-ticket problem). Costs pennies (haiku profile).
+    name: "triage-on-create",
+    trigger: { event: "ticket:created", labels: ["bug"] },
+    action: { spawnProfile: "triage-scout", expectVerdict: false },
+    promptTemplate: "Triage bug ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nVerify whether this bug STILL reproduces against the CURRENT code. Tickets often cite stale line numbers from before a refactor — locate the code by symbol/content, not the old line number. Use read-only tools only.\n\nRecord your finding with zana_ticket_comment: one of STILL-OPEN (cite current file:line), ALREADY-FIXED (cite the evidence), or CANNOT-REPRODUCE. Do NOT fix anything and do NOT close the ticket unless explicitly told auto-close is enabled — comment only by default.",
+  },
+  {
+    // Design-only escalation: a ticket that changes a core invariant (or that
+    // the router couldn't confidently place) is escalated rather than handed
+    // straight to an implementer. We spawn an architect to produce a design +
+    // ADR recommendation and PARK the ticket (it carries "awaiting-decision",
+    // which the auto-implement rule skips) until a human releases it. Fire-and-
+    // forget: the architect writes its design as a comment; there's no VERDICT.
+    name: "design-only-on-escalation",
+    trigger: { event: "ticket:escalated" },
+    action: { spawnProfile: "architect", expectVerdict: false },
+    promptTemplate: "DESIGN ONLY — ticket \"{{title}}\" (ID: {{id}}) was escalated because it changes a core invariant or the router was not confident. Do NOT write production code.\n\nDescription: {{description}}\n\nProduce: (1) a clear recommendation with rationale and rejected alternatives, (2) a minimal implementation outline (files, sequencing), (3) risks + test strategy, (4) a draft ADR in docs/decisions house style. Read the relevant code and any shared artifacts first.\n\nRecord your design by calling zana_ticket_comment with the full recommendation. The ticket is parked for a human decision — do not change its status. A human will remove the awaiting-decision label to release it for implementation.",
+  },
+  {
+    // Auto-implement: when a ticket is claimed with a bound profile, spawn that
+    // profile to actually DO the work. Closes the front of the pipeline — the
+    // review rules below already handled everything AFTER implementation.
+    // Fire-and-forget: the implementer drives its own status→review transition
+    // (the QA rule then takes over), so there's no VERDICT to parse here.
+    // `designOnly` tickets are parked for a human and must NOT auto-implement.
+    name: "auto-implement",
+    trigger: { event: "ticket:claimed" },
+    action: { spawnProfile: "{{assigneeProfileId}}", expectVerdict: false, skipLabels: ["awaiting-decision"] },
+    promptTemplate: "Implement ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nDo the work end to end: read the relevant files, make the change, build, and run the tests for the affected package(s). Keep the change minimal and idiomatic to the surrounding code.\n\nWhen the implementation is complete and tests pass, call the MCP tool zana_ticket_update with status \"review\" and a progress note listing the files you changed. If you cannot complete it, call zana_ticket_update with status \"blocked\" and explain why in the progress note.\n\nDo not over-build — nothing more than the ticket asks for.",
+  },
+  {
     trigger: { status: "review", reviewPhase: "qa" },
-    action: { spawnProfile: "code-reviewer" },
-    promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = issues remain; ticket should go to rework with your findings as the reason.\n\nBe terse. Lead with the verdict reasoning, end with the VERDICT line.",
+    action: { spawnProfile: "code-reviewer", expectVerdict: true },
+    promptTemplate: "QA Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nRead the relevant files. Evaluate correctness, security, and code quality.\n\nPREFERRED: record your verdict by calling the MCP tool zana_ticket_verdict with verdict PASS or FAIL (and a one-line reason on FAIL).\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines (no markdown around it):\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = code is good enough to advance to architecture review.\nFAIL = issues remain; ticket should go to rework with your findings as the reason.\n\nBe terse. Lead with the verdict reasoning.",
   },
   {
     // The qa→architecture advance happens via updateReviewPhase(), which emits
@@ -179,13 +251,13 @@ const DEFAULT_RULES = [
     // into review auto-sets reviewPhase=qa, never architecture. Listen for the
     // phase-change event so the architect actually spawns.
     trigger: { event: "ticket:reviewPhaseChanged", reviewPhase: "architecture" },
-    action: { spawnProfile: "architect" },
-    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nREPLY FORMAT — your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = ticket is done.\nFAIL = architectural issues; ticket should go to rework.\n\nBe terse.",
+    action: { spawnProfile: "architect", expectVerdict: true },
+    promptTemplate: "Architecture Review for ticket \"{{title}}\" (ID: {{id}}).\n\nDescription: {{description}}\n\nCheck that the implementation matches the architecture, design docs, and conventions. Read shared artifacts for context.\n\nPREFERRED: record your verdict by calling the MCP tool zana_ticket_verdict with verdict PASS or FAIL.\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: PASS\nVERDICT: FAIL — <one-line reason>\n\nPASS = ticket is done.\nFAIL = architectural issues; ticket should go to rework.\n\nBe terse.",
   },
   {
     trigger: { status: "rework" },
-    action: { spawnProfile: "{{assigneeProfileId}}" },
-    promptTemplate: "REWORK needed on ticket \"{{title}}\" (ID: {{id}}).\n\nYour previous work was reviewed and needs changes. Read the latest ticket comments for reviewer feedback and fix the identified issues.\n\nWhen fixes are complete, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: READY  — fixes complete, ready for re-review\nVERDICT: BLOCKED — <reason; ticket will be marked blocked>\n\nOriginal description: {{description}}",
+    action: { spawnProfile: "{{assigneeProfileId}}", expectVerdict: true },
+    promptTemplate: "REWORK needed on ticket \"{{title}}\" (ID: {{id}}).\n\nYour previous work was reviewed and needs changes. Read the latest ticket comments for reviewer feedback and fix the identified issues.\n\nPREFERRED: when done, record your verdict by calling the MCP tool zana_ticket_verdict with verdict READY (fixes complete, ready for re-review) or BLOCKED (with a reason).\nFALLBACK (deprecated): if that tool is unavailable, your output MUST end with EXACTLY ONE of these lines:\nVERDICT: READY  — fixes complete, ready for re-review\nVERDICT: BLOCKED — <reason; ticket will be marked blocked>\n\nOriginal description: {{description}}",
   },
 ];
 
@@ -463,6 +535,18 @@ function executeAutomation(rule, eventType, payload, ticket) {
     return;
   }
 
+  // skipLabels: a guard so a rule can decline to fire for tickets carrying a
+  // given label (e.g. auto-implement must NOT fire on a design-only ticket
+  // parked for a human — it carries "awaiting-decision").
+  const skipLabels = Array.isArray(rule.action?.skipLabels) ? rule.action.skipLabels : [];
+  if (skipLabels.length > 0) {
+    const owned = Array.isArray(ticket?.labels) ? ticket.labels : [];
+    if (skipLabels.some((l) => owned.includes(l))) {
+      log(`Skipping ${rule.name || "rule"} for ticket ${ticket.id} — carries skip label`);
+      return;
+    }
+  }
+
   const ctx = buildTemplateContext(eventType, payload, ticket);
   const profileId = renderTemplate(rule.action.spawnProfile, ctx);
 
@@ -488,7 +572,15 @@ function executeAutomation(rule, eventType, payload, ticket) {
           // Don't track — there's no agent to wait for.
         } else if (result && result.agentId) {
           log(`Spawn for ticket ${ticket.id} → agent ${result.agentId}`);
-          inFlightSpawns.set(result.agentId, { ticket, rule });
+          // Track spawns whose terminal output decides a ticket transition so
+          // applyVerdict runs on agent:terminated. Default is to track (every
+          // pre-existing review rule and user automation.json relies on this);
+          // only fire-and-forget rules (implement, triage, design) opt OUT with
+          // `expectVerdict: false` — they drive their own transitions via MCP
+          // tools, so tracking them would emit a spurious "no VERDICT" comment.
+          if (rule.action?.expectVerdict !== false) {
+            inFlightSpawns.set(result.agentId, { ticket, rule });
+          }
         }
       })
       .catch((err) => {
@@ -562,31 +654,55 @@ export function parseVerdict(text: string): { kind: string; reason: string | nul
 let serviceOverride: any = null;
 export function _setServiceOverride(svc: any) { serviceOverride = svc; }
 
+// agent:terminated handler — the TEXT-fallback path. Parses the VERDICT: line
+// from agent output. Skipped when a structured verdict (zana_ticket_verdict)
+// already arrived for this ticket, so the two paths never double-apply.
 function applyVerdict(ticket: any, rule: any, agentResult: string) {
+  const seenAt = structuredVerdictSeen.get(ticket.id);
+  if (seenAt && Date.now() - seenAt < STRUCTURED_VERDICT_TTL_MS) {
+    structuredVerdictSeen.delete(ticket.id);
+    log(`Ticket ${ticket.id} already had a structured verdict — skipping text-fallback parse`);
+    return;
+  }
   const verdict = parseVerdict(agentResult);
-  const ticketService = serviceOverride || require("./service");
-  const actor = "ticket-watcher";
   const profileLabel = rule?.action?.spawnProfile || "Automation";
 
   if (!verdict) {
+    const ticketService = serviceOverride || require("./service");
     log(`No VERDICT found in agent output for ticket ${ticket.id} — leaving state untouched, adding comment`);
     ticketService.addComment(
       ticket.id,
-      actor,
+      "ticket-watcher",
       "Automation",
       `⚠️ Review agent (${profileLabel}) did not produce a parseable VERDICT line. Manual intervention needed.\n\nAgent output (first 500 chars):\n${(agentResult || "(empty)").slice(0, 500)}`
     );
     return;
   }
 
+  applyParsedVerdict(ticket, rule?.action || {}, verdict, agentResult);
+}
+
+// Shared transition logic for BOTH the structured-verdict and text-fallback
+// paths. Records an audit comment then applies the PASS/FAIL/READY/BLOCKED
+// state transition. `detail` is the full agent output (text path) or empty.
+function applyParsedVerdict(
+  ticket: any,
+  action: any,
+  verdict: { kind: string; reason: string | null },
+  detail: string,
+) {
+  const ticketService = serviceOverride || require("./service");
+  const actor = "ticket-watcher";
+  const profileLabel = action?.spawnProfile || "Automation";
+
   log(`Verdict for ticket ${ticket.id}: ${verdict.kind}${verdict.reason ? " — " + verdict.reason : ""}`);
 
-  // Add a comment with the agent's full output for the audit trail.
+  // Add a comment with the agent's output / reason for the audit trail.
   ticketService.addComment(
     ticket.id,
     actor,
     profileLabel,
-    `**${verdict.kind}**${verdict.reason ? `: ${verdict.reason}` : ""}\n\n---\n\n${(agentResult || "").slice(0, 4000)}`
+    `**${verdict.kind}**${verdict.reason ? `: ${verdict.reason}` : ""}\n\n---\n\n${(detail || verdict.reason || "").slice(0, 4000)}`
   );
 
   if (verdict.kind === "PASS") {
@@ -646,6 +762,7 @@ export function stop() {
   configPathTracked = null;
   inFlightSpawns.clear();
   recentlyFired.clear();
+  structuredVerdictSeen.clear();
   queue = [];
   activeAutomations = 0;
   saveProcessedStates();
@@ -662,4 +779,14 @@ export function _getProcessedStates() { return processedStates; }
 
 // Test-only: reset the dedup LRU between scenarios. Vitest module isolation
 // means tests share watcher state across `it` blocks within one file.
-export function _resetDedup() { recentlyFired.clear(); processedStates.clear(); }
+export function _resetDedup() {
+  recentlyFired.clear();
+  processedStates.clear();
+  structuredVerdictSeen.clear();
+}
+
+// Test-only: seed inFlightSpawns so a test can drive the agent:terminated
+// verdict path without exercising the real spawn flow.
+export function _trackForTest(agentId: string, ticket: any, rule: any) {
+  inFlightSpawns.set(agentId, { ticket, rule });
+}

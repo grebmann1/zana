@@ -14,6 +14,7 @@ import * as crypto from "node:crypto";
 import * as os from "node:os";
 import * as persistence from "../persistence";
 import { bus, EVENTS } from "../events/bus";
+import * as eventLog from "../events/log";
 import { MAX_CONCURRENT_AGENTS } from "../config";
 import * as moduleConfig from "../modules/config";
 
@@ -581,6 +582,25 @@ function launchHeadlessChild(
             // narration" — misled team_status during dogfooding.
             agent.lastAssistantText = textBlocks.map((b: any) => b.text).join("\n");
           }
+          // Headless agents never POST hooks back to the daemon, so the
+          // interactive event path (hook-server -> eventLog.append at
+          // core.ts) never fires for them and events.ndjson stays empty.
+          // The stream-json assistant turn carries tool_use blocks — treat
+          // each as the PostToolUse-equivalent moment and feed BOTH sinks the
+          // interactive path feeds: the bus (work/tracker -> stats-engine) and
+          // eventLog (events.ndjson + per-agent agents/<terminalId>.ndjson).
+          const toolUseBlocks = msg.message.content.filter((b: any) => b.type === "tool_use");
+          for (const b of toolUseBlocks) {
+            const hookPayload = {
+              agentId: agent.id,
+              zana_terminal_id: agent.terminalId,
+              hook_event_name: "PostToolUse",
+              tool_name: b.name,
+              tool_input: b.input,
+            };
+            bus.emit(EVENTS.AGENT_HOOK, hookPayload);
+            eventLog.append(hookPayload);
+          }
         }
         if (msg.type === "result") {
           if (msg.result) agent.result = msg.result;
@@ -611,11 +631,31 @@ function launchHeadlessChild(
     }
   });
 
-  // Configurable timeout for headless agents
+  // Idle (not wall-clock) timeout for headless agents. A fixed wall-clock
+  // timer killed long-but-healthy agents — e.g. a scheduled `npm test` that
+  // streams output for >agentTimeoutMinutes was SIGTERMed (code 143) mid-run
+  // even though it was actively producing results. agentTimeoutMinutes is now
+  // an INACTIVITY threshold: the agent is killed only after that many minutes
+  // with NO stdout. Every stdout chunk already stamps agent.lastActivity
+  // (see the stdout 'data' handler above), so a working agent keeps resetting
+  // the clock; a genuinely hung one (no output) still gets reaped.
   const AGENT_TIMEOUT_MS = (moduleConfig.getModuleConfig("system")?.agentTimeoutMinutes || 10) * 60 * 1000;
-  const timeoutHandle = setTimeout(() => {
-    if (getAgent(agentId)?.state === "active") {
-      console.warn(`[agent-manager] agent ${agentId} timed out after ${AGENT_TIMEOUT_MS / 60000}min, killing`);
+  let timeoutHandle: ReturnType<typeof setTimeout>;
+  const scheduleIdleCheck = (delay: number) => {
+    timeoutHandle = setTimeout(() => {
+      const agentNow = getAgent(agentId);
+      if (agentNow?.state !== "active") return;
+      const idleFor = Date.now() - (agentNow.lastActivity ?? 0);
+      if (idleFor < AGENT_TIMEOUT_MS) {
+        // Output arrived since the timer was armed — the agent is healthy.
+        // Re-arm for the remaining idle window rather than killing.
+        scheduleIdleCheck(AGENT_TIMEOUT_MS - idleFor);
+        return;
+      }
+      console.warn(
+        `[agent-manager] agent ${agentId} idle for ${Math.round(idleFor / 60000)}min ` +
+          `(threshold ${AGENT_TIMEOUT_MS / 60000}min, no output), killing`,
+      );
       // Signal the whole group (child is detached) so the timed-out agent's
       // grandchildren don't outlive it as orphans.
       signalChildTree(child, "SIGTERM");
@@ -624,8 +664,9 @@ function launchHeadlessChild(
           signalChildTree(child, "SIGKILL");
         }
       }, 5000);
-    }
-  }, AGENT_TIMEOUT_MS);
+    }, delay);
+  };
+  scheduleIdleCheck(AGENT_TIMEOUT_MS);
 
   child.on("error", (err: any) => {
     clearTimeout(timeoutHandle);

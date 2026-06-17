@@ -9,9 +9,18 @@ describe("ticket-watcher loadRules fallback", () => {
     // Pass a path that doesn't exist — forces the catch branch
     watcher.loadRules("/nonexistent/path/automation.json");
     const rules = watcher.getRules();
-    expect(rules.length).toBe(3);
+    // Six default rules: triage-on-create, design-only-on-escalation,
+    // auto-implement, qa review, architecture review, rework.
+    expect(rules.length).toBe(6);
     const profiles = rules.map((r: any) => r.action.spawnProfile).sort();
-    expect(profiles).toEqual(["architect", "code-reviewer", "{{assigneeProfileId}}"]);
+    expect(profiles).toEqual([
+      "architect",            // architecture review
+      "architect",            // design-only-on-escalation
+      "code-reviewer",        // qa review
+      "triage-scout",         // triage-on-create
+      "{{assigneeProfileId}}", // auto-implement
+      "{{assigneeProfileId}}", // rework
+    ]);
   });
 
   it("default rules use renamed profile IDs (no built-in- prefix)", async () => {
@@ -799,7 +808,7 @@ describe("ticket-watcher hot-reload", () => {
     // Write garbage — loadRules's catch branch should restore defaults.
     fs.writeFileSync(automationPath, "this is not json {", "utf8");
     await new Promise((r) => setTimeout(r, 600));
-    expect(watcher.getRules().length).toBe(3); // DEFAULT_RULES
+    expect(watcher.getRules().length).toBe(6); // DEFAULT_RULES
   });
 
   it("a rule added post-reload fires when its event is emitted", async () => {

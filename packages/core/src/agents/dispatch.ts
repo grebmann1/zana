@@ -213,6 +213,10 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
     case "ticket_comment": {
       return _ticketService().addComment(params.ticketId, params.authorId, params.authorName, params.body);
     }
+    case "ticket_verdict": {
+      return _ticketService().recordVerdict(
+        params.ticketId, params.verdict, params.reason, params.reportedBy, params.profileLabel);
+    }
     case "ticket_complete": {
       return _ticketService().completeTicket(params.ticketId, params.resultSummary, params.completedBy);
     }
