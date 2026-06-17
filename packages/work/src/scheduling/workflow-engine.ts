@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
+import type { IProfileStore } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
 function _bus() { return _core().events.bus; }
 function _workspaceContext() { return _core().project.workspaceContext; }
@@ -32,7 +33,7 @@ export function loadRun(runId) {
   }
 }
 
-export function listRuns(filter = {}) {
+export function listRuns(filter: { status?: string } = {}) {
   const dir = getWorkflowsDir();
   try {
     return fs.readdirSync(dir)
@@ -151,7 +152,9 @@ async function executeStep(step, context) {
         return { halted: true, reason: `condition not met: ${step.condition}` };
       }
       const agentManager = _core().agents.manager;
-      const profileStore = _core().agents.profileStore;
+      // Profile lookup via the published IProfileStore contract (read-only here).
+      // agentManager stays concrete — spawnHeadlessAgent is outside the contract.
+      const profileStore: IProfileStore = _core().agents.profileStore;
       const profileId = step.profile || step.profileId;
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };
