@@ -82,11 +82,13 @@ export function migrateIfNeeded(db) {
     INSERT OR IGNORE INTO tickets (
       id, title, description, status, priority, assigneeId, assigneeName,
       assigneeProfileId, reviewPhase, reworkCount, sprintId, labels, blockedBy,
-      type, comments, audit, createdBy, createdAt, updatedAt, closedAt, resultSummary
+      type, comments, audit, createdBy, createdAt, updatedAt, closedAt, resultSummary,
+      parentId
     ) VALUES (
       @id, @title, @description, @status, @priority, @assigneeId, @assigneeName,
       @assigneeProfileId, @reviewPhase, @reworkCount, @sprintId, @labels, @blockedBy,
-      @type, @comments, @audit, @createdBy, @createdAt, @updatedAt, @closedAt, @resultSummary
+      @type, @comments, @audit, @createdBy, @createdAt, @updatedAt, @closedAt, @resultSummary,
+      @parentId
     )
   `);
 
@@ -122,6 +124,7 @@ export function migrateIfNeeded(db) {
         updatedAt: ticket.updatedAt,
         closedAt: ticket.closedAt || null,
         resultSummary: ticket.resultSummary || null,
+        parentId: ticket.parentId || null,
       });
     }
 
@@ -148,12 +151,19 @@ export function migrateIfNeeded(db) {
 //   1. Additive `workRef` column on tickets (where the implementation landed:
 //      branch / commit range / worktree). Older DBs predate the CREATE TABLE
 //      column, so add it with ALTER TABLE when missing.
-//   2. Rename legacy `hiveId` column on sprints to `daemonId`.
+//   2. Additive `parentId` column on tickets (epic/parent hierarchy). Same
+//      pattern — older DBs predate the column.
+//   3. Rename legacy `hiveId` column on sprints to `daemonId`.
 export function migrateSchemaIfNeeded(db) {
   try {
     const ticketCols = db.prepare("PRAGMA table_info(tickets)").all();
     if (ticketCols.length > 0 && !ticketCols.some((c) => c.name === "workRef")) {
       db.exec("ALTER TABLE tickets ADD COLUMN workRef TEXT");
+    }
+    if (ticketCols.length > 0 && !ticketCols.some((c) => c.name === "parentId")) {
+      db.exec("ALTER TABLE tickets ADD COLUMN parentId TEXT");
+      // Index is best-effort: a brand-new DB already has it from CREATE TABLE.
+      try { db.exec("CREATE INDEX IF NOT EXISTS idx_tickets_parent ON tickets(parentId)"); } catch {}
     }
   } catch {
     // tickets table may not exist yet on a brand-new DB — CREATE TABLE already

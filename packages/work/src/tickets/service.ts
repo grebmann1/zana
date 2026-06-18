@@ -46,6 +46,24 @@ function wouldCreateCycle(ticketId, newBlockedBy) {
   return false;
 }
 
+// Walks the parentId chain upward from `startParentId`. Returns true if the
+// chain reaches `ticketId` (a cycle) — including a direct self-parent. Unlike
+// blockedBy (a DAG), parentId is a strict tree: each ticket has at most one
+// parent, so this is a linear walk, not a graph traversal. A missing parent
+// terminates the walk (treated as a root).
+function wouldCreateParentCycle(ticketId, startParentId) {
+  let cur = startParentId;
+  const seen = new Set<string>();
+  while (cur) {
+    if (cur === ticketId) return true;
+    if (seen.has(cur)) break; // pre-existing loop elsewhere — don't spin forever
+    seen.add(cur);
+    const parent = ticketStore.getTicket(cur);
+    cur = parent ? parent.parentId : null;
+  }
+  return false;
+}
+
 const STATUS_TRANSITIONS = {
   "backlog": ["in-progress", "cancelled"],
   "in-progress": ["review", "done", "backlog", "cancelled"],
@@ -67,9 +85,19 @@ function addAuditEntry(ticket, action, actor, details) {
   });
 }
 
-export function createTicket({ title, description, priority, labels, blockedBy, sprintId, createdBy }) {
+export function createTicket({ title, description, priority, labels, blockedBy, sprintId, createdBy, parentId }) {
   if (!title || typeof title !== "string" || title.trim().length === 0) {
     return { error: "title is required" };
+  }
+
+  // Validate the parent link, if any. The parent must exist; a child can't be
+  // its own ancestor. (A freshly minted id can't yet appear in any chain, so
+  // the cycle check here only catches a parent that doesn't resolve — kept for
+  // symmetry with updateTicket where re-parenting can form a real loop.)
+  let resolvedParentId = parentId || null;
+  if (resolvedParentId) {
+    const parent = ticketStore.getTicket(resolvedParentId);
+    if (!parent) return { error: `parent ticket not found: ${resolvedParentId}` };
   }
 
   // Auto-attach to the active sprint when caller didn't pick one. Without this
@@ -123,6 +151,7 @@ export function createTicket({ title, description, priority, labels, blockedBy, 
     updatedAt: now,
     closedAt: null,
     resultSummary: null,
+    parentId: resolvedParentId,
   };
 
   addAuditEntry(ticket, "created", createdBy, { title, priority: ticket.priority });
@@ -193,6 +222,59 @@ export function escalateForDesign(ticketId, reason, escalatedBy?) {
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:escalated", { ticketId, reason: reason || null, escalatedBy: escalatedBy || "auto-router" });
   return { ok: true, escalated: true };
+}
+
+// Direct children of an epic/parent ticket. Read-only.
+export function getChildren(ticketId) {
+  return ticketStore.listTickets({ parentId: ticketId });
+}
+
+// When a child reaches a terminal status, check whether its parent epic is now
+// fully resolved (every child done/cancelled) and, if so, auto-complete the
+// epic. An epic with no remaining open children has nothing left to do — leaving
+// it open forever is the "ghost epic" problem. Idempotent: a parent already in a
+// terminal status is left untouched. Only fires for parents that are themselves
+// still open and have at least one child (a leaf ticket with no children is not
+// an epic). Returns the parent id if it was auto-completed, else null.
+function maybeCompleteParentEpic(childTicket, actor) {
+  const parentId = childTicket?.parentId;
+  if (!parentId) return null;
+  const parent = ticketStore.getTicket(parentId);
+  if (!parent) return null;
+  if (parent.status === "done" || parent.status === "cancelled") return null;
+
+  const children = getChildren(parentId);
+  if (children.length === 0) return null;
+  const allClosed = children.every(
+    (c) => c.status === "done" || c.status === "cancelled",
+  );
+  if (!allClosed) return null;
+
+  // Force the epic to done regardless of its current column — the children
+  // already attest the work is finished, and the epic's own status is a roll-up,
+  // not an independently-driven state. (Same forced-terminal rationale as
+  // completeTicket.)
+  const doneCount = children.filter((c) => c.status === "done").length;
+  const oldStatus = parent.status;
+  parent.status = "done";
+  parent.closedAt = new Date().toISOString();
+  parent.updatedAt = parent.closedAt;
+  parent.resultSummary =
+    parent.resultSummary ||
+    `Auto-completed: all ${children.length} child tickets resolved (${doneCount} done, ${children.length - doneCount} cancelled).`;
+  addAuditEntry(parent, "status_changed", actor || "system", { from: oldStatus, to: "done" });
+  addAuditEntry(parent, "epic_auto_completed", actor || "system", {
+    childCount: children.length,
+    doneCount,
+  });
+  ticketStore.saveTicket(parent);
+  _bus().emit("ticket:completed", {
+    ticketId: parent.id,
+    completedBy: actor || "system",
+    resultSummary: parent.resultSummary,
+    auto: true,
+  });
+  return parent.id;
 }
 
 export function claimTicket(ticketId, agentId, agentName, profileId?) {
@@ -298,6 +380,10 @@ export function updateStatus(ticketId, newStatus, updatedBy) {
   addAuditEntry(ticket, "status_changed", updatedBy, { from: oldStatus, to: newStatus });
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:statusChanged", { ticketId, oldStatus, newStatus, updatedBy });
+  // A child reaching a terminal status may complete its parent epic.
+  if (newStatus === "done" || newStatus === "cancelled") {
+    maybeCompleteParentEpic(ticket, updatedBy);
+  }
   return { ok: true, ticket };
 }
 
@@ -336,6 +422,8 @@ export function completeTicket(ticketId, resultSummary, completedBy, evidence?) 
   addAuditEntry(ticket, "completed", completedBy, { resultSummary, evidence: ev });
   ticketStore.saveTicket(ticket);
   _bus().emit("ticket:completed", { ticketId, completedBy, resultSummary, evidence: ev });
+  // Roll the closure up to the parent epic if this was the last open child.
+  maybeCompleteParentEpic(ticket, completedBy);
   return { ok: true, ticket };
 }
 
@@ -361,7 +449,7 @@ export function addComment(ticketId, authorId, authorName, body) {
 }
 
 const VALID_TYPES = ["bug", "feature", "chore", "spike"];
-const UPDATABLE_FIELDS = ["title", "description", "priority", "labels", "sprintId", "blockedBy", "type"];
+const UPDATABLE_FIELDS = ["title", "description", "priority", "labels", "sprintId", "blockedBy", "type", "parentId"];
 
 export function updateTicket(ticketId, fields, updatedBy) {
   const ticket = ticketStore.getTicket(ticketId);
@@ -397,6 +485,16 @@ export function updateTicket(ticketId, fields, updatedBy) {
     const deps = Array.isArray(fields.blockedBy) ? fields.blockedBy : [];
     if (deps.length > 0 && wouldCreateCycle(ticketId, deps)) {
       return { error: "blockedBy would create a dependency cycle" };
+    }
+  }
+
+  // Validate a re-parent: the parent must exist and the move must not make the
+  // ticket its own ancestor. `null` detaches (promotes to a root/epic).
+  if ("parentId" in fields && fields.parentId) {
+    const parent = ticketStore.getTicket(fields.parentId);
+    if (!parent) return { error: `parent ticket not found: ${fields.parentId}` };
+    if (wouldCreateParentCycle(ticketId, fields.parentId)) {
+      return { error: "parentId would create a hierarchy cycle" };
     }
   }
 
@@ -569,6 +667,214 @@ export function recordVerdict(ticketId, kind, reason, reportedBy, profileLabel?)
     reportedBy: reportedBy || "agent",
   });
   return { ok: true, ticketId, verdict: normalized, reason: reason || null };
+}
+
+// ─── Stage-history timeline (derived, not stored) ──────────────────────────
+//
+// Orcanator keeps a dedicated card_stage_history table; we instead DERIVE the
+// timeline from the audit trail we already record on every transition. Each
+// `status_changed` audit entry carries { from, to, actor, timestamp }, so we
+// can reconstruct stage durations without a second table to keep in sync. The
+// result is a list of stages, each with the status entered, when, by whom, how
+// it was entered (claimed/status_changed/completed/escalated/recovered), and
+// the dwell time until the next transition. The final (open) stage has
+// exitedAt=null and durationMs measured to `nowMs` (default: now).
+//
+// This intentionally trades the queryability of a real table for zero schema
+// drift — the audit array is the single source of truth (ADR 0008 already
+// makes audit the authoritative trail). Returns { error } for a missing ticket.
+export function getTicketTimeline(ticketId, nowMs?) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  const audit = Array.isArray(ticket.audit) ? ticket.audit : [];
+
+  // Entry actions that mark a stage boundary. `claimed`/`escalated`/`recovered`
+  // are recorded alongside their status_changed, so we key off status_changed
+  // for the canonical status and fold the sibling action in as `via`.
+  const transitions = audit
+    .filter((e) => e && e.action === "status_changed" && e.details && e.details.to)
+    .map((e) => ({
+      status: e.details.to,
+      from: e.details.from ?? null,
+      enteredAt: e.timestamp,
+      actor: e.actor || "system",
+    }));
+
+  // Seed the initial stage from the `created` entry (status backlog) when the
+  // first transition isn't already backlog. Gives every ticket a stage 0.
+  const created = audit.find((e) => e && e.action === "created");
+  const stages: any[] = [];
+  if (created && (transitions.length === 0 || transitions[0].from === "backlog" || transitions[0].status !== "backlog")) {
+    stages.push({ status: "backlog", from: null, enteredAt: created.timestamp, actor: created.actor || "system" });
+  }
+  stages.push(...transitions);
+
+  const end = typeof nowMs === "number" ? nowMs : Date.now();
+  const timeline = stages.map((s, i) => {
+    const enteredMs = Date.parse(s.enteredAt);
+    const next = stages[i + 1];
+    const exitedAt = next ? next.enteredAt : null;
+    const exitedMs = next ? Date.parse(next.enteredAt) : end;
+    const durationMs = isNaN(enteredMs) ? null : Math.max(0, exitedMs - enteredMs);
+    return {
+      status: s.status,
+      enteredAt: s.enteredAt,
+      exitedAt,
+      actor: s.actor,
+      durationMs,
+      open: !next,
+    };
+  });
+
+  // Roll-up metrics the caller most often wants (cycle time, rework bounces).
+  const reworkBounces = stages.filter((s) => s.status === "rework").length;
+  const firstAt = stages.length ? Date.parse(stages[0].enteredAt) : NaN;
+  const closedEntry = audit.find((e) => e && (e.action === "completed"));
+  const closedMs = ticket.closedAt ? Date.parse(ticket.closedAt) : (closedEntry ? Date.parse(closedEntry.timestamp) : NaN);
+  const totalMs = !isNaN(firstAt) ? Math.max(0, (isNaN(closedMs) ? end : closedMs) - firstAt) : null;
+
+  return {
+    ok: true,
+    ticketId,
+    currentStatus: ticket.status,
+    stages: timeline,
+    reworkBounces,
+    totalMs,
+  };
+}
+
+// ─── Human checkpoint (first-class pause for a human decision) ──────────────
+//
+// Orcanator models a human-checkpoint as a real SDLC node that pauses the
+// pipeline, fires a notification, and waits for approve/reject. We had only the
+// `awaiting-decision` label convention (ADR 0008 §4) with no resume primitive
+// and no proactive surfacing. These two verbs make "a human must look" a
+// first-class, observable state:
+//
+//   requestHumanCheckpoint — park the ticket (label `awaiting-decision`, which
+//     the auto-implement rule already skips), record WHY, and emit
+//     `ticket:needsHuman` so a surface layer (inbox, Slack, UI badge) can
+//     proactively alert. Idempotent — re-parking is a no-op.
+//   resolveHumanCheckpoint — a human (or trusted caller) clears the gate:
+//     removes the label and, optionally, releases the ticket back to a status
+//     (approve → backlog for re-dispatch, reject → cancelled). Emits
+//     `ticket:humanResolved`.
+//
+// This is deliberately label-driven (not a new column) so it composes with the
+// existing watcher skipLabels and the design-only escalation lane.
+const HUMAN_GATE_LABEL = "awaiting-decision";
+
+export function requestHumanCheckpoint(ticketId, reason, requestedBy, kind?) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  if (!Array.isArray(ticket.labels)) ticket.labels = [];
+  if (ticket.labels.includes(HUMAN_GATE_LABEL)) {
+    return { ok: true, parked: false, reason: "already_parked" };
+  }
+  ticket.labels.push(HUMAN_GATE_LABEL);
+  ticket.updatedAt = new Date().toISOString();
+  addAuditEntry(ticket, "human_checkpoint_requested", requestedBy || "system", {
+    reason: reason || null,
+    kind: kind || "decision",
+  });
+  ticketStore.saveTicket(ticket);
+  _bus().emit("ticket:needsHuman", {
+    ticketId,
+    kind: kind || "decision",
+    reason: reason || null,
+    title: ticket.title,
+    status: ticket.status,
+    requestedBy: requestedBy || "system",
+  });
+  return { ok: true, parked: true };
+}
+
+export function resolveHumanCheckpoint(ticketId, resolution, resolvedBy, note?) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  if (!Array.isArray(ticket.labels)) ticket.labels = [];
+  const had = ticket.labels.includes(HUMAN_GATE_LABEL);
+  ticket.labels = ticket.labels.filter((l) => l !== HUMAN_GATE_LABEL);
+  ticket.updatedAt = new Date().toISOString();
+  addAuditEntry(ticket, "human_checkpoint_resolved", resolvedBy || "human", {
+    resolution: resolution || "released",
+    note: note || null,
+  });
+  ticketStore.saveTicket(ticket);
+
+  // Optional status release. `approve` re-queues the ticket for dispatch;
+  // `reject` cancels it. `release` (default) just clears the label and leaves
+  // the status where it is. We route status changes through updateStatus so the
+  // transition graph and audit stay authoritative — but a parked ticket may be
+  // in any status, so fall back to a forced reopen-to-backlog when the graph
+  // forbids the move from the current status.
+  if (resolution === "approve") {
+    if (ticket.status !== "backlog") {
+      const res = updateStatus(ticketId, "backlog", resolvedBy || "human");
+      if (res && res.error) {
+        // Forbidden by the graph (e.g. in-progress→backlog is allowed, but
+        // review→backlog is not). Force it: a human override is authorized.
+        const fresh = ticketStore.getTicket(ticketId);
+        fresh.status = "backlog";
+        fresh.updatedAt = new Date().toISOString();
+        addAuditEntry(fresh, "status_changed", resolvedBy || "human", { from: ticket.status, to: "backlog", forced: true });
+        ticketStore.saveTicket(fresh);
+        _bus().emit("ticket:statusChanged", { ticketId, oldStatus: ticket.status, newStatus: "backlog", updatedBy: resolvedBy || "human" });
+      }
+    }
+  } else if (resolution === "reject") {
+    if (ticket.status !== "cancelled") {
+      const fresh = ticketStore.getTicket(ticketId);
+      const old = fresh.status;
+      fresh.status = "cancelled";
+      fresh.closedAt = new Date().toISOString();
+      fresh.updatedAt = fresh.closedAt;
+      addAuditEntry(fresh, "status_changed", resolvedBy || "human", { from: old, to: "cancelled", forced: true });
+      ticketStore.saveTicket(fresh);
+      _bus().emit("ticket:statusChanged", { ticketId, oldStatus: old, newStatus: "cancelled", updatedBy: resolvedBy || "human" });
+      maybeCompleteParentEpic(fresh, resolvedBy || "human");
+    }
+  }
+
+  _bus().emit("ticket:humanResolved", {
+    ticketId,
+    resolution: resolution || "released",
+    resolvedBy: resolvedBy || "human",
+    wasParked: had,
+  });
+  return { ok: true, resolution: resolution || "released", wasParked: had };
+}
+
+// ─── Crash recovery (prompt path; complements the 24h sweeper) ─────────────
+//
+// When an agent working a ticket dies (crash, OOM, exhausted transient retries)
+// the ticket is stranded in `in-progress`/`rework` until the sweeper cancels it
+// 24h later. This is the PROMPT path: the watcher calls this the moment it sees
+// `agent:terminated reason=errored` for a spawn it owns. We force the ticket to
+// `blocked` (the transition graph forbids in-progress→blocked, but a crash IS
+// the authorized exception, same rationale as completeTicket's forced done),
+// record why, and raise a human checkpoint so it's surfaced — not silently
+// parked. Idempotent: a ticket already terminal/blocked is left untouched.
+export function recoverStuckTicket(ticketId, reason, recoveredBy) {
+  const ticket = ticketStore.getTicket(ticketId);
+  if (!ticket) return { error: "ticket not found" };
+  // Only recover tickets that are genuinely in-flight. A ticket that already
+  // moved on (the worker DID report progress before dying, or a reviewer/human
+  // already acted) must not be clobbered.
+  if (ticket.status !== "in-progress" && ticket.status !== "rework") {
+    return { ok: true, recovered: false, reason: "not_in_flight", status: ticket.status };
+  }
+  const oldStatus = ticket.status;
+  ticket.status = "blocked";
+  ticket.updatedAt = new Date().toISOString();
+  addAuditEntry(ticket, "status_changed", recoveredBy || "ticket-watcher", { from: oldStatus, to: "blocked", forced: true });
+  addAuditEntry(ticket, "recovered_stuck", recoveredBy || "ticket-watcher", { reason: reason || "agent terminated unexpectedly" });
+  ticketStore.saveTicket(ticket);
+  _bus().emit("ticket:statusChanged", { ticketId, oldStatus, newStatus: "blocked", updatedBy: recoveredBy || "ticket-watcher" });
+  _bus().emit("ticket:recovered", { ticketId, from: oldStatus, reason: reason || null, recoveredBy: recoveredBy || "ticket-watcher" });
+  // Surface for a human — a crashed worker is exactly a "someone must look" moment.
+  requestHumanCheckpoint(ticketId, reason || "Agent terminated unexpectedly while working this ticket.", recoveredBy || "ticket-watcher", "recovery");
+  return { ok: true, recovered: true, from: oldStatus };
 }
 
 export const listTickets = (ticketStore as any).listTickets;

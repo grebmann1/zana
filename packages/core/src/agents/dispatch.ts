@@ -231,6 +231,20 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
     case "ticket_add_to_sprint": {
       return _ticketService().addTicketToSprint(params.ticketId, params.sprintId);
     }
+    case "ticket_timeline": {
+      return _ticketService().getTicketTimeline(params.ticketId);
+    }
+    case "ticket_children": {
+      return _ticketService().getChildren(params.ticketId);
+    }
+    case "ticket_request_human": {
+      return _ticketService().requestHumanCheckpoint(
+        params.ticketId, params.reason, params.requestedBy, params.kind);
+    }
+    case "ticket_resolve_human": {
+      return _ticketService().resolveHumanCheckpoint(
+        params.ticketId, params.resolution, params.resolvedBy, params.note);
+    }
     case "ticket_update": {
       const ticketService = _ticketService();
       const ticketStore = _ticketStore();

@@ -62,11 +62,13 @@ function getDb() {
       updatedAt TEXT NOT NULL,
       closedAt TEXT,
       resultSummary TEXT,
-      workRef TEXT
+      workRef TEXT,
+      parentId TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_tickets_sprint ON tickets(sprintId);
     CREATE INDEX IF NOT EXISTS idx_tickets_updated ON tickets(updatedAt DESC);
+    CREATE INDEX IF NOT EXISTS idx_tickets_parent ON tickets(parentId);
 
     CREATE TABLE IF NOT EXISTS sprints (
       id TEXT PRIMARY KEY,
@@ -97,6 +99,7 @@ function rowToTicket(row) {
     comments: JSON.parse(row.comments || "[]"),
     audit: JSON.parse(row.audit || "[]"),
     reworkCount: row.reworkCount || 0,
+    parentId: row.parentId || null,
     // workRef is a small JSON object ({ branch?, commitRange?, worktree? }) or
     // null. Tolerate a legacy/corrupt value by falling back to null rather than
     // throwing on read.
@@ -133,6 +136,16 @@ function _listTickets(filter: any = {}) {
     sql += " AND priority = ?";
     params.push(filter.priority);
   }
+  // parentId === null is a meaningful filter (top-level tickets / epics), so
+  // distinguish "not provided" (undefined) from an explicit null request.
+  if (filter.parentId !== undefined) {
+    if (filter.parentId === null) {
+      sql += " AND parentId IS NULL";
+    } else {
+      sql += " AND parentId = ?";
+      params.push(filter.parentId);
+    }
+  }
   if (filter.label) {
     sql += " AND json_each.value = ?";
     sql = sql.replace("SELECT * FROM tickets WHERE 1=1", "SELECT DISTINCT tickets.* FROM tickets, json_each(tickets.labels) WHERE 1=1");
@@ -159,12 +172,12 @@ function _saveTicket(ticket) {
       id, title, description, status, priority, assigneeId, assigneeName,
       assigneeProfileId, reviewPhase, reworkCount, sprintId, labels, blockedBy,
       type, comments, audit, createdBy, createdAt, updatedAt, closedAt, resultSummary,
-      workRef
+      workRef, parentId
     ) VALUES (
       @id, @title, @description, @status, @priority, @assigneeId, @assigneeName,
       @assigneeProfileId, @reviewPhase, @reworkCount, @sprintId, @labels, @blockedBy,
       @type, @comments, @audit, @createdBy, @createdAt, @updatedAt, @closedAt, @resultSummary,
-      @workRef
+      @workRef, @parentId
     )
   `);
 
@@ -191,6 +204,7 @@ function _saveTicket(ticket) {
     closedAt: ticket.closedAt || null,
     resultSummary: ticket.resultSummary || null,
     workRef: ticket.workRef ? JSON.stringify(ticket.workRef) : null,
+    parentId: ticket.parentId || null,
   });
 
   return ticket;

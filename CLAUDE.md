@@ -227,7 +227,9 @@ Schema doc: `plugins/zana/loop/skills/scheduler/SKILL.md`.
   `docs/decisions/` (0001 require-cycle, 0002 tenant isolation, 0003 MCP
   workspace resolution, 0004 deliberation convergence, 0005 daemon-tools-by-default,
   0006 MCP→daemon agent-registry forwarding, 0007 profile model tiering, 0008
-  ticket-automation pipeline, 0009 freeze swarm/GOAP/vector-memory). See
+  ticket-automation pipeline, 0009 freeze swarm/GOAP/vector-memory, 0010
+  contracts base layer, 0011 ticket epics/timeline/checkpoint/recovery, 0012
+  optional Claude-subagent team execution strategy). See
   `docs/decisions/README.md` for the index.
   Read them before changing an invariant; add a new ADR when you make a decision
   a future reader would question.
