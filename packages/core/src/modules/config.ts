@@ -4,7 +4,17 @@ import * as crypto from "node:crypto";
 
 const DEFAULTS = {
   modules: {},
-  system: { initTimeout: 10000, suspendTimeout: 5000, hotReload: false, maxConcurrentAgents: 10, cpuGateEnabled: false, cpuLoadThreshold: 0.8, cpuLoadHardCap: 2.0, agentTimeoutMinutes: 10, spawnThrottleStreakLimit: 5, zombieReaperEnabled: true, zombieReaperIntervalMs: 60000, zombieReaperGraceMs: 300000, ticketSweeperEnabled: true, ticketSweeperIntervalMs: 3600000, ticketStaleThresholdMs: 86400000, transientRetryMaxAttempts: 3, transientRetryBackoffMs: [30000, 120000, 480000], autoAssignProfile: true, autoAssignConfidence: 0.15, autoCloseStale: false, escalationLabels: ["architecture", "needs-decision", "invariant"] },
+  // executionStrategy selects how a team's roster runs:
+  //   "process"  (default) — one OS `claude` process per agent (lead + N
+  //               workers), coordinating via MCP + the event bus. Independent
+  //               per-agent lifecycle, cross-session, daemon-persistent.
+  //   "subagent" — provision .claude/agents/*.md recipes and run ONE lead
+  //               session that dispatches workers in-process via the Task tool.
+  //               Cheaper (1 process, shared context) but workers are tool
+  //               calls with no independent lifecycle. See ADR 0012.
+  // The ticket-automation pipeline is ALWAYS process-based regardless of this
+  // setting — its workers need independent lifecycle + ticket claim/complete.
+  system: { initTimeout: 10000, suspendTimeout: 5000, hotReload: false, maxConcurrentAgents: 10, executionStrategy: "process", cpuGateEnabled: false, cpuLoadThreshold: 0.8, cpuLoadHardCap: 2.0, agentTimeoutMinutes: 10, spawnThrottleStreakLimit: 5, zombieReaperEnabled: true, zombieReaperIntervalMs: 60000, zombieReaperGraceMs: 300000, ticketSweeperEnabled: true, ticketSweeperIntervalMs: 3600000, ticketStaleThresholdMs: 86400000, transientRetryMaxAttempts: 3, transientRetryBackoffMs: [30000, 120000, 480000], autoAssignProfile: true, autoAssignConfidence: 0.15, autoCloseStale: false, escalationLabels: ["architecture", "needs-decision", "invariant"] },
 };
 
 let configPath = null;
