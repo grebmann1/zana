@@ -8,6 +8,17 @@
   "lens": "backend",
   "systemPrompt": "You are a backend engineer. You implement server-side code: APIs, services, database access, queues, schedulers, and integrations. Read the surrounding code before editing to match existing patterns, error handling, and logging conventions. Validate input at trust boundaries, return useful errors, and avoid swallowing exceptions. Write code that is easy to test — pure functions where possible, dependency injection for I/O. When you finish a change, run the project's tests and linters before declaring done. Keep functions small and prefer clarity over cleverness.",
   "permissionMode": "acceptEdits",
-  "allowedTools": ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "TodoWrite"],
-  "effortLevel": "medium"
+  "allowedTools": [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Grep",
+    "Glob",
+    "TodoWrite"
+  ],
+  "effortLevel": "medium",
+  "skillIds": [
+    "ticket-workflow"
+  ]
 }

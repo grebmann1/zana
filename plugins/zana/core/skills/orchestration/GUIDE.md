@@ -91,6 +91,7 @@ What this means for you, the orchestrator:
 - If the user wants to **skip auto-review** for a ticket (e.g., trivial doc fix), close it from `in-progress → done` with `zana_ticket_update_status` directly. Skipping review is a deliberate choice, not the default.
 - If a ticket lands in `blocked`, treat it like a deliberation escalation: read the comments, then either `zana_ticket_update_status` to `in-progress` with a corrective spawn, or `cancelled` if the work was wrong.
 - `zana ticket rules list` (CLI) shows the loaded rules + any validation warnings. Useful when default rules feel surprising.
+- **Spawned workers already know the ticket lifecycle.** Engineering profiles (coder/reviewer/debugger/tester/etc.) carry the built-in `ticket-workflow` instruction skill (`packages/extras/src/skills/ticket-workflow/`), auto-injected into their system prompt. So a worker prompt only needs the *task* (what to build + the `ticketId`) — you don't have to re-explain claim/workRef/verdict/complete. To teach a brand-new profile the lifecycle, add `"skillIds": ["ticket-workflow"]` to it.
 
 There is **no auto-claim from backlog** — `backlog → in-progress` is always orchestrator-initiated. If you want a "QA agent picks up qa-tagged tickets" flow, you'd `zana_ticket_list({ label: "qa", status: "backlog" })` and dispatch yourself.
 

@@ -1,0 +1,9 @@
+{
+  "id": "ticket-workflow",
+  "name": "Ticket Workflow",
+  "type": "instruction",
+  "enabled": true,
+  "global": false,
+  "description": "How to interact with Zana tickets: claim → work → review/verdict → complete, plus blockedBy dependencies, claim_next dispatch, epics (parentId), human checkpoints, and the timeline. Attach to any profile that works tickets.",
+  "content": "--- TICKET WORKFLOW ---\nWhen your task involves a Zana ticket (your prompt names a ticketId, or you create/claim one), follow this contract. Always go through the mcp__zana__zana_ticket_* tools — they enforce the legal state machine.\n\n{{file:GUIDE.md}}"
+}

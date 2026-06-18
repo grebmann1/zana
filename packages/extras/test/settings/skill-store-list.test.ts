@@ -35,14 +35,19 @@ describe("skill-store — listSkills / getEnabledInstructions / getEnabledToolSk
 
   // ── listSkills ────────────────────────────────────────────────────────────
 
-  it("listSkills: returns an empty array when the directory is empty", () => {
-    expect(listSkills()).toEqual([]);
+  // listSkills() always includes committed built-in skills (e.g.
+  // `ticket-workflow`) from BUILT_IN_SKILLS_DIR. These tests assert on the USER
+  // skills written into the temp SKILLS_DIR, so they filter built-ins out.
+  const userSkills = () => listSkills().filter((s) => !s._builtIn);
+
+  it("listSkills: returns no USER skills when the user directory is empty", () => {
+    expect(userSkills()).toEqual([]);
   });
 
   it("listSkills: returns skills saved as flat .json files", () => {
     saveSkill({ name: "alpha", type: "instruction", content: "do alpha" });
     saveSkill({ name: "beta", type: "instruction", content: "do beta" });
-    const skills = listSkills();
+    const skills = userSkills();
     expect(skills).toHaveLength(2);
     const names = skills.map((s) => s.name).sort();
     expect(names).toEqual(["alpha", "beta"]);
@@ -55,17 +60,17 @@ describe("skill-store — listSkills / getEnabledInstructions / getEnabledToolSk
       content: "dir content",
       supportingFiles: [{ name: "extra.txt", content: "extra" }],
     });
-    const skills = listSkills();
+    const skills = userSkills();
     expect(skills).toHaveLength(1);
     expect(skills[0].name).toBe("dir-skill");
   });
 
   it("listSkills: user skill with same id as built-in masks the built-in", () => {
-    // Simulate a built-in skill in the BUILT_IN_SKILLS_DIR by writing directly
-    // into the directory the module resolves as __dirname/../skills.  Because
-    // that path doesn't exist in this test environment the built-in list is
-    // always empty — so this test verifies that two user skills with distinct
-    // ids both appear (no accidental deduplication of unrelated ids).
+    // Built-in skills DO ship now (e.g. ticket-workflow from BUILT_IN_SKILLS_DIR).
+    // This test uses a unique id that no built-in claims, verifying that a user
+    // skill appears under its own id (no accidental dedup of unrelated ids). The
+    // real built-in→user override path is covered in
+    // skill-store-builtin-ticket-workflow.test.ts.
     const id = "fixed-id-clash-test";
     fs.writeFileSync(
       path.join(tmpDir, `${id}.json`),
@@ -111,8 +116,16 @@ describe("skill-store — listSkills / getEnabledInstructions / getEnabledToolSk
     expect(instructions.some((i) => i.includes("tool-skill"))).toBe(false);
   });
 
-  it("getEnabledInstructions: returns empty array when no qualifying skills exist", () => {
-    expect(getEnabledInstructions()).toEqual([]);
+  it("getEnabledInstructions: returns no USER instructions when none are saved", () => {
+    // getEnabledInstructions has no per-profile scoping, so it always includes
+    // committed built-in instruction skills (e.g. ticket-workflow). With no
+    // USER skills saved, every entry must therefore be a built-in.
+    const builtInNames = listSkills().filter((s) => s._builtIn).map((s) => s.name);
+    const instructions = getEnabledInstructions();
+    for (const entry of instructions) {
+      const matchesBuiltIn = builtInNames.some((n) => entry.startsWith(`[${n}]:`));
+      expect(matchesBuiltIn).toBe(true);
+    }
   });
 
   // ── getEnabledToolSkills ──────────────────────────────────────────────────
