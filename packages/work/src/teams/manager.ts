@@ -1,9 +1,33 @@
 import * as teamStore from "./store";
+import type { IProfileStore, IEventBus } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
+// _agentManager stays `any`: this caller uses the full runtime surface
+// (spawnHeadlessAgent / spawnInteractive / writeToAgent / onAgentsChange /
+// killAgent), which is broader than the minimal IAgentManager read contract.
+// Profile + bus access fit the published contracts exactly, so type those.
 function _agentManager(): any { return _core().agents.manager; }
-function _profileStore(): any { return _core().agents.profileStore; }
-function _bus(): any { return _core().events.bus; }
+function _profileStore(): IProfileStore { return _core().agents.profileStore; }
+function _bus(): IEventBus { return _core().events.bus; }
 function _EVENTS(): any { return _core().events.EVENTS; }
+function _subagentProvisioner(): any { return _core().agents.subagentProvisioner; }
+function _moduleConfig(): any { return _core().modules.config; }
+
+// Which execution strategy a team should run under. "process" (the default)
+// spawns one claude process per agent; "subagent" provisions .claude/agents/*.md
+// recipes and runs ONE lead that dispatches workers in-process via the Task
+// tool. A per-team `team.executionStrategy` overrides the global system default.
+// See ADR 0012.
+function resolveExecutionStrategy(team: any): "process" | "subagent" {
+  if (team?.executionStrategy === "process" || team?.executionStrategy === "subagent") {
+    return team.executionStrategy;
+  }
+  try {
+    const sys = _moduleConfig().get()?.system;
+    return sys?.executionStrategy === "subagent" ? "subagent" : "process";
+  } catch {
+    return "process";
+  }
+}
 import * as checkpointStore from "../runs/checkpoint/store";
 import * as checkpointResume from "../runs/checkpoint/resume";
 
@@ -172,7 +196,32 @@ RULES:
   return `${delegationMandate}You are leading team "${team.name}" (${totalSlots} total slots). Your available workers:\n\n${workerList}${rulesBlock}${artifactNote}\n\nTask:\n${userPrompt || team.initialPrompt || "Awaiting instructions."}`;
 }
 
-export function startTeam(teamId, options = {}) {
+// Build the Tier-0 directive for a SUBAGENT-mode lead: it dispatches workers
+// in-process via the Task tool's `subagent_type`, NOT via zana_spawn_agent.
+// Lists the provisioned recipe names so the lead knows exactly what it may
+// dispatch (the foreign-subagent guard). Ported from Orchestranator §2.4.
+function buildSubagentLeadPrompt(team, roster, userPrompt) {
+  const roleList = roster
+    .map((r) => `- \`${r.subagentType}\` — ${r.profile.displayName || r.profile.id}: ${r.profile.description || "no description"}`)
+    .join("\n");
+  return `CRITICAL: You are the LEAD of team "${team.name}". You orchestrate; you do NOT implement directly.
+
+You run as a SINGLE Claude session and dispatch your teammates as SUBAGENTS via the Task tool. Each teammate is a provisioned subagent recipe in .claude/agents/. Dispatch a teammate by calling Task with its exact \`subagent_type\`.
+
+YOUR TEAMMATES (dispatch ONLY these — never invent a subagent_type, never dispatch one not listed here):
+${roleList}
+
+RULES:
+- You have NO implementation tools (Write/Edit/Bash are disabled for you). The ONLY way to make a file change or run a command is to dispatch a teammate via Task. Do not attempt to implement directly — you cannot.
+- Dispatch INDEPENDENT subtasks in ONE message (parallel Task calls) for speed; sequence only true dependencies.
+- Give each Task a detailed prompt: what to do, which files, what conventions, and any context from earlier teammates' results.
+- Synthesize teammates' results into the final outcome yourself.
+
+Task:
+${userPrompt || team.initialPrompt || "Awaiting instructions."}`;
+}
+
+export function startTeam(teamId, options: { prompt?: string; cwd?: string; headless?: boolean; cols?: number; rows?: number } = {}) {
   const team = teamStore.getTeam(teamId);
   if (!team) return { ok: false, error: "team not found" };
 
@@ -189,6 +238,11 @@ export function startTeam(teamId, options = {}) {
   const workerProfiles = [...new Set(slots.map((s) => s.profileId))]
     .map((id) => _profileStore().getProfile(id))
     .filter(Boolean);
+
+  const strategy = resolveExecutionStrategy(team);
+  if (strategy === "subagent") {
+    return startTeamAsSubagents(team, orchestratorProfile, workerProfiles, options);
+  }
 
   const prompt = buildOrchestratorPrompt(team, workerProfiles, options.prompt);
 
@@ -239,6 +293,118 @@ export function startTeam(teamId, options = {}) {
   _bus().emit(_EVENTS().TEAM_STARTED, { teamId, teamName: team.name, orchestratorAgentId: result.agentId });
 
   return { ok: true, orchestratorAgentId: result.agentId, terminalId: result.terminalId };
+}
+
+// Subagent-mode team start: provision .claude/agents/*.md recipes into the
+// lead's working directory, then spawn ONE lead session that dispatches the
+// roster in-process via the Task tool. There are NO separate worker processes
+// here — the lead IS the team. See ADR 0012.
+function startTeamAsSubagents(team, orchestratorProfile, workerProfiles, options) {
+  const cwd = options.cwd || process.env.HOME;
+
+  // Worktree guard: .claude/agents/*.md are untracked files. A fresh git
+  // worktree starts from a clean tree and would not contain them, so the
+  // subagents would silently not exist. Orchestranator hits this exact wall
+  // (§A.6) and runs --run-mode branch instead. Refuse rather than provision
+  // into a tree where the recipes will vanish.
+  if (options.worktree) {
+    return {
+      ok: false,
+      error: "subagent execution strategy is incompatible with worktree isolation (.claude/agents/*.md are untracked and invisible in a fresh worktree); use the process strategy for worktree-isolated teams",
+    };
+  }
+
+  const teamSlug = team.slug || team.id || team.name;
+  const provisioner = _subagentProvisioner();
+
+  // The recipe body must carry any imperative the worker needs, because a
+  // subagent never sees the lead's --append-system-prompt. The ticket
+  // lifecycle is process-only, so it is intentionally NOT injected here.
+  let provisionResults;
+  try {
+    provisionResults = provisioner.provisionTeam({
+      workingDirectory: cwd,
+      teamSlug,
+      profiles: workerProfiles,
+    });
+  } catch (err: any) {
+    return { ok: false, error: `failed to provision subagent recipes: ${err?.message || err}` };
+  }
+
+  const roster = workerProfiles.map((profile) => ({
+    profile,
+    subagentType: provisioner.compositeSlug(teamSlug, profile.id),
+  }));
+
+  const leadPrompt = buildSubagentLeadPrompt(team, roster, options.prompt);
+  const augmentedProfile = {
+    ...orchestratorProfile,
+    appendSystemPrompt: [
+      orchestratorProfile.appendSystemPrompt || "",
+      `\n\n--- TEAM CONTEXT (subagent mode) ---\n${leadPrompt}`,
+    ].join(""),
+    // The lead MUST delegate, not implement. Without removing its implementation
+    // tools the model takes the cheapest path — doing the work itself and never
+    // dispatching (observed in the 2026-06-18 live A/B run: zero dispatches).
+    // Apply the SAME Write/Edit/Bash restriction the process path uses so
+    // dispatching teammates is the only way to do file work. The built-in Agent
+    // dispatch tool is never in this disallow list, so delegation stays open.
+    disallowedTools: buildTeamLeadDisallowedTools(team, orchestratorProfile),
+    // Pin the lead to ONLY the zana MCP config. Without --strict-mcp-config the
+    // spawned child inherits the host's MCP servers (e.g. a cockpit's task tools),
+    // which shadow the built-in Agent dispatch tool — in the live run the lead
+    // grabbed those instead and never delegated. strictMcpConfig is honored by
+    // buildClaudeArgs (spawner.ts) → emits --strict-mcp-config.
+    strictMcpConfig: true,
+  };
+
+  const headless = options.headless || !!process.env.ZANA_HEADLESS;
+  const kickoffMessage = options.prompt || team.initialPrompt || "Begin working on the task described in your instructions.";
+
+  let result;
+  if (headless) {
+    result = _agentManager().spawnHeadlessAgent(augmentedProfile, { cwd, multiTurn: true });
+    setTimeout(() => {
+      _agentManager().writeToAgent(result.agentId, {
+        type: "user",
+        message: { role: "user", content: [{ type: "text", text: kickoffMessage }] },
+      });
+    }, 2000);
+  } else {
+    result = _agentManager().spawnInteractive(augmentedProfile, { cwd, cols: options.cols, rows: options.rows });
+    setTimeout(() => {
+      const ptyHost = require("@zana-ai/core").agents.ptyHost;
+      ptyHost.writeTerminal(result.terminalId, kickoffMessage + "\n");
+    }, 20000);
+  }
+
+  const checkpoint = checkpointResume.createFromTeam(team.id, team.name, result.agentId, cwd);
+
+  runningTeams.set(team.id, {
+    teamId: team.id,
+    teamName: team.name,
+    teamIcon: team.icon,
+    orchestratorAgentId: result.agentId,
+    checkpointId: checkpoint.id,
+    checkpointedAgents: new Set(),
+    status: "running",
+    startedAt: Date.now(),
+    executionStrategy: "subagent",
+    subagentRoster: roster.map((r) => r.subagentType),
+    provision: provisionResults,
+  });
+
+  notifyChange();
+  _bus().emit(_EVENTS().TEAM_STARTED, { teamId: team.id, teamName: team.name, orchestratorAgentId: result.agentId, executionStrategy: "subagent" });
+
+  return {
+    ok: true,
+    orchestratorAgentId: result.agentId,
+    terminalId: result.terminalId,
+    executionStrategy: "subagent",
+    subagents: roster.map((r) => r.subagentType),
+    provision: provisionResults,
+  };
 }
 
 export function stopTeam(teamId) {
