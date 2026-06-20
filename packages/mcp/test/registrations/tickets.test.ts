@@ -134,3 +134,137 @@ describe("zana_ticket_list handler", () => {
     expect(mapped[1].commentCount).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// zana_ticket_complete
+//
+// Not a thin passthrough: it slims the core's full result down to
+// { ok, ticketId, status, closedAt } and applies fallbacks when the core omits
+// fields. Those defaults are the behavior worth pinning.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("zana_ticket_complete handler", () => {
+  const handler = getHandler("zana_ticket_complete");
+
+  it("forwards ticketId/resultSummary/evidence to the ticket_complete op", async () => {
+    const captured: unknown[] = [];
+    const callCore = (op: string, args: unknown) => {
+      captured.push({ op, args });
+      return Promise.resolve({ ok: true, ticket: { id: "t-1" } });
+    };
+    const evidence = { branch: "main", testResult: "10 passed" };
+
+    await handler({ ticketId: "t-1", resultSummary: "did it", evidence }, { callCore });
+
+    expect(captured).toHaveLength(1);
+    expect((captured[0] as any).op).toBe("ticket_complete");
+    expect((captured[0] as any).args).toMatchObject({
+      ticketId: "t-1",
+      resultSummary: "did it",
+      evidence,
+    });
+  });
+
+  it("slims the core result to ok/ticketId/status/closedAt only", async () => {
+    const fullTicket = {
+      id: "t-9",
+      status: "done",
+      closedAt: "2026-01-02T00:00:00Z",
+      description: "huge",
+      comments: ["a", "b"],
+      audit: [{ x: 1 }],
+    };
+    const result = (await handler(
+      { ticketId: "t-9", resultSummary: "done" },
+      { callCore: fakeCallCore({ ok: true, ticket: fullTicket }) },
+    )) as Record<string, unknown>;
+
+    expect(result).toEqual({
+      ok: true,
+      ticketId: "t-9",
+      status: "done",
+      closedAt: "2026-01-02T00:00:00Z",
+    });
+  });
+
+  it("defaults ok=true, status='done', closedAt=null and echoes args.ticketId when the core omits the ticket", async () => {
+    const result = (await handler(
+      { ticketId: "t-7", resultSummary: "done" },
+      { callCore: fakeCallCore({}) },
+    )) as Record<string, unknown>;
+
+    expect(result).toEqual({
+      ok: true,
+      ticketId: "t-7",
+      status: "done",
+      closedAt: null,
+    });
+  });
+
+  it("preserves an explicit ok:false from the core", async () => {
+    const result = (await handler(
+      { ticketId: "t-3", resultSummary: "nope" },
+      { callCore: fakeCallCore({ ok: false }) },
+    )) as Record<string, unknown>;
+
+    expect(result.ok).toBe(false);
+    expect(result.ticketId).toBe("t-3");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// zana_ticket_children
+//
+// Not a thin passthrough: it slims each raw child ticket down to a fixed
+// public shape ({id,title,status,priority,assigneeId,parentId}) and drops
+// every other field, but only when the core returns an array. A non-array
+// result (e.g. an error envelope) is passed through untouched. Both branches
+// are the behavior worth pinning.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("zana_ticket_children handler", () => {
+  const handler = getHandler("zana_ticket_children");
+
+  it("forwards ticketId to the ticket_children op", async () => {
+    const captured: unknown[] = [];
+    const callCore = (op: string, args: unknown) => {
+      captured.push({ op, args });
+      return Promise.resolve([]);
+    };
+
+    await handler({ ticketId: "epic-1" }, { callCore });
+
+    expect(captured).toHaveLength(1);
+    expect((captured[0] as any).op).toBe("ticket_children");
+    expect((captured[0] as any).args).toEqual({ ticketId: "epic-1" });
+  });
+
+  it("slims each child to the public shape and drops extra fields", async () => {
+    const children = [
+      rawTicket({ id: "c-1", parentId: "epic-1", internalField: "secret" }),
+      rawTicket({ id: "c-2", parentId: "epic-1", title: "Second", status: "done", priority: "high" }),
+    ];
+    const result = (await handler(
+      { ticketId: "epic-1" },
+      { callCore: fakeCallCore(children) },
+    )) as Array<Record<string, unknown>>;
+
+    expect(result).toEqual([
+      { id: "c-1", title: "Fix the thing", status: "backlog", priority: "medium", assigneeId: null, parentId: "epic-1" },
+      { id: "c-2", title: "Second", status: "done", priority: "high", assigneeId: null, parentId: "epic-1" },
+    ]);
+    // Extra raw fields must not leak through.
+    expect(result[0]).not.toHaveProperty("internalField");
+    expect(result[0]).not.toHaveProperty("comments");
+  });
+
+  it("passes a non-array core result through untouched", async () => {
+    const errorEnvelope = { ok: false, error: "not an epic" };
+    const result = await handler(
+      { ticketId: "t-1" },
+      { callCore: fakeCallCore(errorEnvelope) },
+    );
+
+    expect(result).toEqual(errorEnvelope);
+  });
+});

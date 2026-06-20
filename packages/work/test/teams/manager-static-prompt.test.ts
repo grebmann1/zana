@@ -155,6 +155,24 @@ describe("manager — static team orchestrator prompt: worker list", () => {
     expect(augmented.appendSystemPrompt).toContain("`coder`");
   });
 
+  it("renders the total slot count as the sum of every slot's quantity", () => {
+    const augmented = startStaticTeam({
+      id: "team-static-total",
+      name: "Total Slots Team",
+      orchestratorProfileId: "orchestrator",
+      workerProfileIds: [],
+      slots: [
+        { profileId: "coder", quantity: 3 },
+        { profileId: "reviewer", quantity: 1 },
+      ],
+    });
+
+    // buildOrchestratorPrompt renders "(N total slots)" where N = Σ quantity.
+    // 3 (coder) + 1 (reviewer) = 4 — not the slot *count* (2).
+    expect(augmented.appendSystemPrompt).toContain("(4 total slots)");
+    expect(augmented.appendSystemPrompt).not.toContain("(2 total slots)");
+  });
+
   it("includes the per-role cap annotation when quantity > 1", () => {
     const augmented = startStaticTeam({
       id: "team-static-qty",

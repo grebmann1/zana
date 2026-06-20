@@ -7,7 +7,7 @@
 //   - clear wipes the entire registry
 //   - invalid inputs are silently ignored
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const registry = require("@zana-ai/core/src/modules/tool-registry.ts");
 
@@ -162,6 +162,60 @@ describe("unregisterModuleTools", () => {
     registerModuleTools("alpha", [makeTool("zana_alpha_t", "alpha")]);
     unregisterModuleTools("unknown");
     expect(listModuleTools()).toHaveLength(1);
+  });
+
+  // The other unregister tests verify removal only through the flat
+  // listModuleTools() view. But getModuleTool() (by prefixed name) and
+  // getToolsForModule() (by moduleId) iterate / index the registry
+  // independently (tool-registry.ts lines 50 & 63). A regression that dropped a
+  // module from the flat list while leaving a dangling per-module entry would
+  // pass every existing case yet still resolve a tool that was supposedly
+  // removed. This pins that unregister purges ALL lookup paths consistently,
+  // and that a sibling module's tools remain resolvable afterward.
+  it("purges getModuleTool and getToolsForModule lookups after unregister", () => {
+    registerModuleTools("alpha", [makeTool("zana_alpha_t", "alpha")]);
+    registerModuleTools("beta", [makeTool("zana_beta_t", "beta")]);
+
+    // Pre-condition: both lookup paths resolve alpha's tool.
+    expect(getModuleTool("zana_alpha_t")).not.toBeNull();
+    expect(getToolsForModule("alpha")).toHaveLength(1);
+
+    unregisterModuleTools("alpha");
+
+    // After unregister, both lookup paths for alpha must be empty/null...
+    expect(getModuleTool("zana_alpha_t")).toBeNull();
+    expect(getToolsForModule("alpha")).toEqual([]);
+
+    // ...while the untouched sibling module stays fully resolvable.
+    expect(getModuleTool("zana_beta_t")).toMatchObject({ moduleId: "beta" });
+    expect(getToolsForModule("beta")).toHaveLength(1);
+  });
+});
+
+describe("getModuleTool — handler preservation", () => {
+  // The registry's whole purpose is to let the MCP layer dispatch a module's
+  // `handler` by prefixed tool name. Every other test builds tools via
+  // makeTool(), which never sets a handler — so the field that actually gets
+  // invoked at call time is never exercised. A regression that stripped or
+  // shallow-rebuilt tool entries (dropping the function reference) would pass
+  // the entire existing suite while breaking real tool calls. This pins that
+  // getModuleTool returns the live tool object with its callable handler
+  // intact, and that calling it routes args through to that exact function.
+  it("returns the tool with its callable handler reference intact", () => {
+    const handler = vi.fn((args: any) => ({ ok: true, echoed: args }));
+    const tool = { ...makeTool("zana_alpha_run", "alpha"), handler };
+    registerModuleTools("alpha", [tool]);
+
+    const found = getModuleTool("zana_alpha_run");
+    expect(found).not.toBeNull();
+    expect(typeof found.handler).toBe("function");
+    // Same function reference, not a copy/wrapper.
+    expect(found.handler).toBe(handler);
+
+    const result = found.handler({ x: 1 });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({ x: 1 });
+    expect(result).toEqual({ ok: true, echoed: { x: 1 } });
   });
 });
 

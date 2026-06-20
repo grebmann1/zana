@@ -254,6 +254,45 @@ describe("listSprints — hiveId → daemonId on-read migration", () => {
     expect(onDisk.daemonId).toBe("daemon-old");
     expect(onDisk.hiveId).toBeUndefined();
   });
+  it("does NOT migrate when daemonId is already present — preserves daemonId and leaves hiveId untouched", () => {
+    // Guard branch: store.ts only migrates when `daemonId === undefined`
+    // (src: `sprint.hiveId !== undefined && sprint.daemonId === undefined`).
+    // When a sprint already has daemonId, the existing value must win and the
+    // file must NOT be rewritten — a regression here would clobber daemonId
+    // with a stale hiveId. The runs/store guard is tested; this pins the same
+    // invariant for the tickets/store listSprints path.
+    const sprintsDir = getSprintsDir();
+    fs.mkdirSync(sprintsDir, { recursive: true });
+
+    const id = `S-both-${uid()}`;
+    const now = new Date().toISOString();
+    const filePath = path.join(sprintsDir, `${id}.json`);
+    const raw = {
+      id,
+      name: "Coexistence sprint",
+      status: "planning",
+      hiveId: "stale-hive",
+      daemonId: "daemon-current",
+      ticketIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    fs.writeFileSync(filePath, JSON.stringify(raw, null, 2), "utf8");
+
+    const results = store.listSprints();
+    const found = results.find((s: any) => s.id === id);
+
+    expect(found).not.toBeUndefined();
+    // Existing daemonId wins; it is NOT overwritten by hiveId.
+    expect(found!.daemonId).toBe("daemon-current");
+    // Migration did not fire, so hiveId survives in the in-memory result.
+    expect((found as any).hiveId).toBe("stale-hive");
+
+    // The on-disk file must be left byte-for-byte unchanged (no best-effort rewrite).
+    const onDisk = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    expect(onDisk.daemonId).toBe("daemon-current");
+    expect(onDisk.hiveId).toBe("stale-hive");
+  });
 });
 
 // ── malformed files are skipped ────────────────────────────────────────────

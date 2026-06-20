@@ -170,6 +170,32 @@ describe("requestHumanCheckpoint / resolveHumanCheckpoint", () => {
     expect(t.labels).not.toContain("awaiting-decision");
     expect(t.status).toBe("review");
   });
+
+  it("reject of the last open child auto-completes the parent epic", () => {
+    // Rejecting a checkpoint cancels the child (service.ts:835 routes through
+    // maybeCompleteParentEpic). When that child is the epic's last open child,
+    // the parent must roll up to done — the human-checkpoint reject path is the
+    // only caller of that branch left untested.
+    const now = new Date().toISOString();
+    fakeDb._tickets.set("EPIC", {
+      id: "EPIC", title: "epic", status: "in-progress", reviewPhase: null,
+      labels: [], blockedBy: [], comments: [], audit: [], parentId: null,
+      createdAt: now, updatedAt: now, closedAt: null,
+    });
+    fakeDb._tickets.set("CHILD", {
+      id: "CHILD", title: "child", status: "review", reviewPhase: null,
+      labels: [], blockedBy: [], comments: [], audit: [], parentId: "EPIC",
+      createdAt: now, updatedAt: now, closedAt: null,
+    });
+
+    svc.requestHumanCheckpoint("CHILD", "x", "agent");
+    svc.resolveHumanCheckpoint("CHILD", "reject", "human");
+
+    expect(svc.getTicket("CHILD").status).toBe("cancelled");
+    const epic = svc.getTicket("EPIC");
+    expect(epic.status).toBe("done");
+    expect(epic.audit.some((e: any) => e.action === "epic_auto_completed")).toBe(true);
+  });
 });
 
 // ── #1 Crash recovery ─────────────────────────────────────────────────────────

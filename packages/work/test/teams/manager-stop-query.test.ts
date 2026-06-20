@@ -229,6 +229,23 @@ describe("manager — getTeamStatus", () => {
     // The transition is persisted: a second query still reports completed.
     expect(manager.getTeamStatus("team-status-done")!.status).toBe("completed");
   });
+
+  it("reports orchestrator: null and keeps status 'running' when the orchestrator agent is absent from the registry", () => {
+    bootTeam("team-status-missing");
+    // The orchestrator id is NOT present in listAgents() (e.g. registry lag).
+    // The terminated→completed flip is guarded by `orchestrator && ...`, so an
+    // absent orchestrator must leave the team running rather than crash or
+    // falsely complete it.
+    listAgentsSpy.mockReturnValue([
+      { id: "some-other-agent", parentAgentId: null, state: "active" },
+    ]);
+
+    const status = manager.getTeamStatus("team-status-missing");
+    expect(status).not.toBeNull();
+    expect(status!.orchestrator).toBeNull();
+    expect(status!.status).toBe("running");
+    expect(status!.workers).toEqual([]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -208,6 +208,23 @@ describe("lazyRequire — getter overload", () => {
     expect(callCount()).toBe(1); // enumeration resolved the module just once
   });
 
+  // Every test above reads STRING keys, but the `get` and `has` traps cast
+  // `prop as string` and index the resolved module directly — a runtime no-op
+  // for symbols. Symbol-keyed exports (Symbol.iterator, Symbol.toStringTag,
+  // library-defined symbols used for branding) must therefore reflect into the
+  // underlying module too. A regression that string-coerced the key before
+  // indexing (e.g. `mod[String(prop)]`) would silently return undefined for
+  // symbol exports and report them absent, yet pass every string-keyed test.
+  // Pins symbol passthrough for both traps, including symbol identity.
+  it("reflects symbol-keyed access into the resolved module (get + has traps)", () => {
+    const tag = Symbol("tag");
+    const { getter } = fakeModule<Record<string | symbol, unknown>>({ [tag]: "viaSymbol" });
+    const proxy = lazyRequire<Record<string | symbol, unknown>>(getter);
+    expect(tag in proxy).toBe(true); // has trap resolves symbol key
+    expect(proxy[tag]).toBe("viaSymbol"); // get trap returns symbol-keyed value
+    expect(Symbol("tag") in proxy).toBe(false); // same description, distinct identity → absent
+  });
+
   it("getOwnPropertyDescriptor returns the underlying descriptor", () => {
     const { getter } = fakeModule({ key: "value" });
     const proxy = lazyRequire(getter);

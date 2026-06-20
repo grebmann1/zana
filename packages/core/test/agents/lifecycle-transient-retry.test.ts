@@ -248,6 +248,27 @@ describe("resumeHeadlessAgent — boot crash recovery", () => {
     expect(agent.retryAttempts).toBe(1);
   });
 
+  it("defaults retryAttempts to 0 when the snapshot omits it", () => {
+    // Documented invariant (lifecycle.ts): the resumed record carries forward
+    // `snapshot.retryAttempts ?? 0`. A snapshot that predates retry bookkeeping
+    // (no retryAttempts field) must resume with a fresh count of 0, NOT
+    // undefined — otherwise the first transient failure would compute the
+    // backoff ladder index off `undefined` and the ceiling check would misbehave.
+    const newId = resumeHeadlessAgent({
+      id: "old-no-retrycount",
+      profileId: "tester",
+      profileName: "Tester",
+      mode: "headless",
+      claudeSessionId: "sess-no-retrycount",
+      prompt: "resume me",
+      cwd: "/tmp/work",
+      // no retryAttempts field
+    });
+
+    expect(typeof newId).toBe("string");
+    expect(getAgent(newId!).retryAttempts).toBe(0);
+  });
+
   it("returns null when the snapshot lacks a session id (unresumable)", () => {
     const newId = resumeHeadlessAgent({
       id: "x",

@@ -278,4 +278,21 @@ describe("findRunningDaemon()", () => {
   it("returns null when no workspace is given and no daemons are alive", () => {
     expect(registry.findRunningDaemon(null)).toBeNull();
   });
+
+  it("prefers a headless daemon (not just alive[0]) when no workspace is given", () => {
+    // No-workspace lookup must prefer a headless daemon over a non-headless one,
+    // regardless of registration order. The non-headless daemon is registered
+    // FIRST (so it tends to be alive[0]); findRunningDaemon(null) must still
+    // return the headless daemon via `alive.find(e => e.headless)`, exercising
+    // the branch that the existing tests never reach.
+    const nonHeadless = registry.generateDaemonId();
+    const headless = registry.generateDaemonId();
+    registry.register({ id: nonHeadless, port: 8888, apiPort: null, workspace: "/repo-x", headless: false });
+    registry.register({ id: headless, port: 8889, apiPort: null, workspace: "/repo-y", headless: true });
+
+    const found = registry.findRunningDaemon(null);
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe(headless);
+    expect(found!.headless).toBe(true);
+  });
 });

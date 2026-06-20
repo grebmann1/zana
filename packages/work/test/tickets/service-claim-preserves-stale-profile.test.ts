@@ -80,7 +80,7 @@ describe("claimTicket — stale assigneeProfileId on profileless re-claim", () =
     // The guard skips the assignment, so the prior profile survives — it is
     // NOT cleared to null/undefined.
     expect(result.ticket.assigneeProfileId).toBe("coder-profile");
-  });
+  }, 30000); // first svc call in-file pays lazy require("@zana-ai/core") cost; generous timeout survives full-suite parallel contention
 
   it("persists the preserved profile to the store on a profileless re-claim", () => {
     const id = seed({ status: "rework", assigneeProfileId: "architect-profile" });

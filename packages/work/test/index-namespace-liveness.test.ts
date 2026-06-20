@@ -69,4 +69,21 @@ describe("@zana-ai/work dist barrel — sub-module liveness", () => {
     expect(schema).toBeTruthy();
     expect(Array.isArray(schema.ACTION_TYPES)).toBe(true);
   });
+
+  it("deliberation is a live namespace exposing its public functions", () => {
+    // The deliberation namespace is a re-export barrel (`require("./deliberation")`)
+    // and is the ONE sub-module the REPRESENTATIVE table above omits. index.test.ts
+    // only checks it with toBeTruthy(), which an empty `{}` from a broken require
+    // would still pass — so a dropped/mis-wired deliberation barrel slips through at
+    // the package-barrel level. Pin representative functions from across its own
+    // sub-modules (round-controller, synthesize, quorum, role-packs).
+    const { deliberation } = workIndex;
+    expect(deliberation, "deliberation should resolve to a live module").toBeTruthy();
+    for (const fnName of ["decide", "synthesize", "assembleCouncil", "listRolePacks"]) {
+      expect(
+        typeof deliberation[fnName],
+        `deliberation.${fnName} should be a function (barrel require wired correctly)`,
+      ).toBe("function");
+    }
+  });
 });

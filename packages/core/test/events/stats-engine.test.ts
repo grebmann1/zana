@@ -66,6 +66,26 @@ describe("computeOverview", () => {
     expect(computeOverview([]).ticketCompletionRate).toBe(0);
   });
 
+  // ticketCompletionRate (stats-engine.ts) is `completed / created` with NO
+  // clamp once created > 0 — unlike the `created > 0 ? … : 0` divide-by-zero
+  // guard. The sibling computeTicketFlow test pins that completions can exceed
+  // creations inside a stats window (a ticket created before the window opened
+  // can complete inside it), but the overview's rate is only ever exercised with
+  // completed <= created (1/3, 1/2). This pins the parallel edge: more
+  // completions than creations yields a rate ABOVE 1.0, not a value clamped to 1.
+  it("ticketCompletionRate can exceed 1.0 when completions outnumber creations", () => {
+    const events = [
+      makeEvent("ticket:completed"), // created outside the window
+      makeEvent("ticket:completed"),
+      makeEvent("ticket:created"),
+    ];
+    const ov = computeOverview(events);
+    expect(ov.ticketsCreated).toBe(1);
+    expect(ov.ticketsCompleted).toBe(2);
+    // 2 / 1 = 2 — unclamped, NOT floored to 1.0.
+    expect(ov.ticketCompletionRate).toBe(2);
+  });
+
   it("eventCount reflects total number of events regardless of type", () => {
     const events = [makeEvent("unknown:type"), makeEvent("agent:spawned", { agentId: "x" })];
     expect(computeOverview(events).eventCount).toBe(2);
@@ -280,6 +300,31 @@ describe("computeAgentTimeline", () => {
     // every bucket from termination onward is zero
     for (const b of buckets.slice(1)) expect(b.count).toBe(0);
   });
+
+  // Every timeline test above overrides bucketMs with 1000 (the empty/no-spawn
+  // cases return [] before the bucket loop), so computeAgentTimeline's DEFAULT
+  // bucket width (stats-engine.ts: `bucketMs = 30000`) is never exercised on a
+  // real timeline — yet that 30-second window is the granularity the activity
+  // chart renders at. computeThroughput has a sibling default-30000 test; the
+  // timeline's identical default is otherwise unpinned, so an accidental change
+  // to the bucket size would silently alter every rendered timeline and pass the
+  // whole suite. Stepping by the default 30000 from start=0 to end=60000 must
+  // yield exactly three buckets; a smaller default would explode the count.
+  it("uses a default 30000ms bucket window when bucketMs is omitted", () => {
+    // Last event ts=60000 > FROZEN_NOW (5000), so end = max(60000, now) = 60000,
+    // making the extent independent of the frozen clock for this assertion.
+    const events = [
+      { type: "agent:spawned",    payload: { agentId: "a1" }, timestamp: 0 },
+      { type: "agent:spawned",    payload: { agentId: "a2" }, timestamp: 30000 },
+      { type: "agent:terminated", payload: { agentId: "a1" }, timestamp: 60000 },
+    ];
+    // No bucketMs argument → default 30000. start=0, end=60000, step=30000.
+    expect(computeAgentTimeline(events)).toEqual([
+      { ts: 0, count: 1 },     // a1 active
+      { ts: 30000, count: 2 }, // a1 + a2 active
+      { ts: 60000, count: 1 }, // a1 terminated → a2 remains
+    ]);
+  });
 });
 
 // ─── computeTicketFlow ───────────────────────────────────────────────────────
@@ -393,6 +438,30 @@ describe("computeThroughput", () => {
     expect(computeThroughput(events)).toEqual([
       { ts: 0, count: 2 },
       { ts: 30000, count: 1 },
+    ]);
+  });
+
+  // Non-bucket-aligned span: the loop runs `ts <= end` stepping by bucketMs
+  // from start, so the last `ts` is the largest multiple of bucketMs at or
+  // below `end` — and `end` (the final tool event) lands inside that bucket's
+  // half-open window [ts, ts+bucketMs). Every existing case uses an end that is
+  // an exact multiple of bucketMs (1000/3000/30000) or start===end, so the
+  // misaligned tail is untested: a regression bounding the loop on `ts < end`
+  // (or counting with `<=` upper) would drop or mis-place the trailing event
+  // here yet pass the aligned suite. A last event at 2500 with 1000ms buckets
+  // must still be tallied in the [2000,3000) bucket — not dropped.
+  it("counts the trailing event when the span is not a multiple of bucketMs", () => {
+    const bucketMs = 1000;
+    const events = [
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Read" }, 0),
+      makeEvent("agent:hook", { hook_event_name: "PostToolUse", tool_name: "Edit" }, 2500),
+    ];
+    // start=0, end=2500 → ts = 0, 1000, 2000 (2000<=2500, 3000>2500 stops).
+    // The 2500 event falls in [2000, 3000) and must not be dropped.
+    expect(computeThroughput(events, bucketMs)).toEqual([
+      { ts: 0, count: 1 },
+      { ts: 1000, count: 0 },
+      { ts: 2000, count: 1 },
     ]);
   });
 

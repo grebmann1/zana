@@ -82,6 +82,28 @@ describe("appendEvent + queryEvents", () => {
     const results = store.queryEvents({}, 100);
     expect(results).toEqual([]);
   });
+
+  // queryEvents parses the NDJSON file line-by-line and wraps each JSON.parse in
+  // a try/catch that silently `continue`s on failure (store.ts lines 85-91). A
+  // single corrupt/truncated line — e.g. from a crash mid-append — must NOT throw
+  // and must NOT drop the surrounding well-formed events. The existing suite only
+  // exercises clean files; this pins the resilience invariant against a regression
+  // that lets one bad line poison an entire query.
+  it("skips malformed NDJSON lines and still returns the well-formed events", () => {
+    store.appendEvent(makeEvent({ type: "a:event", id: "1" }));
+    // Inject a corrupt line directly into the same NDJSON file, between two
+    // valid records, simulating a partial write / on-disk corruption.
+    const eventsFile = path.join(
+      workspaceContextTs.getProjectPaths().eventsDir,
+      "bus-events.ndjson",
+    );
+    fs.appendFileSync(eventsFile, "{ this is not valid json\n", "utf8");
+    store.appendEvent(makeEvent({ type: "b:event", id: "2" }));
+
+    const results = store.queryEvents({}, 100);
+    expect(results.length).toBe(2);
+    expect(results.map((e) => e.id)).toEqual(["1", "2"]);
+  });
 });
 
 // ─── queryEvents filtering ───────────────────────────────────────────────────

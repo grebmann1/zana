@@ -58,6 +58,22 @@ describe("buildTeamLeadDisallowedTools", () => {
     expect(result).not.toContain("Bash");
   });
 
+  it("orchestratorAllowedTools prevents adding a tool but does NOT remove a pre-existing disallow", () => {
+    // A per-team override saying the lead MAY use Write only skips the
+    // restrict-base loop's `add` step (line 104 `continue`); it cannot scrub a
+    // tool the base profile already explicitly disallows. So Write stays
+    // disallowed because it came from baseProfile.disallowedTools, not the loop.
+    const team = { name: "T", rules: { orchestratorAllowedTools: ["Write"] } };
+    const profile = { id: "orchestrator", allowedTools: ["Read"], disallowedTools: ["Write"] };
+    const result = buildTeamLeadDisallowedTools(team, profile);
+    expect(result).toContain("Write"); // base disallow wins over the override
+    // Edit/Bash are not allowed anywhere, so they are still added by the loop.
+    expect(result).toContain("Edit");
+    expect(result).toContain("Bash");
+    // No duplicate Write entry leaked through the Set.
+    expect(result.filter((t) => t === "Write")).toHaveLength(1);
+  });
+
   it("handles team with no rules property (Write/Edit/Bash added when not in allowedTools)", () => {
     // team.rules is undefined — optional chaining team.rules?.orchestratorAllowedTools
     // must not throw, and the function must fall back to adding Write/Edit/Bash.

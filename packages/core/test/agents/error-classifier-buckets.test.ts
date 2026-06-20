@@ -70,6 +70,21 @@ describe("classifySpawnError — ordering invariant", () => {
     // quota (402) is checked before transport (ECONNRESET)
     expect(classifySpawnError("402 Payment Required after ECONNRESET")).toBe("quota");
   });
+
+  // The rate_limit/transport adjacency is the only link in the cascade
+  // (auth → rate_limit → quota → transport → spawn) left unpinned by the cases
+  // above. rate_limit is checked before transport, so an API capacity signal
+  // (429/529/overloaded) arriving alongside a network/TLS code must bucket as
+  // rate_limit — attributing the failure to API backpressure rather than a
+  // transport blip. Both are transient (isTransientFailure stays true either
+  // way, asserted below), so the distinction is diagnostic, not retry-altering;
+  // pinning it guards against a regression that reorders the two checks.
+  it("prefers rate_limit over transport when a message mentions both 529 and a transport code", () => {
+    expect(classifySpawnError("529 Overloaded — also ECONNRESET")).toBe("rate_limit");
+    expect(classifySpawnError("429 too many requests after getaddrinfo ENOTFOUND")).toBe("rate_limit");
+    // Either bucket would be transient; the cascade order decides the label.
+    expect(isTransientFailure(classifySpawnError("529 Overloaded — also ECONNRESET"))).toBe(true);
+  });
 });
 
 describe("classifySpawnError — non-string error shapes", () => {

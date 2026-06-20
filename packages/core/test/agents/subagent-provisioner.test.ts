@@ -76,10 +76,42 @@ describe("renderRecipe / parseRecipe round-trip", () => {
     expect(inherited).toContain("tools: Read");
   });
 
+  it("omits the optional tools and model lines when the profile sets neither (inherit session defaults)", () => {
+    // Documented invariant (renderRecipe): tools/model are optional and are
+    // OMITTED rather than emitted empty when the caller didn't set them, so the
+    // subagent inherits the session defaults instead of being pinned to a value
+    // nobody chose. name/description/zana_stamp are always present.
+    const profile = { id: "scout", displayName: "Scout", description: "Looks around" };
+    const body = buildRecipeBody(profile);
+    const recipe = renderRecipe("t-scout", profile, body);
+
+    expect(recipe).not.toContain("tools:");
+    expect(recipe).not.toContain("model:");
+    expect(recipe).toContain("name: t-scout");
+    expect(recipe).toContain('description: "Looks around"');
+    expect(recipe).toMatch(/zana_stamp: [a-f0-9]{64}/);
+    // Still a well-formed recipe: parseRecipe recovers the stamp and exact body.
+    const parsed = parseRecipe(recipe);
+    expect(parsed.body).toBe(body);
+    expect(parsed.stamp).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it("collapses a multi-line description into a single YAML scalar", () => {
     const profile = { id: "x", description: "line one\nline two" };
     const recipe = renderRecipe("t__x", profile, buildRecipeBody(profile));
     expect(recipe).toContain('description: "line one line two"');
+  });
+
+  it("escapes embedded double-quotes so the description stays a valid YAML scalar", () => {
+    // An unescaped quote in the double-quoted YAML scalar would terminate the
+    // value early and corrupt the frontmatter. yamlInline must backslash-escape
+    // every `"` in the description.
+    const profile = { id: "x", description: 'Reviews "critical" code paths' };
+    const recipe = renderRecipe("t__x", profile, buildRecipeBody(profile));
+    expect(recipe).toContain('description: "Reviews \\"critical\\" code paths"');
+    // The frontmatter still parses as our recipe (stamp recovered, body intact).
+    const parsed = parseRecipe(recipe);
+    expect(parsed.stamp).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("bakes systemPrompt + appendSystemPrompt + extra blocks into the body", () => {
@@ -93,6 +125,27 @@ describe("renderRecipe / parseRecipe round-trip", () => {
 
   it("falls back to a Role: line when the profile carries no prompt text", () => {
     expect(buildRecipeBody({ id: "scout", displayName: "Scout" })).toBe("Role: Scout\n");
+  });
+
+  // buildRecipeBody trims each part and drops empties via `.filter(p => p.length > 0)`
+  // (subagent-provisioner.ts lines 83-87). The existing tests pin all-parts-present
+  // and the all-empty `Role:` fallback, but NOT the middle case: a whitespace-only
+  // systemPrompt must be DROPPED so the surviving appendSystemPrompt is not preceded
+  // by a stray blank line. A regression that removed the trim/filter would emit a body
+  // starting with "\n\n…" — which both reads wrong and breaks the stamp round-trip
+  // (parseRecipe strips exactly one separating newline). This pins that invariant.
+  it("drops whitespace-only parts so a surviving part has no leading blank line", () => {
+    const profile = {
+      id: "x",
+      systemPrompt: "   \n  \t ",          // whitespace only → filtered out
+      appendSystemPrompt: "Only this survives.",
+    };
+    const body = buildRecipeBody(profile);
+    // The single surviving part stands alone — no leading newline, no "\n\n" join gap.
+    expect(body).toBe("Only this survives.\n");
+    // And it round-trips: rendering then parsing recovers the exact body byte-for-byte.
+    const recipe = renderRecipe("t-x", profile, body);
+    expect(parseRecipe(recipe).body).toBe(body);
   });
 });
 
