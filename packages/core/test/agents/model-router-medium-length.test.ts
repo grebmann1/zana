@@ -36,4 +36,22 @@ describe("model-router — OPUS keyword at medium prompt lengths", () => {
     expect(prompt.length).toBeLessThanOrEqual(2000);
     expect(selectModel(prompt, { category: "code-review" })).toBe(TIERS.OPUS);
   });
+
+  // The mirror of the OPUS-keyword cases above: a mid-length prompt whose ONLY
+  // keyword is a HAIKU one (no Opus keyword, no category) must fall through to
+  // the SONNET default. The HAIKU branch is gated on `len < 200` (line 24), so
+  // at >=200 chars it cannot fire, and nothing else matches. The existing suite
+  // only asserts such a prompt is `not.toBe(HAIKU)` — it never pins the exact
+  // tier, so a regression that loosened the HAIKU gate to `len < 2000` (routing
+  // it to the cheapest tier) OR one that mis-routed it to OPUS would both slip
+  // through. This pins the precise SONNET landing for the mid-range HAIKU case.
+  it("routes a 200..2000-char HAIKU-keyword-only prompt to SONNET, not HAIKU or OPUS", () => {
+    const prompt = "list the open tasks " + "a".repeat(400);
+    expect(prompt.length).toBeGreaterThanOrEqual(200);
+    expect(prompt.length).toBeLessThanOrEqual(2000);
+    const result = selectModel(prompt);
+    expect(result).toBe(TIERS.SONNET);
+    expect(result).not.toBe(TIERS.HAIKU);
+    expect(result).not.toBe(TIERS.OPUS);
+  });
 });

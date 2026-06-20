@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { lazyRequire } from "@zana-ai/contracts";
+import type { IProfileStore, IEventBus } from "@zana-ai/contracts";
 function _core() { return require("@zana-ai/core"); }
 function ZANA_DIR() { return _core().config.ZANA_DIR; }
 
@@ -16,10 +17,12 @@ function _gateRouterWrite(operation, target) {
     throw new ErrCtor({ operation, path: target });
   }
 }
-type EventBusService = typeof import("@zana-ai/core/dist/src/events/service");
-type ProfileStoreModule = typeof import("@zana-ai/core/dist/src/agents/profile-store");
-const eventBus = lazyRequire<EventBusService>(() => require("@zana-ai/core").events.service);
-const profileStore = lazyRequire<ProfileStoreModule>(() => require("@zana-ai/core").agents.profileStore);
+// Consume the agent/profile + event surfaces through the published
+// @zana-ai/contracts interfaces, not `typeof import("@zana-ai/core/dist/src/…")`
+// type-aliases that bind to core's internal file layout. We only emit on the
+// bus and read/list profiles here — the minimal contracts cover it exactly.
+const eventBus = lazyRequire<IEventBus>(() => require("@zana-ai/core").events.service);
+const profileStore = lazyRequire<IProfileStore>(() => require("@zana-ai/core").agents.profileStore);
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 

@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isClaudeHost } from "@zana-ai/core/dist/src/host/detect.js";
 function _config() { return require("@zana-ai/core").config; }
+// Reach host detection via the package root (core re-exports it as `host`),
+// not a "@zana-ai/core/dist/src/..." deep import that binds to internal layout.
+function isClaudeHost(): boolean { return require("@zana-ai/core").host.isClaudeHost(); }
 
 export const HOOK_EVENTS = [
   "SessionStart",

@@ -20,13 +20,23 @@
 //
 // No real Claude, no real SQLite, no real spawns.
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
 let tmpDir: string | null = null;
 let watcher: any = null;
+
+// Warm the heavy @zana-ai/work ↔ @zana-ai/core require-cycle ONCE, off the
+// per-test clock. The first cold import of this graph can exceed the default
+// 5s test timeout under full-suite parallel CPU contention; pre-loading it
+// here (with a generous hook budget) keeps each test's own import a cache hit
+// so the 5s budget covers only the ~300ms debounce logic it actually exercises.
+beforeAll(async () => {
+  await import("@zana-ai/work/src/tickets/watcher.ts");
+  await import("@zana-ai/core");
+}, 60_000);
 
 function makeStubService(ticket: any, opts: { failInProgress?: boolean } = {}) {
   const calls: any[] = [];

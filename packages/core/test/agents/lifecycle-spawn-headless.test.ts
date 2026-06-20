@@ -152,6 +152,25 @@ describe("spawnHeadlessAgent — stdout stream-json parsing", () => {
     expect(agent.numTurns).toBe(3);
   });
 
+  it("maps usage.cache_creation_input_tokens to agent.tokensCacheWrite", () => {
+    // The sibling usage fields are pinned above, but the cache-WRITE mapping
+    // (usage.cache_creation_input_tokens -> agent.tokensCacheWrite) was the one
+    // field never asserted. A regression that dropped or renamed it would have
+    // gone unnoticed.
+    lastChild.stdout.emit(
+      "data",
+      Buffer.from(
+        JSON.stringify({
+          type: "result",
+          result: "done",
+          usage: { cache_creation_input_tokens: 17 },
+        }) + "\n",
+      ),
+    );
+
+    expect(getAgent(agentId).tokensCacheWrite).toBe(17);
+  });
+
   it("INVARIANT: streaming assistant text sets lastAssistantText but NOT result", () => {
     lastChild.stdout.emit(
       "data",

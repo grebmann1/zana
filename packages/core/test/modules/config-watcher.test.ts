@@ -100,4 +100,52 @@ describe("config watcher", () => {
     expect(removed).not.toHaveBeenCalled(); // disposed listener stays silent
     expect(kept).toHaveBeenCalledTimes(1); // surviving listener still fires
   });
+
+  // startWatching() guards against double-start with `if (pollTimer) return`, so
+  // a second call is a no-op rather than spawning a second setInterval. Without
+  // that guard the second start would overwrite `pollTimer`, orphaning the first
+  // interval — a leaked poller that stopWatching() can never clear and that keeps
+  // mutating `currentConfig` after the watcher is supposed to be stopped. This
+  // pins idempotency: after start→start→stop, a later on-disk change is NOT
+  // observed (currentConfig stays put), proving exactly one cancellable timer
+  // existed. The existing suite only ever starts the watcher once.
+  it("startWatching() is idempotent: a single stop fully halts even after a double start", () => {
+    vi.useFakeTimers();
+    cfg.startWatching();
+    cfg.startWatching(); // must be a no-op (guarded), not a second leaked interval
+    cfg.stopWatching(); // one stop must cancel the one and only timer
+
+    // A leaked second interval would still be polling and would pick this up.
+    writeFileSync(cfgPath, JSON.stringify({ modules: { zeta: { enabled: false } } }), "utf8");
+    vi.advanceTimersByTime(4000);
+
+    // Fully stopped: the on-disk change is never observed in memory.
+    expect(cfg.get().modules).toEqual({});
+  });
+
+  // startWatching() wraps each listener in try/catch: a throwing listener must
+  // not abort the notification loop, and the error is reported to stderr rather
+  // than propagated. This pins that resilience invariant — a single buggy
+  // listener cannot silence the others or crash the poll cycle.
+  it("isolates a throwing listener: others still fire and the error is logged to stderr", () => {
+    vi.useFakeTimers();
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const boom = vi.fn(() => {
+      throw new Error("listener kaboom");
+    });
+    const after = vi.fn();
+    cfg.onConfigChanged(boom); // registered first so it throws mid-loop
+    cfg.onConfigChanged(after); // must still run despite the prior throw
+    cfg.startWatching();
+
+    writeFileSync(cfgPath, JSON.stringify({ modules: { eps: { enabled: false } } }), "utf8");
+    expect(() => vi.advanceTimersByTime(2000)).not.toThrow(); // poll survives
+
+    expect(boom).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledTimes(1); // not short-circuited by the throw
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("listener kaboom"),
+    );
+    stderrSpy.mockRestore();
+  });
 });

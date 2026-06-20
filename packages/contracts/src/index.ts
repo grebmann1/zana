@@ -31,3 +31,8 @@ export * from "./config";
 // top level so `import { createForWorkspace } from "@zana-ai/contracts"` works
 // alongside the `import * as workspaceContext` (subpath) namespace style.
 export * from "./workspace-context";
+
+// Service contracts (type-only): the interfaces every package can depend on
+// without depending on an implementation. See packages/contracts/src/services
+// and docs/architecture-decoupling-plan.md.
+export * from "./services";

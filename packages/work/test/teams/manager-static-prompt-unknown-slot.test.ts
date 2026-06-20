@@ -70,4 +70,35 @@ describe("manager — static prompt drops a slot whose profile does not resolve"
     expect(augmented.appendSystemPrompt).toContain("Coder");
     expect(augmented.appendSystemPrompt).not.toContain("ghost");
   });
+
+  it("still counts the unresolved slot's quantity in the (N total slots) header", () => {
+    // totalSlots = Σ slot.quantity over ALL slots (manager.ts:124), computed
+    // BEFORE the worker-list filter drops unresolvable profiles. So an
+    // unresolved slot inflates the header count even though it renders no
+    // roster line: here 1 (coder) + 1 (ghost) = 2 total slots, but only the
+    // Coder line is listed. This count/roster asymmetry is intentional and
+    // otherwise unverified. (Quantity stays 1 so no "Per-role caps" line is
+    // emitted — that path echoes the raw profileId via the `|| s.profileId`
+    // fallback, which is a separate behavior.)
+    (teamStore.getTeam as ReturnType<typeof vi.fn>).mockReturnValue({
+      id: "team-unknown-slot-count", name: "Inflated Header", orchestratorProfileId: "orchestrator",
+      workerProfileIds: [],
+      slots: [{ profileId: "coder", quantity: 1 }, { profileId: "ghost", quantity: 1 }],
+    });
+    getProfileSpy.mockImplementation((id: string) => {
+      if (id === "orchestrator") return { id: "orchestrator", displayName: "Orchestrator", appendSystemPrompt: "", allowedTools: ["Read"], disallowedTools: [] };
+      if (id === "coder") return { id: "coder", displayName: "Coder", description: "Writes code", icon: "🧑‍💻" };
+      return null; // "ghost" is unresolvable
+    });
+
+    const result = manager.startTeam("team-unknown-slot-count", { headless: true });
+    expect(result.ok).toBe(true);
+
+    const augmented = spawnSpy.mock.calls.at(-1)![0] as any;
+    // Header counts every slot quantity (1 + 1), independent of resolvability.
+    expect(augmented.appendSystemPrompt).toContain("(2 total slots)");
+    // ...yet only the resolvable worker is rendered in the roster.
+    expect(augmented.appendSystemPrompt).toContain("Coder");
+    expect(augmented.appendSystemPrompt).not.toContain("ghost");
+  });
 });

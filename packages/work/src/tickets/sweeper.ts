@@ -15,6 +15,7 @@
  */
 
 import { lazyRequire } from "@zana-ai/contracts";
+import type { IAgentManager } from "@zana-ai/contracts";
 
 type Agent = { id: string; state: string };
 type Ticket = {
@@ -30,9 +31,9 @@ type StatusUpdateResult = { ok?: boolean; error?: string; ticket?: Ticket };
 interface ModuleConfigShape {
   get(): { system?: any } | null;
 }
-interface AgentManagerShape {
-  listAgents(): Agent[];
-}
+// Agent registry is consumed through the published IAgentManager contract
+// (@zana-ai/contracts), not an ad-hoc local shape — so work depends on the
+// interface, not core's internal module layout. We only call listAgents() here.
 interface BusShape {
   emit(type: string, payload: any): void;
 }
@@ -43,12 +44,16 @@ interface TicketServiceShape {
 }
 
 const moduleConfig = lazyRequire<ModuleConfigShape>(() => require("@zana-ai/core").modules.config);
-const agentManager = lazyRequire<AgentManagerShape>(() => require("@zana-ai/core").agents.manager);
+const agentManager = lazyRequire<IAgentManager>(() => require("@zana-ai/core").agents.manager);
 const coreEvents = lazyRequire<{ bus: BusShape }>(() => require("@zana-ai/core").events);
 // `service` lives in this same package — direct relative require, no cycle.
 function _ticketSvc(): TicketServiceShape { return require("./service"); }
 
 const ELIGIBLE_STATUSES = ["in-progress", "review", "rework", "blocked"] as const;
+
+// Mirrors service.ts HUMAN_GATE_LABEL — a ticket carrying this label is parked
+// on a human checkpoint and must not be auto-cancelled by the staleness sweep.
+const HUMAN_GATE_LABEL = "awaiting-decision";
 
 const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;        // 1 hour
 const DEFAULT_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -154,6 +159,16 @@ export function sweepOnce(): { swept: SweepDecision[]; skipped: number; total: n
       try {
         const ageMs = nowMs - lastActivityMs(ticket);
         if (ageMs <= cfg.staleThresholdMs) { skipped++; continue; }
+
+        // A ticket parked on a human checkpoint (`awaiting-decision`) is
+        // intentionally waiting on a person, not abandoned — most often a
+        // crash-recovered ticket forced to `blocked` by recoverStuckTicket.
+        // Auto-cancelling it would silently defeat the human checkpoint, so
+        // skip it and let the human resolve (or explicitly cancel) it.
+        if (Array.isArray(ticket.labels) && ticket.labels.includes(HUMAN_GATE_LABEL)) {
+          skipped++;
+          continue;
+        }
 
         let reason: SweepReason;
         if (status === "blocked") {

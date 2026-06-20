@@ -142,6 +142,25 @@ describe("manager — onAgentsChange auto-checkpoint of finished workers", () =>
     vi.useRealTimers();
   });
 
+  it("does NOT checkpoint a worker that is still active (only terminal states are recorded)", () => {
+    // Guards the `state === "terminated" || state === "errored"` condition: an
+    // in-flight worker must never be snapshotted as a completed agent, or its
+    // partial result would be persisted and it would be skipped (via the
+    // checkpointedAgents Set) once it genuinely finishes.
+    const orch = bootTeam("team-ac-active", "orch-ac-active");
+    listAgentsSpy.mockReturnValue([
+      { id: orch, parentAgentId: null, state: "active" },
+      { id: "live", parentAgentId: orch, state: "active", profileId: "coder", profileName: "Coder", result: "" },
+    ]);
+
+    onAgentsChange();
+
+    expect(checkpointStore.addCompletedAgent).not.toHaveBeenCalled();
+    // Team stays running because the orchestrator has not terminated.
+    expect(manager.getTeamStatus("team-ac-active")!.status).toBe("running");
+    vi.useRealTimers();
+  });
+
   it("flips the team to 'completed' and marks the checkpoint completed when the orchestrator terminates", () => {
     const orch = bootTeam("team-ac-orch", "orch-ac-orch");
     listAgentsSpy.mockReturnValue([{ id: orch, parentAgentId: null, state: "terminated" }]);

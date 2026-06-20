@@ -41,4 +41,14 @@ describe("@zana-ai/contracts — public barrel surface", () => {
     );
     expect(typeof (contracts as any).WorkspaceNotInitializedError).toBe("function");
   });
+
+  // Service contracts (Phase 1 of the decoupling plan). These are type-only
+  // except for the one runtime narrowing helper — they must be reachable from
+  // the package root so packages can depend on the contract, not an impl.
+  it("re-exports the service-contracts narrowing helper", () => {
+    expect(typeof (contracts as any).isServiceError).toBe("function");
+    expect((contracts as any).isServiceError({ error: "boom" })).toBe(true);
+    expect((contracts as any).isServiceError({ ok: true })).toBe(false);
+    expect((contracts as any).isServiceError(null)).toBe(false);
+  });
 });

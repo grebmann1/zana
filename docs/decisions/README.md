@@ -60,3 +60,5 @@ add a new ADR and mark the old one `Superseded by ADR-XXXX`.
 | [0008](0008-ticket-automation-pipeline.md) | The ticket-automation pipeline (watcher rules, verdicts, escalation) | Accepted |
 | [0009](0009-freeze-swarm-goap-vector-memory.md) | Freeze multi-daemon swarm, GOAP planner, and vector-memory | Accepted |
 | [0010](0010-contracts-base-layer.md) | Extract the dependency-free base layer into @zana-ai/contracts | Accepted |
+| [0011](0011-ticket-hierarchy-timeline-checkpoint-recovery.md) | Ticket epics, derived timeline, human checkpoints, and crash recovery | Accepted |
+| [0012](0012-execution-strategy-claude-subagents.md) | Optional Claude Code subagents as a team execution strategy | Accepted |

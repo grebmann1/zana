@@ -77,7 +77,7 @@ describe("completeTicket — attestation with evidence", () => {
 
     const completedEntry = result.ticket.audit.find((a: any) => a.action === "completed");
     expect(completedEntry.details.evidence).toEqual(evidence);
-  });
+  }, 30000); // first svc call in-file pays lazy require("@zana-ai/core") cost; generous timeout survives full-suite parallel contention
 
   it("reconciles a wrongly-failed ticket straight from rework without a rework round-trip", () => {
     // The whole point of defect #3: rework → done is illegal via updateStatus,

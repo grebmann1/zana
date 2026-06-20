@@ -199,4 +199,14 @@ describe("scheduling/store", () => {
     store.saveScheduleYaml({ id: "upd3", every: "1h", history: { enabled: false } });
     expect(store.updateRunResult("upd3", "any-agent", { status: "done" })).toBeNull();
   });
+
+  it("updateRunResult returns null (no throw, no file) when history is enabled but empty", () => {
+    // History enabled by default, but appendRunResult was never called — so
+    // getRunHistory() returns []. This hits the `history.length === 0` guard,
+    // a distinct early-return from both the disabled and agentId-not-found paths.
+    store.saveScheduleYaml({ id: "upd4", every: "1h" });
+    expect(store.updateRunResult("upd4", "any-agent", { status: "done" })).toBeNull();
+    // The guard must not materialize a history file as a side effect.
+    expect(existsSync(join(schedulerDir(), "upd4.history.json"))).toBe(false);
+  });
 });

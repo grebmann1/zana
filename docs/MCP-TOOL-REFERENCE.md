@@ -91,6 +91,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 - [`zana_swarm_stop`](#zana_swarm_stop)
 - [`zana_team_status`](#zana_team_status)
 - [`zana_ticket_add_to_sprint`](#zana_ticket_add_to_sprint)
+- [`zana_ticket_children`](#zana_ticket_children)
 - [`zana_ticket_claim`](#zana_ticket_claim)
 - [`zana_ticket_claim_next`](#zana_ticket_claim_next)
 - [`zana_ticket_comment`](#zana_ticket_comment)
@@ -100,6 +101,9 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 - [`zana_ticket_get`](#zana_ticket_get)
 - [`zana_ticket_list`](#zana_ticket_list)
 - [`zana_ticket_list_ready`](#zana_ticket_list_ready)
+- [`zana_ticket_request_human`](#zana_ticket_request_human)
+- [`zana_ticket_resolve_human`](#zana_ticket_resolve_human)
+- [`zana_ticket_timeline`](#zana_ticket_timeline)
 - [`zana_ticket_update`](#zana_ticket_update)
 - [`zana_ticket_update_status`](#zana_ticket_update_status)
 - [`zana_ticket_verdict`](#zana_ticket_verdict)
@@ -2560,8 +2564,25 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:204`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:206`
 - Handler: `packages/work/src/tickets/service.ts:addTicketToSprint`
+
+---
+
+## zana_ticket_children
+
+**Description:** List the direct child tickets of an epic/parent ticket. Children are linked via parentId at create time or with zana_ticket_edit. When every child reaches done/cancelled, the parent epic auto-completes.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| ticketId | string | yes | Parent/epic ticket ID |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:228`
 
 ---
 
@@ -2618,7 +2639,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:48`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:49`
 - Handler: `packages/work/src/tickets/service.ts:claimTicket`
 
 **Common pitfalls:**
@@ -2642,7 +2663,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:60`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:61`
 
 ---
 
@@ -2673,7 +2694,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:99`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:100`
 - Handler: `packages/work/src/tickets/service.ts:addComment`
 
 **Common pitfalls:**
@@ -2736,7 +2757,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:111`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:112`
 - Handler: `packages/work/src/tickets/service.ts:completeTicket`
 
 **Common pitfalls:**
@@ -2757,6 +2778,7 @@ _No input parameters._
 | blockedBy | array<string> | no | IDs of tickets blocking this one |
 | description | string | no | Detailed description of the work |
 | labels | array<string> | no | Tags/labels |
+| parentId | string | no | Parent/epic ticket ID. When all of an epic's children reach done/cancelled, the epic auto-completes. |
 | priority | string | no | `critical` \| `high` \| `medium` \| `low` — Priority level |
 | sprintId | string | no | Sprint to add this ticket to |
 | title | string | yes | Short title for the ticket |
@@ -2821,6 +2843,7 @@ _No input parameters._
 |---|---|---|---|
 | description | string | no | New description (optional) |
 | labels | array<string> | no | New labels array (replaces existing) |
+| parentId | string | no | Re-parent under an epic (optional). Pass empty string / null to detach to a top-level ticket. |
 | priority | string | no | `critical` \| `high` \| `medium` \| `low` — New priority (optional) |
 | sprintId | string | no | Move to sprint (optional) |
 | ticketId | string | yes | Ticket ID to edit |
@@ -2869,7 +2892,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:133`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:134`
 - Handler: `packages/work/src/tickets/service.ts:updateTicket`
 
 **Common pitfalls:**
@@ -2928,7 +2951,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:39`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:40`
 - Handler: `packages/work/src/tickets/db.ts:_getTicket`
 
 **Common pitfalls:**
@@ -2991,7 +3014,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:26`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:27`
 - Handler: `packages/work/src/tickets/db.ts:_listTickets`
 
 **Common pitfalls:**
@@ -3014,7 +3037,62 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:72`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:73`
+
+---
+
+## zana_ticket_request_human
+
+**Description:** Raise a human checkpoint on a ticket: park it (it stops auto-implementing) and emit a 'needs human' signal so a human is proactively alerted. Use when a decision, approval, or judgement is required before automation can safely continue. Idempotent.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| kind | string | no | Checkpoint kind: 'decision' (default), 'approval', 'recovery' |
+| reason | string | yes | Why a human is needed (shown in the alert) |
+| ticketId | string | yes |  |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:238`
+
+---
+
+## zana_ticket_resolve_human
+
+**Description:** Resolve a human checkpoint: clears the gate and optionally releases the ticket. resolution='approve' re-queues it (→ backlog) for dispatch; 'reject' cancels it; 'release' (default) just clears the gate and leaves status unchanged.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| note | string | no | Optional note recorded on the audit trail |
+| resolution | string | no | `approve` \| `reject` \| `release` — approve → re-queue, reject → cancel, release → just clear the gate |
+| ticketId | string | yes |  |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:252`
+
+---
+
+## zana_ticket_timeline
+
+**Description:** Get the stage-history timeline for a ticket: the ordered stages it passed through (backlog → in-progress → review → …), when it entered each, who moved it, and how long it dwelled (durationMs). Includes rollup metrics: reworkBounces (how many times it cycled back to rework) and totalMs (cycle time). Derived from the audit trail.
+
+**Input:**
+
+| Field | Type | Required | Enum / Notes |
+|---|---|---|---|
+| ticketId | string | yes |  |
+
+**Output shape:** TODO — not yet documented. Read the handler before guessing field names.
+
+**Source:**
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:218`
 
 ---
 
@@ -3077,7 +3155,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:151`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:153`
 - Handler: `packages/core/src/agents/manager.ts case 'ticket_update'`
 
 **Common pitfalls:**
@@ -3142,7 +3220,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:83`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:84`
 - Handler: `packages/work/src/tickets/service.ts:updateStatus`
 
 **Common pitfalls:**
@@ -3167,7 +3245,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:186`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:188`
 
 ---
 

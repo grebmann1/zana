@@ -136,6 +136,16 @@ describe("parseJudgeOutput", () => {
     expect(r!.verdict).toBe("approve");
     expect(r!.rationale).toBe("VERDICT: approve");
   });
+
+  it("matches the VERDICT token case-insensitively and normalizes the verdict to lowercase", () => {
+    // Invariant (judge.ts): the regex carries the /i flag and the captured
+    // verdict is lowercased, so a model that emits mixed/upper case
+    // ("Verdict: REWORK") still parses to the canonical lowercase token.
+    const r = parseJudgeOutput("Verdict: REWORK\nPlease tighten the auth checks.");
+    expect(r).not.toBeNull();
+    expect(r!.verdict).toBe("rework");
+    expect(r!.rationale).toBe("Please tighten the auth checks.");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -43,7 +43,7 @@ function createDatabase(): any {
       reviewPhase TEXT, reworkCount INTEGER DEFAULT 0, sprintId TEXT,
       labels TEXT, blockedBy TEXT, type TEXT, comments TEXT, audit TEXT,
       createdBy TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL,
-      closedAt TEXT, resultSummary TEXT
+      closedAt TEXT, resultSummary TEXT, parentId TEXT
     );
     CREATE TABLE sprints (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, teamId TEXT, daemonId TEXT,

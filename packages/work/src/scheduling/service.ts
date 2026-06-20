@@ -4,8 +4,16 @@ import * as schedulerStore from "./store";
 import { pickBackend, computeNextRunAt } from "./triggers";
 import { everShorthandToMs } from "./yaml-format";
 import { validateSchedule, ValidationIssue } from "./schema";
+import type { IAgentManager } from "@zana-ai/contracts";
 
 function _log() { return require("@zana-ai/core").util.logger.getLogger("scheduler"); }
+
+// Read live agent state through the published IAgentManager contract rather than
+// an untyped `require("@zana-ai/core").agents.manager` — so the overlap gate
+// depends on the interface, not core's concrete manager. (Spawn sites below
+// still use the concrete surface: spawnHeadlessAgent/handleOrchestratorCommand
+// are deliberately outside the minimal read contract.)
+function _agentManagerRead(): IAgentManager { return require("@zana-ai/core").agents.manager; }
 
 function logWarnings(scheduleId: string, issues: ValidationIssue[]) {
   for (const w of issues) {
@@ -69,7 +77,7 @@ export function sweepInflightAgents(): number {
 // overlap-skip gate can be exercised without spawning a real subprocess.
 let agentStateResolver: (agentId: string) => string | undefined = (agentId) => {
   try {
-    return require("@zana-ai/core").agents.manager.getAgent(agentId)?.state;
+    return _agentManagerRead().getAgent(agentId)?.state;
   } catch {
     return undefined;
   }
@@ -83,7 +91,7 @@ export function _setAgentStateResolverForTest(
     resolver ??
     ((agentId) => {
       try {
-        return require("@zana-ai/core").agents.manager.getAgent(agentId)?.state;
+        return _agentManagerRead().getAgent(agentId)?.state;
       } catch {
         return undefined;
       }
@@ -131,7 +139,7 @@ function attachTerminationListener(bus: any, eventName: string) {
     if (!tracked) return;
     inflightAgents.delete(evt.agentId);
     try {
-      const agentManager = require("@zana-ai/core").agents.manager;
+      const agentManager = _agentManagerRead();
       const agent = agentManager.getAgent(evt.agentId);
       const resultText: string =
         (agent?.result as string) ||

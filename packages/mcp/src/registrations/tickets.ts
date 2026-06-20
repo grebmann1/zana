@@ -19,6 +19,7 @@ export const tickets: ToolDomain = {
           labels: { type: "array", items: { type: "string" }, description: "Tags/labels" },
           blockedBy: { type: "array", items: { type: "string" }, description: "IDs of tickets blocking this one" },
           sprintId: { type: "string", description: "Sprint to add this ticket to" },
+          parentId: { type: "string", description: "Parent/epic ticket ID. When all of an epic's children reach done/cancelled, the epic auto-completes." },
         },
         required: ["title"],
       },
@@ -144,6 +145,7 @@ export const tickets: ToolDomain = {
           labels: { type: "array", items: { type: "string" }, description: "New labels array (replaces existing)" },
           type: { type: "string", enum: ["bug", "feature", "chore", "spike"], description: "Ticket type (optional)" },
           sprintId: { type: "string", description: "Move to sprint (optional)" },
+          parentId: { type: "string", description: "Re-parent under an epic (optional). Pass empty string / null to detach to a top-level ticket." },
         },
         required: ["ticketId"],
       },
@@ -213,6 +215,54 @@ export const tickets: ToolDomain = {
         required: ["ticketId", "sprintId"],
       },
     },
+    {
+      name: "zana_ticket_timeline",
+      description:
+        "Get the stage-history timeline for a ticket: the ordered stages it passed through (backlog → in-progress → review → …), when it entered each, who moved it, and how long it dwelled (durationMs). Includes rollup metrics: reworkBounces (how many times it cycled back to rework) and totalMs (cycle time). Derived from the audit trail.",
+      inputSchema: {
+        type: "object",
+        properties: { ticketId: { type: "string" } },
+        required: ["ticketId"],
+      },
+    },
+    {
+      name: "zana_ticket_children",
+      description:
+        "List the direct child tickets of an epic/parent ticket. Children are linked via parentId at create time or with zana_ticket_edit. When every child reaches done/cancelled, the parent epic auto-completes.",
+      inputSchema: {
+        type: "object",
+        properties: { ticketId: { type: "string", description: "Parent/epic ticket ID" } },
+        required: ["ticketId"],
+      },
+    },
+    {
+      name: "zana_ticket_request_human",
+      description:
+        "Raise a human checkpoint on a ticket: park it (it stops auto-implementing) and emit a 'needs human' signal so a human is proactively alerted. Use when a decision, approval, or judgement is required before automation can safely continue. Idempotent.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ticketId: { type: "string" },
+          reason: { type: "string", description: "Why a human is needed (shown in the alert)" },
+          kind: { type: "string", description: "Checkpoint kind: 'decision' (default), 'approval', 'recovery'" },
+        },
+        required: ["ticketId", "reason"],
+      },
+    },
+    {
+      name: "zana_ticket_resolve_human",
+      description:
+        "Resolve a human checkpoint: clears the gate and optionally releases the ticket. resolution='approve' re-queues it (→ backlog) for dispatch; 'reject' cancels it; 'release' (default) just clears the gate and leaves status unchanged.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          ticketId: { type: "string" },
+          resolution: { type: "string", enum: ["approve", "reject", "release"], description: "approve → re-queue, reject → cancel, release → just clear the gate" },
+          note: { type: "string", description: "Optional note recorded on the audit trail" },
+        },
+        required: ["ticketId"],
+      },
+    },
   ],
 
   handlers: {
@@ -224,6 +274,7 @@ export const tickets: ToolDomain = {
         labels: args.labels,
         blockedBy: args.blockedBy,
         sprintId: args.sprintId,
+        parentId: args.parentId,
         createdBy: env("ZANA_TERMINAL_ID", "agent"),
       }),
     zana_ticket_list: async (args, { callCore }) => {
@@ -333,6 +384,7 @@ export const tickets: ToolDomain = {
         labels: args.labels,
         type: args.type,
         sprintId: args.sprintId,
+        parentId: args.parentId,
         updatedBy: env("ZANA_TERMINAL_ID", "agent"),
       }),
     zana_ticket_verdict: (args, { callCore }) =>
@@ -345,5 +397,33 @@ export const tickets: ToolDomain = {
       }),
     zana_ticket_add_to_sprint: (args, { callCore }) =>
       callCore("ticket_add_to_sprint", { ticketId: args.ticketId, sprintId: args.sprintId }),
+    zana_ticket_timeline: (args, { callCore }) =>
+      callCore("ticket_timeline", { ticketId: args.ticketId }),
+    zana_ticket_children: async (args, { callCore }) => {
+      const children = await callCore("ticket_children", { ticketId: args.ticketId });
+      if (!Array.isArray(children)) return children;
+      return children.map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        assigneeId: t.assigneeId,
+        parentId: t.parentId,
+      }));
+    },
+    zana_ticket_request_human: (args, { callCore }) =>
+      callCore("ticket_request_human", {
+        ticketId: args.ticketId,
+        reason: args.reason,
+        kind: args.kind,
+        requestedBy: env("ZANA_TERMINAL_ID", "agent"),
+      }),
+    zana_ticket_resolve_human: (args, { callCore }) =>
+      callCore("ticket_resolve_human", {
+        ticketId: args.ticketId,
+        resolution: args.resolution,
+        note: args.note,
+        resolvedBy: env("ZANA_TERMINAL_ID", "agent"),
+      }),
   },
 };

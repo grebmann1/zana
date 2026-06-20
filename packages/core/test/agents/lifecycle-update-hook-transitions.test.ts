@@ -112,6 +112,24 @@ describe("updateAgentFromHook — state transitions on a matching agent", () => 
     updateAgentFromHook({ zana_terminal_id: terminalId, hook_event_name: "Stop" });
     expect(getAgent(agentId).lastActivity).toBeGreaterThan(0);
   });
+
+  it("an unrecognized event bumps lastActivity but leaves state/lastAction untouched", () => {
+    // None of the if/else branches match an unknown event (e.g. "Notification"),
+    // so the default path must NOT mutate the agent's state or lastAction — only
+    // lastActivity is stamped. A fresh headless agent starts active with the
+    // "Running headless..." stamp; both must survive the unhandled event.
+    const before = getAgent(agentId);
+    expect(before.state).toBe("active");
+    expect(before.lastAction).toBe("Running headless...");
+    before.lastActivity = 0; // force a stale value to prove it gets refreshed
+
+    updateAgentFromHook({ zana_terminal_id: terminalId, hook_event_name: "Notification" });
+
+    const after = getAgent(agentId);
+    expect(after.state).toBe("active"); // unchanged — no branch matched
+    expect(after.lastAction).toBe("Running headless..."); // unchanged
+    expect(after.lastActivity).toBeGreaterThan(0); // still refreshed
+  });
 });
 
 describe("updateAgentFromHook — AGENT_HOOK emission for a matching agent", () => {

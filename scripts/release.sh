@@ -55,8 +55,9 @@ npm run build:runtime
 
 # --- publish in dependency order ---------------------------------------------
 # Each package's internal @zana-ai/* deps must already exist on the registry
-# at the version being published, so leaves go first.
-PKGS=(core swarm intelligence extras work server mcp)
+# at the version being published, so leaves go first. `contracts` is the
+# dependency-free base layer (ADR 0010) — it MUST publish before any consumer.
+PKGS=(contracts core swarm intelligence extras work server mcp)
 
 VERSION="$(node -e "console.log(require('./packages/core/package.json').version)")"
 echo "==> Releasing @zana-ai/* @ ${VERSION}"

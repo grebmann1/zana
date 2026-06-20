@@ -337,6 +337,24 @@ describe("auto-judge — end-to-end through deliberateHandler", () => {
     expect(judgeCalled).toBe(false);
   });
 
+  it("adjudicateEscalation throws (leaving state untouched) on an unknown deliberation id", async () => {
+    // Guard rail: the loop only calls adjudicateEscalation after reaching a
+    // terminal-escalation state, but the function defends its own contract.
+    // A missing id resolves to null in loadDeliberation → it must throw rather
+    // than spawn a judge against nothing. spawnOneShot must never be reached.
+    let spawnCalled = false;
+    await expect(
+      adjudicateEscalation("delib-does-not-exist", {
+        getProfile: () => profileFor("judge"),
+        spawnOneShot: async () => {
+          spawnCalled = true;
+          return { output: "VERDICT: approve", exitCode: 0 };
+        },
+      }),
+    ).rejects.toThrow(/not found/);
+    expect(spawnCalled).toBe(false);
+  });
+
   it("council-settled deliberation has verdictSource=council (not judge)", async () => {
     const state = { round: 1 };
     const script: Record<number, Record<string, any>> = {

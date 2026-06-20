@@ -99,6 +99,12 @@ let inFlightSpawns = new Map();
 // wall-clock backstop. Separate from inFlightSpawns because EVERY spawn holds a
 // slot, but only expectVerdict rules are tracked for applyVerdict.
 let slotByAgent = new Map<string, () => void>();
+// Map agentId → ticketId for EVERY ticket-driven spawn (not just verdict ones).
+// When an agent dies with reason="errored" we use this to recover the stranded
+// ticket promptly, rather than waiting ~24h for the ticket-sweeper. Cleared on
+// terminate. Separate from inFlightSpawns (verdict-only) and slotByAgent
+// (concurrency accounting).
+let ticketByAgent = new Map<string, string>();
 // Short-lived dedup keyed by `(ruleKey, eventType, ticketId, oldStatus, newStatus)`
 // to swallow duplicate emits within DEDUP_TTL_MS.
 let recentlyFired = new Map<string, number>();
@@ -164,6 +170,36 @@ export function init({ ticketsDirectory, spawnAgent, configPath }) {
       slotByAgent.delete(msg.agentId);
       releaseSlot();
     }
+    // Crash recovery (prompt path; the ticket-sweeper is the slow 24h backstop).
+    // If this agent died with an error (crash / OOM / exhausted transient
+    // retries) and it owned a ticket still in flight, force that ticket to
+    // blocked + raise a human checkpoint instead of leaving it stranded in
+    // in-progress. `completed`/`killed`/`daemon-restart` are NOT failures: a
+    // completed worker already drove its own transition; a killed/restarted one
+    // is an operator action, not a crash. recoverStuckTicket itself no-ops a
+    // ticket that already moved on, so this is safe even if the worker reported
+    // progress before exiting nonzero.
+    const ownedTicketId = ticketByAgent.get(msg.agentId);
+    if (ownedTicketId) {
+      ticketByAgent.delete(msg.agentId);
+      const reason = msg.reason;
+      if (reason === "errored" || reason === "spawn-error") {
+        try {
+          const ticketService = serviceOverride || require("./service");
+          const res = ticketService.recoverStuckTicket(
+            ownedTicketId,
+            `Agent ${msg.agentId} terminated (${reason})${msg.error ? `: ${msg.error}` : ""} while working this ticket.`,
+            "ticket-watcher",
+          );
+          if (res && res.recovered) {
+            log(`Recovered stuck ticket ${ownedTicketId} after agent ${msg.agentId} ${reason} → blocked + needs-human`);
+          }
+        } catch (err: any) {
+          log(`recoverStuckTicket failed for ${ownedTicketId}: ${err.message || err}`);
+        }
+      }
+    }
+
     const tracked = inFlightSpawns.get(msg.agentId);
     if (!tracked) return; // not one of ours (or fire-and-forget)
     inFlightSpawns.delete(msg.agentId);
@@ -606,6 +642,10 @@ function executeAutomation(rule, eventType, payload, ticket) {
           log(`Spawn for ticket ${ticket.id} → agent ${result.agentId}`);
           // Hold the slot until this agent terminates.
           slotByAgent.set(result.agentId, release);
+          // Remember which ticket this agent is working so a crash can recover
+          // it promptly (see onAgentTerminated). Tracked for ALL spawns, not
+          // just verdict ones.
+          ticketByAgent.set(result.agentId, ticket.id);
           // Track spawns whose terminal output decides a ticket transition so
           // applyVerdict runs on agent:terminated. Default is fire-and-forget;
           // only review/rework rules opt IN with `expectVerdict: true`.
@@ -835,6 +875,7 @@ export function stop() {
   configPathTracked = null;
   inFlightSpawns.clear();
   slotByAgent.clear();
+  ticketByAgent.clear();
   recentlyFired.clear();
   structuredVerdictSeen.clear();
   queue = [];
@@ -860,7 +901,15 @@ export function _resetDedup() {
 }
 
 // Test-only: seed inFlightSpawns so a test can drive the agent:terminated
-// verdict path without exercising the real spawn flow.
+// verdict path without exercising the real spawn flow. Also seeds the
+// agent→ticketId map so the crash-recovery path is exercised the same way.
 export function _trackForTest(agentId: string, ticket: any, rule: any) {
   inFlightSpawns.set(agentId, { ticket, rule });
+  if (ticket && ticket.id) ticketByAgent.set(agentId, ticket.id);
+}
+
+// Test-only: seed ONLY the agent→ticket map (a fire-and-forget implementer is
+// tracked here but NOT in inFlightSpawns, since it carries no verdict).
+export function _trackTicketForTest(agentId: string, ticketId: string) {
+  ticketByAgent.set(agentId, ticketId);
 }
