@@ -274,6 +274,10 @@ function maybeCompleteParentEpic(childTicket, actor) {
     resultSummary: parent.resultSummary,
     auto: true,
   });
+  // Roll up further: this epic may itself be a child of a grandparent epic.
+  // Completing it can close the grandparent's last open child. The terminal-
+  // status guard at the top makes the recursion idempotent and loop-safe.
+  if (parent.parentId) maybeCompleteParentEpic(parent, actor);
   return parent.id;
 }
 
