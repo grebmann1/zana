@@ -193,6 +193,30 @@ describe("provisionRole — idempotency + hand-edit guard", () => {
     expect(fs.readFileSync(file, "utf8")).toBe(foreign);
   });
 
+  it("preserves a foreign file that HAS frontmatter but no zana_stamp (skipped-hand-edited)", () => {
+    // Distinct from the no-frontmatter case: here the regex in parseRecipe DOES
+    // match a `---…---` block, but it carries no `zana_stamp:` line — e.g. a
+    // human (or another tool) hand-authored YAML frontmatter. parseRecipe must
+    // recover the body yet return stamp=null, and the hand-edit guard
+    // (stamp !== null) must then refuse to overwrite. This pins the
+    // frontmatter-present / stamp-absent branch that the existing tests skip.
+    const dir = agentsDir(wd);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, "t__reviewer.md");
+    const foreign = '---\nname: t__reviewer\ndescription: "human authored"\n---\n\nHand-written body, no stamp.\n';
+    fs.writeFileSync(file, foreign, "utf8");
+
+    // parseRecipe recovers the body but reports no stamp (the file isn't ours).
+    const parsed = parseRecipe(foreign);
+    expect(parsed.stamp).toBeNull();
+    expect(parsed.body).toBe("Hand-written body, no stamp.\n");
+
+    const res = provisionRole({ workingDirectory: wd, name: "t__reviewer", profile });
+    expect(res.outcome).toBe("skipped-hand-edited");
+    // The foreign content is untouched — Zana's recipe was NOT written.
+    expect(fs.readFileSync(file, "utf8")).toBe(foreign);
+  });
+
   it("preserves a hand-edited file (skipped-hand-edited)", () => {
     // Use a profile with prompt text so the BODY (which the stamp guards) has
     // something a human can edit.
@@ -240,6 +264,24 @@ describe("provisionTeam", () => {
     // Passing inheritModel:false honors the per-profile model pin.
     const pinned = provisionTeam({ workingDirectory: wd, teamSlug: "pinned", profiles, inheritModel: false });
     expect(fs.readFileSync(pinned[0].file, "utf8")).toContain("model: claude-opus-4-8");
+  });
+
+  it("is idempotent across re-runs: an unchanged team re-provisions to all 'unchanged'", () => {
+    // The team path renders with inheritModel:true (no `model:` line), a subtly
+    // different byte layout than the model-pinned provisionRole tests exercise.
+    // Re-running an unchanged roster must round-trip through the stamp guard and
+    // report every role "unchanged" — no rewrite. A regression in render
+    // determinism or stamp computation under inheritModel:true would surface here
+    // (and nowhere else, since every other idempotency test pins the model).
+    const profiles = [
+      { id: "coder", displayName: "Coder", description: "writes code", model: "claude-opus-4-8" },
+      { id: "reviewer", displayName: "Reviewer", description: "reviews code", allowedTools: ["Read"] },
+    ];
+    const first = provisionTeam({ workingDirectory: wd, teamSlug: "squad", profiles });
+    expect(first.every((r) => r.outcome === "created")).toBe(true);
+
+    const second = provisionTeam({ workingDirectory: wd, teamSlug: "squad", profiles });
+    expect(second.map((r) => r.outcome)).toEqual(["unchanged", "unchanged"]);
   });
 
   it("two teams in one workdir do not collide (namespaced by team slug)", () => {
