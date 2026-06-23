@@ -62,3 +62,4 @@ add a new ADR and mark the old one `Superseded by ADR-XXXX`.
 | [0010](0010-contracts-base-layer.md) | Extract the dependency-free base layer into @zana-ai/contracts | Accepted |
 | [0011](0011-ticket-hierarchy-timeline-checkpoint-recovery.md) | Ticket epics, derived timeline, human checkpoints, and crash recovery | Accepted |
 | [0012](0012-execution-strategy-claude-subagents.md) | Optional Claude Code subagents as a team execution strategy | Accepted |
+| [0013](0013-headless-worker-filesystem-sandbox.md) | Headless worker filesystem sandbox (deferred) | Proposed |
