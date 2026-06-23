@@ -155,15 +155,18 @@ async function handleRequest(req, res) {
     const body = await readBody(req);
     const profile = daemon.profileStore.getProfile(body.profileId);
     if (!profile) { json(res, { error: "profile not found" }, 404); return; }
-    let cwd = body.cwd || daemon.workspace;
-    const resolved = path.resolve(cwd);
-    if (!resolved.startsWith(path.resolve(daemon.workspace))) {
-      json(res, { error: "cwd must be within workspace" }, 403);
-      return;
-    }
+    // Shared confinement with the in-process dispatch path (core agents.spawnCwd):
+    // realpath-resolve + confine to the workspace (or a registered projectId),
+    // closing the symlink / `../` escapes a plain string-prefix check missed.
+    const cwdResult = _core().agents.spawnCwd.resolveConfinedCwd({
+      cwd: body.cwd,
+      projectId: body.projectId,
+      workspace: daemon.workspace,
+    });
+    if ("error" in cwdResult) { json(res, { error: cwdResult.error }, 403); return; }
     const result = daemon.agentManager.spawnHeadlessAgent(profile, {
       prompt: body.prompt,
-      cwd: resolved,
+      cwd: cwdResult.cwd,
     });
     json(res, result, 201);
     return;

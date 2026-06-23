@@ -16,6 +16,7 @@ import {
   getMaxConcurrentAgents,
 } from "./lifecycle";
 import * as teamRuntime from "./team-runtime";
+import { resolveConfinedCwd } from "./spawn-cwd";
 
 type SkillStoreModule = typeof import("@zana-ai/extras/dist/src/settings/skill-store");
 const skillStore = lazyRequire<SkillStoreModule>(
@@ -36,7 +37,28 @@ function _schedulerService() { return work.scheduling.service; }
 function _artifactStore() { return work.runs.artifacts; }
 
 export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: any) {
-  const { action, ...params } = payload;
+  // `action` is the routing command (e.g. "schedule_create"). A few tools —
+  // schedule_create / schedule_update / scheduled mcp_tool calls — also carry a
+  // *parameter* literally named `action` (the schedule's action object). Both
+  // cannot share one key: a naive `{ action, ...params }` at the call site lets
+  // the param clobber the command, so routing receives the object and falls
+  // through to `unknown action: [object Object]`.
+  //
+  // Callers disambiguate by sending the routing command under the reserved
+  // `_action` key, which takes precedence; the literal `action` then survives
+  // untouched as a normal parameter. Legacy callers that send the command under
+  // `action` (with no colliding param) keep working via the fallback.
+  const { _action, ...rest } = payload;
+  let action: string;
+  let params: any;
+  if (_action !== undefined) {
+    action = _action;
+    params = rest; // `rest.action`, if present, is a genuine parameter
+  } else {
+    action = rest.action;
+    const { action: _routingKey, ...p } = rest;
+    params = p;
+  }
 
   switch (action) {
     case "spawn_agent": {
@@ -46,6 +68,7 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
       }
       const { profileId, prompt, parentAgentId } = params;
       const resourceError = checkSystemResources();
+      // (cwd confinement happens after the cheap guards below, right before spawn)
       if (resourceError) {
         const streak = recordSpawnOverload(parentAgentId);
         const limit = getSpawnThrottleStreakLimit();
@@ -71,8 +94,13 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
       }
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };
-      const cwd = getWorkspaceFn ? getWorkspaceFn() : process.env.HOME;
-      const result = spawnHeadlessAgent(profile, { prompt, cwd, parentAgentId });
+      const cwdResult = resolveConfinedCwd({
+        cwd: params.cwd,
+        projectId: params.projectId,
+        workspace: getWorkspaceFn ? getWorkspaceFn() : process.env.HOME,
+      });
+      if ("error" in cwdResult) return { error: cwdResult.error };
+      const result = spawnHeadlessAgent(profile, { prompt, cwd: cwdResult.cwd, parentAgentId });
       return { agentId: result.agentId, status: "spawned" };
     }
     case "spawn_agent_validated": {
@@ -87,12 +115,17 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
       }
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };
-      const cwd = getWorkspaceFn ? getWorkspaceFn() : process.env.HOME;
+      const cwdResult = resolveConfinedCwd({
+        cwd: params.cwd,
+        projectId: params.projectId,
+        workspace: getWorkspaceFn ? getWorkspaceFn() : process.env.HOME,
+      });
+      if ("error" in cwdResult) return { error: cwdResult.error };
       const guardrails = require("../guardrails/index");
       const result = await guardrails.spawnValidatedAgent(
         { spawnHeadlessAgent, getAgent },
         profile,
-        { prompt, cwd, parentAgentId, maxRetries },
+        { prompt, cwd: cwdResult.cwd, parentAgentId, maxRetries },
         guardrailConfigs || []
       );
       return {
@@ -559,12 +592,19 @@ export async function handleOrchestratorCommand(payload: any, getWorkspaceFn: an
       const { profileId, prompt } = params;
       const profile = profileStore.getProfile(profileId);
       if (!profile) return { error: `profile not found: ${profileId}` };
-      const cwd = getWorkspaceFn ? getWorkspaceFn() : process.env.HOME;
-      const result = await spawnOneShot(profile, prompt, { cwd, timeout: params.timeout });
+      const cwdResult = resolveConfinedCwd({
+        cwd: params.cwd,
+        projectId: params.projectId,
+        workspace: getWorkspaceFn ? getWorkspaceFn() : process.env.HOME,
+      });
+      if ("error" in cwdResult) return { error: cwdResult.error };
+      const result = await spawnOneShot(profile, prompt, { cwd: cwdResult.cwd, timeout: params.timeout });
       return { output: result.output, exitCode: result.exitCode };
     }
 
     default:
-      return { error: `unknown action: ${action}` };
+      return {
+        error: `unknown action: ${typeof action === "string" ? action : JSON.stringify(action)}`,
+      };
   }
 }
