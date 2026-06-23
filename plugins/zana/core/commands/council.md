@@ -7,7 +7,7 @@ allowed-tools: Agent SendMessage mcp__zana__zana_get_profile mcp__zana__zana_lis
 
 # /zana:council
 
-Run a council deliberation **inside this Claude Code session** as a native fan-out: N voter subagents review the question in parallel; the host harness captures each voter's final message (stance + rationale) and feeds them to a synthesizer subagent, which aggregates and emits the verdict. Voters do NOT message each other or the synthesizer — final-message capture is the contract (see Rules).
+Run a council deliberation **inside this Claude Code session** as a native fan-out: N voter subagents review the question in parallel; each voter delivers its stance (stance + rationale) back to the convening session with `SendMessage({ to: "main" })`, and once all N have reported you feed them to a synthesizer subagent, which aggregates and emits the verdict. Explicit `SendMessage` delivery is the contract — background subagents go idle without reliably auto-delivering their final message as a task-notification, so voters must push their stance themselves (see Rules).
 
 For headless / CI / scheduled deliberations with content-addressed audit and the full state machine (`PROPOSED → REVIEWING → SYNTHESIZING → CONVERGING → SETTLED|ESCALATED|EXHAUSTED`), the daemon path remains available via `mcp__zana__zana_deliberate` (do NOT call it from this command).
 
@@ -71,7 +71,7 @@ If `$ARGUMENTS` is empty (after stripping any flags), ask the user "What should 
           - `Emit a single stance: APPROVE or CHANGES.`
           - `Provide a rationale of 3–8 sentences specific to your specialty.`
           - `If you have dissenting concerns, state them explicitly — they will NOT be collapsed by synthesis.`
-       5. Output contract: `Your final assistant message IS your stance delivery. Begin it with "Stance: APPROVE" or "Stance: CHANGES" on its own line, followed by your rationale. Do NOT call SendMessage — the host harness captures your final message and routes it to the synthesizer.`
+       5. Output contract: `Deliver your stance by calling SendMessage({ to: "main", summary: "<voterName> stance: APPROVE|CHANGES", message: "<your full stance + rationale>" }) as the LAST thing you do. The message body MUST begin with "Stance: APPROVE" or "Stance: CHANGES" on its own line, followed by your rationale. This SendMessage call is the delivery mechanism — do NOT rely on your final assistant message being captured automatically; the convening session reads your stance from the message you send. After sending, you may stop.`
 
 5. **Spawn voters — one tool-use block.** Issue all N voter `Agent` calls together with `run_in_background: true`. Do not spawn the synthesizer yet.
 
@@ -83,7 +83,8 @@ If `$ARGUMENTS` is empty (after stripping any flags), ask the user "What should 
      Waiting for <N> voter stances before judge synthesis…
    ```
 
-7. **Wait for all voters to complete.** The harness delivers a task-notification per voter; each notification's `result` field contains the voter's final message (stance + rationale). Do NOT poll. Do NOT spawn the synthesizer until all N voters have reported.
+7. **Collect all N voter stances from your inbox.** Each voter delivers its stance to you via `SendMessage({ to: "main" })`; the message body is the voter's stance + rationale. Do NOT poll in a busy loop — the messages arrive in your inbox as voters finish. Do NOT spawn the synthesizer until all N voters have reported.
+   - **Idle-nudge fallback:** if a voter subagent goes idle (`idle_notification`, `idleReason: "available"`) without having sent its stance message, send it exactly one `SendMessage({ to: "<voterName>", message: "You went idle without delivering your stance. Reply now with SendMessage({ to: \"main\", message: \"Stance: APPROVE|CHANGES\\n<rationale>\" })." })` to nudge it, then resume collecting. This guards the tail case so the council never hangs awaiting a stance that was computed but not delivered.
 
 8. **Spawn the synthesizer — one tool-use block, foreground (`run_in_background: false`).**
    - `name`: `synthesizer`.
@@ -97,9 +98,9 @@ If `$ARGUMENTS` is empty (after stripping any flags), ask the user "What should 
         ==========================================================================
         VOTER <i>: <voterName> — Stance: <APPROVE|CHANGES>
         ==========================================================================
-        <verbatim final message from the voter>
+        <verbatim stance message the voter delivered via SendMessage>
         ```
-        (Parse the voter's stance from the first `Stance: ...` line of their final message; if absent, infer from the rationale and flag it in the synthesis.)
+        (Parse the voter's stance from the first `Stance: ...` line of their delivered message; if absent, infer from the rationale and flag it in the synthesis.)
      5. `Build a synthesis report:`
         - `[CONSENSUS] — points where all voters agree`
         - `[MAJORITY] — points where most voters agree`
@@ -128,8 +129,8 @@ The native path is right for "I want N perspectives and a verdict, fast." The da
 ## Rules
 
 - ALWAYS spawn voters in ONE tool-use block with `run_in_background: true` — parallel review is the point.
-- ALWAYS wait for all voter notifications before spawning the synthesizer.
-- The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — voters do NOT call `SendMessage` (it isn't reliably reachable from nested `general-purpose` subagents in this harness; final-message capture is the contract).
+- ALWAYS collect all N voter stance messages before spawning the synthesizer.
+- The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — each voter delivers its stance with `SendMessage({ to: "main" })`. Explicit `SendMessage` delivery is the contract: background `general-purpose` subagents go idle without reliably auto-delivering their final message as a task-notification, so voters MUST push their stance themselves. Do NOT rely on final-message capture.
 - The synthesizer carries the `judge` profile's systemPrompt and MUST preserve dissent verbatim. Its prompt enforces this; do not silently weaken it.
 - Do NOT call `mcp__zana__zana_deliberate` from this command — that's the daemon path.
 - Do NOT pick a verdict at the host level — the synthesizer (judge) is the only voice that emits the verdict.

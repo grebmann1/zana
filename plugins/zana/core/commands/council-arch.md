@@ -53,7 +53,7 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
           - `Emit a single stance: APPROVE or CHANGES.`
           - `Provide a rationale of 3–8 sentences specific to your architectural specialty (security posture, performance/scalability, API ergonomics, generalist cross-cutting concerns, or design coherence depending on your role).`
           - `If you have dissenting concerns, state them explicitly — they will NOT be collapsed by synthesis.`
-       5. Output contract: `Your final assistant message IS your stance delivery. Begin it with "Stance: APPROVE" or "Stance: CHANGES" on its own line, followed by your rationale. Do NOT call SendMessage — the host harness captures your final message and routes it to the synthesizer.`
+       5. Output contract: `Deliver your stance by calling SendMessage({ to: "main", summary: "<voterName> stance: APPROVE|CHANGES", message: "<your full stance + rationale>" }) as the LAST thing you do. The message body MUST begin with "Stance: APPROVE" or "Stance: CHANGES" on its own line, followed by your rationale. This SendMessage call is the delivery mechanism — do NOT rely on your final assistant message being captured automatically; the convening session reads your stance from the message you send. After sending, you may stop.`
 
 6. **Spawn voters — one tool-use block.** Issue all N voter `Agent` calls together with `run_in_background: true`. Do not spawn the synthesizer yet.
 
@@ -65,7 +65,8 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
      Waiting for <N> voter stances before synthesis…
    ```
 
-8. **Wait for all voters to complete.** The harness will deliver a task-notification per voter as it finishes; each notification's `result` field contains the voter's final message (stance + rationale). Do NOT poll — the notifications arrive automatically. Do NOT spawn the synthesizer until all N voters have reported.
+8. **Collect all N voter stances from your inbox.** Each voter delivers its stance to you via `SendMessage({ to: "main" })`; the message body is the voter's stance + rationale. Do NOT poll in a busy loop — the messages arrive in your inbox as voters finish. Do NOT spawn the synthesizer until all N voters have reported.
+   - **Idle-nudge fallback:** if a voter subagent goes idle (`idle_notification`, `idleReason: "available"`) without having sent its stance message, send it exactly one `SendMessage({ to: "<voterName>", message: "You went idle without delivering your stance. Reply now with SendMessage({ to: \"main\", message: \"Stance: APPROVE|CHANGES\\n<rationale>\" })." })` to nudge it, then resume collecting. This guards the tail case so the council never hangs awaiting a stance that was computed but not delivered.
 
 9. **Spawn the synthesizer — one tool-use block, foreground (`run_in_background: false`).**
    - `name`: `synthesizer`.
@@ -79,9 +80,9 @@ If `$ARGUMENTS` is empty, ask "What should the architecture council deliberate o
         ==========================================================================
         VOTER <i>: <voterName> — Stance: <APPROVE|CHANGES>
         ==========================================================================
-        <verbatim final message from the voter>
+        <verbatim stance message the voter delivered via SendMessage>
         ```
-        (Parse the voter's stance from the first `Stance: ...` line of their final message; if absent, infer from the rationale and flag it in the synthesis.)
+        (Parse the voter's stance from the first `Stance: ...` line of their delivered message; if absent, infer from the rationale and flag it in the synthesis.)
      5. `Build a synthesis report:`
         - `[CONSENSUS] — points where all voters agree`
         - `[MAJORITY] — points where most voters agree`
@@ -109,8 +110,8 @@ The native path is right for "I want a fast architectural sanity check from thre
 ## Rules
 
 - ALWAYS spawn all voters in ONE tool-use block with `run_in_background: true`.
-- ALWAYS wait for all voter notifications before spawning the synthesizer.
-- The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — voters do NOT call `SendMessage` (it isn't reliably reachable from nested `general-purpose` subagents in this harness; final-message capture is the contract).
+- ALWAYS collect all N voter stance messages before spawning the synthesizer.
+- The synthesizer runs AFTER voters complete, with their rationales injected into its prompt — each voter delivers its stance with `SendMessage({ to: "main" })`. Explicit `SendMessage` delivery is the contract: background `general-purpose` subagents go idle without reliably auto-delivering their final message as a task-notification, so voters MUST push their stance themselves. Do NOT rely on final-message capture.
 - The synthesizer carries the `judge` profile's systemPrompt and MUST preserve dissent verbatim.
 - The researcher seat at quantity≥3 is the **generalist seat** — voters above index 2 are specialist additions; do not drop the researcher to fit a smaller council.
 - Do NOT call `mcp__zana__zana_deliberate` from this command — that's the daemon path.

@@ -39,6 +39,34 @@ Before spawning anyone, decompose. A useful ticket is:
 
 Use `zana_ticket_create` for each piece, then `zana_sprint_create` to group them and `zana_sprint_start` to begin. Tickets are not bureaucracy — they are the unit of dispatch and the thing you mark `complete` so the orchestration loop stays honest about progress.
 
+### Epics — decompose a large goal into a parent + children
+
+When a goal is too big for one ticket but is a single deliverable, model it as an
+**epic**: one parent ticket plus child tickets that carry the actual work. Pass
+`parentId` at create time (or re-parent later with `zana_ticket_edit`). You do
+NOT complete the epic yourself — when its LAST open child reaches
+`done`/`cancelled`, the epic auto-completes (roll-up is recursive, so a
+multi-level `epic → sub-epic → leaf` tree closes all the way up).
+
+```js
+// Parent epic — a deliverable, not a unit of work.
+const epic = zana_ticket_create({ title: "Add password auth", priority: "high" });
+
+// Children carry the work. Gate ordering with blockedBy where there's a real dependency.
+const schema = zana_ticket_create({ title: "Users table + bcrypt hashing", parentId: epic.id });
+const route  = zana_ticket_create({ title: "POST /auth/login → JWT",       parentId: epic.id, blockedBy: [schema.id] });
+const tests  = zana_ticket_create({ title: "Auth integration tests",       parentId: epic.id, blockedBy: [route.id] });
+
+// Inspect the tree any time:
+zana_ticket_children({ ticketId: epic.id });   // → [schema, route, tests]
+```
+
+Prefer an epic + children over one giant ticket: each child fits a single
+worker's context, `blockedBy` enforces order, and `zana_ticket_children` /
+`zana_ticket_timeline` give you a real progress view. Use `parentId` for "part
+of the same deliverable" and `blockedBy` for "can't start until X is done" —
+they're orthogonal (a child can also be `blockedBy` a sibling, as above).
+
 ## The review pipeline (auto-driven — daemon path only)
 
 The ticket watcher described here runs **in the daemon**. Inside a Claude Code session with no daemon attached, `zana_ticket_update_status({ status: "review" })` does NOT auto-spawn a reviewer — run `/zana:ticket:review <ticketId>` to drive the same two-phase gate in-session (see "Native review (no daemon)" below). The auto-driven pipeline below applies when a daemon is running and the watcher is subscribed (default for `zana headless`).
@@ -396,6 +424,33 @@ This is a bigger pattern — you're hand-rolling the loop. Use it when the cost 
 ## Sprints vs ad-hoc tickets
 
 Use a sprint when the work is bounded and you want a single completion signal across multiple tickets (a feature, a bug bash, a refactor). Use ad-hoc tickets when work trickles in or when tickets exist primarily for traceability and not coordination.
+
+### Worked example
+
+```js
+// 1. Create the tickets first — they start in `backlog`.
+const a = zana_ticket_create({ title: "Parse config",   priority: "high" });
+const b = zana_ticket_create({ title: "Validate config", priority: "high", blockedBy: [a.id] });
+const c = zana_ticket_create({ title: "Config tests",     priority: "medium", blockedBy: [b.id] });
+
+// 2. Group them into a sprint. Pass ticketIds inline, or add later.
+const sprint = zana_sprint_create({ name: "Config hardening", ticketIds: [a.id, b.id] });
+zana_ticket_add_to_sprint({ sprintId: sprint.id, ticketId: c.id });   // add one more after the fact
+
+// 3. Start it — moves the sprint from `planning` to `active`.
+zana_sprint_start({ sprintId: sprint.id });
+
+// 4. Monitor without polling tickets one by one — the board groups by status column.
+zana_sprint_board({ sprintId: sprint.id });           // slim: id/title/status/priority/assignee/labels
+zana_sprint_board({ sprintId: sprint.id, verbose: true }); // full payloads when you need detail
+
+// 5. Close it once every ticket is done/cancelled.
+zana_sprint_end({ sprintId: sprint.id });
+```
+
+`zana_sprint_board` is the right monitoring call for sprint work — it answers
+"where does each ticket stand?" in one shot. (For at-a-glance counts across ALL
+work, the status-line footer below is cheaper still.)
 
 Always close sprints with `zana_sprint_end` once the tickets are done — open sprints accumulate noise and confuse autopilot loops that filter on sprint state.
 
