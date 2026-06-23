@@ -16,6 +16,15 @@
 
 set -euo pipefail
 
+# When launched via `npm run release`, the OUTER npm injects
+# `npm_config_userconfig=~/.npmrc` into the env. That lowercase var takes
+# PRECEDENCE over the `NPM_CONFIG_USERCONFIG` we export below to point at the
+# temp npmrc holding the release token — so publish would silently use the
+# host ~/.npmrc instead. If that file carries a STALE registry.npmjs.org token
+# (it did, 2026-06-23), publish fails E401/404 even with a valid NPM_TOKEN.
+# Unset the shadow so our temp npmrc wins whether run via `npm run` or bash.
+unset npm_config_userconfig
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
