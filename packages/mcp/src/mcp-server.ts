@@ -137,8 +137,11 @@ async function callCore(action: string, params: Record<string, unknown> = {}) {
       }
     }
   }
+  // Route under the reserved `_action` key so a parameter literally named
+  // `action` (e.g. a schedule's action object in schedule_create/update) can't
+  // clobber the routing command. See handleOrchestratorCommand for the contract.
   return localDaemon.agentManager.handleOrchestratorCommand(
-    { action, ...params },
+    { _action: action, ...params },
     () => localDaemon.workspace,
   );
 }

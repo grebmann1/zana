@@ -420,8 +420,11 @@ async function executeAction(action) {
       const wc = require("@zana-ai/core").project.workspaceContext;
       if (wc?.isInitialized?.()) workspace = wc.getWorkspaceRoot();
     } catch {}
+    // Route under the reserved `_action` key so a tool arg literally named
+    // `action` (e.g. when this scheduled mcp_tool call targets zana_schedule_create)
+    // can't clobber the routing command. See handleOrchestratorCommand.
     const result = await agentManager.handleOrchestratorCommand(
-      { action: orchestratorAction, ...args },
+      { _action: orchestratorAction, ...args },
       () => workspace
     );
     // Some orchestrator handlers return arrays (list_profiles, list_skills, etc.)
