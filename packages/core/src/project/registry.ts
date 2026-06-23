@@ -15,8 +15,18 @@ import { createForWorkspace } from "@zana-ai/contracts";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-const REGISTRY_PATH = path.join(config.ZANA_DIR, "projects.json");
-const REGISTRY_TMP_PATH = path.join(config.ZANA_DIR, ".projects.json.tmp");
+// Computed lazily, not at module load: reading config.ZANA_DIR at import time
+// makes this module impossible to import without a fully-populated
+// @zana-ai/contracts (a problem for unit tests that stub contracts minimally).
+// The paths are stable for the process, so memoize on first use.
+let _registryPath: string | null = null;
+let _registryTmpPath: string | null = null;
+function REGISTRY_PATH(): string {
+  return (_registryPath ??= path.join(config.ZANA_DIR, "projects.json"));
+}
+function REGISTRY_TMP_PATH(): string {
+  return (_registryTmpPath ??= path.join(config.ZANA_DIR, ".projects.json.tmp"));
+}
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -37,9 +47,9 @@ function readRegistry() {
     fs.mkdirSync(config.ZANA_DIR, { recursive: true });
   }
 
-  if (fs.existsSync(REGISTRY_PATH)) {
+  if (fs.existsSync(REGISTRY_PATH())) {
     try {
-      const raw = fs.readFileSync(REGISTRY_PATH, "utf8");
+      const raw = fs.readFileSync(REGISTRY_PATH(), "utf8");
       const data = JSON.parse(raw);
       if (data && data.version === 1 && Array.isArray(data.projects)) {
         return data;
@@ -69,8 +79,8 @@ function writeRegistry(data) {
     fs.mkdirSync(config.ZANA_DIR, { recursive: true });
   }
   const content = JSON.stringify(data, null, 2) + "\n";
-  fs.writeFileSync(REGISTRY_TMP_PATH, content, "utf8");
-  fs.renameSync(REGISTRY_TMP_PATH, REGISTRY_PATH);
+  fs.writeFileSync(REGISTRY_TMP_PATH(), content, "utf8");
+  fs.renameSync(REGISTRY_TMP_PATH(), REGISTRY_PATH());
 }
 
 /**

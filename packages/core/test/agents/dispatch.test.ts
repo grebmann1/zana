@@ -5,7 +5,7 @@
  * filesystem, or network occurs. Each test exercises one branch of the big
  * switch and verifies the return shape.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Hoisted mock references (must precede vi.mock factory calls) ─────────────
 const {
@@ -99,17 +99,32 @@ vi.mock("@zana-ai/contracts", () => ({
   lazyRequire: (_factory: any) => new Proxy({}, { get: () => vi.fn(() => ({})) }),
 }));
 
+// dispatch.ts → spawn-cwd.ts → project/registry.ts reads config.ZANA_DIR at
+// module load. The spawn_agent/_validated/_oneshot cases call resolveConfinedCwd,
+// so stub the registry; the default (no cwd/projectId) path doesn't touch it.
+vi.mock("@zana-ai/core/src/project/registry.ts", () => ({
+  getById: vi.fn(() => null),
+}));
+
 // modules/loader is require()'d dynamically inside spawn_agent — stub it
 vi.mock("@zana-ai/core/src/modules/loader.ts", () => ({
   getModule: vi.fn(() => undefined),
 }));
 
 import { handleOrchestratorCommand } from "@zana-ai/core/src/agents/dispatch.ts";
+import * as nodeFs from "node:fs";
+import * as nodeOs from "node:os";
+import * as nodePath from "node:path";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function call(action: string, params: Record<string, any> = {}) {
   return handleOrchestratorCommand({ action, ...params }, null);
+}
+
+// A call that supplies a real workspace via getWorkspaceFn, for cwd-confinement.
+function callInWorkspace(action: string, params: Record<string, any>, workspace: string) {
+  return handleOrchestratorCommand({ action, ...params }, () => workspace);
 }
 
 beforeEach(() => {
@@ -319,5 +334,61 @@ describe("handleOrchestratorCommand — resolve_agent_name", () => {
     // An exact local-name hit short-circuits and returns the matching id.
     const result = await call("resolve_agent_name", { name: "Bob" });
     expect(result).toBe("agent-b");
+  });
+});
+
+// spawn_agent / _validated / _oneshot now confine the worker's cwd to the
+// workspace (or a registered projectId) via resolveConfinedCwd. These tests
+// prove the WIRING — that the dispatch case rejects an escape and never reaches
+// the spawn. spawn-cwd.test.ts covers the accept/confine rule itself.
+//
+// We drive this through spawn_agent_validated (not spawn_agent): both reach
+// resolveConfinedCwd identically, but spawn_agent's leading
+// `require("../modules/loader")` resilience hook isn't resolvable in this
+// source-mode harness (see the spawn_agent_validated guard tests above, which
+// exist for the same reason). The confinement check runs BEFORE validated's own
+// `require("../guardrails/index")`, so a refusal returns cleanly without it.
+describe("handleOrchestratorCommand — spawn cwd confinement (wiring)", () => {
+  let workspace: string;
+  let outside: string;
+  beforeEach(() => {
+    workspace = nodeFs.realpathSync(nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), "disp-ws-")));
+    outside = nodeFs.realpathSync(nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), "disp-out-")));
+    mockGetProfile.mockReturnValue({ id: "p1", displayName: "Coder" });
+  });
+  afterEach(() => {
+    for (const d of [workspace, outside]) { try { nodeFs.rmSync(d, { recursive: true, force: true }); } catch {} }
+  });
+
+  it("REFUSES a cwd outside the workspace and does NOT spawn", async () => {
+    const r = await callInWorkspace(
+      "spawn_agent_validated",
+      { profileId: "p1", prompt: "hi", guardrails: [], cwd: outside },
+      workspace,
+    );
+    expect((r as any).error).toMatch(/must be within the workspace/);
+    expect(mockSpawnHeadlessAgent).not.toHaveBeenCalled();
+  });
+
+  it("REFUSES an unknown projectId and does NOT spawn", async () => {
+    const r = await callInWorkspace(
+      "spawn_agent_validated",
+      { profileId: "p1", prompt: "hi", guardrails: [], projectId: "proj_nope" },
+      workspace,
+    );
+    expect((r as any).error).toMatch(/unknown projectId/);
+    expect(mockSpawnHeadlessAgent).not.toHaveBeenCalled();
+  });
+
+  it("REFUSES a symlink cwd that escapes the workspace and does NOT spawn", async () => {
+    const link = nodePath.join(workspace, "escape-link");
+    nodeFs.symlinkSync(outside, link);
+    const r = await callInWorkspace(
+      "spawn_agent_validated",
+      { profileId: "p1", prompt: "hi", guardrails: [], cwd: link },
+      workspace,
+    );
+    expect((r as any).error).toMatch(/must be within the workspace/);
+    expect(mockSpawnHeadlessAgent).not.toHaveBeenCalled();
   });
 });

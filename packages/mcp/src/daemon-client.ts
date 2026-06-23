@@ -121,13 +121,16 @@ export async function forwardToDaemon(
     case "spawn_agent":
     case "spawn_agent_validated":
     case "spawn_oneshot": {
-      // The HTTP spawn endpoint takes { profileId, prompt, cwd } and returns the
-      // created agent record. (validated/oneshot collapse to the same endpoint;
-      // the daemon owns the live process either way.)
+      // The HTTP spawn endpoint takes { profileId, prompt, cwd, projectId } and
+      // returns the created agent record. (validated/oneshot collapse to the
+      // same endpoint; the daemon owns the live process either way.) cwd /
+      // projectId confinement is enforced daemon-side by the shared
+      // resolveConfinedCwd helper — see server.ts POST /agents.
       return httpJson("POST", apiPort, "/agents", {
         profileId: params.profileId,
         prompt: params.prompt,
         cwd: params.cwd,
+        projectId: params.projectId,
       });
     }
     case "list_agents":

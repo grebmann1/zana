@@ -12,12 +12,14 @@ export const agents: ToolDomain = {
     {
       name: "zana_spawn_agent",
       description:
-        "Spawn a sub-agent from an available profile. The agent runs in headless mode and works on the current project.",
+        "Spawn a sub-agent from an available profile. The agent runs in headless mode. By default it works in the current workspace; pass `projectId` to run it in another registered project, or `cwd` to run it in a specific directory (confined to the workspace / project — paths outside are refused).",
       inputSchema: {
         type: "object",
         properties: {
           profileId: { type: "string", description: "Profile ID to spawn (use zana_list_profiles to see available)" },
           prompt: { type: "string", description: "Initial task/prompt to give the sub-agent" },
+          cwd: { type: "string", description: "Optional working directory. Must resolve to inside the workspace (or the given projectId's root); paths outside are refused." },
+          projectId: { type: "string", description: "Optional registered-project id to run the agent in (instead of the current workspace). Must be a project already registered with Zana." },
         },
         required: ["profileId", "prompt"],
       },
@@ -51,6 +53,8 @@ export const agents: ToolDomain = {
             },
           },
           maxRetries: { type: "number", description: "Maximum retry attempts on validation failure (default: 2)" },
+          cwd: { type: "string", description: "Optional working directory, confined to the workspace / projectId root." },
+          projectId: { type: "string", description: "Optional registered-project id to run the agent in." },
         },
         required: ["profileId", "prompt", "guardrails"],
       },
@@ -65,6 +69,8 @@ export const agents: ToolDomain = {
           profileId: { type: "string", description: "Profile ID to use" },
           prompt: { type: "string", description: "The question or task" },
           timeout: { type: "number", description: "Timeout in ms (default 60000)" },
+          cwd: { type: "string", description: "Optional working directory, confined to the workspace / projectId root." },
+          projectId: { type: "string", description: "Optional registered-project id to run the query in." },
         },
         required: ["profileId", "prompt"],
       },
@@ -105,7 +111,13 @@ export const agents: ToolDomain = {
 
   handlers: {
     zana_spawn_agent: (args, { callCore, callerAgentId }) =>
-      callCore("spawn_agent", { profileId: args.profileId, prompt: args.prompt, parentAgentId: callerAgentId }),
+      callCore("spawn_agent", {
+        profileId: args.profileId,
+        prompt: args.prompt,
+        parentAgentId: callerAgentId,
+        cwd: args.cwd,
+        projectId: args.projectId,
+      }),
     zana_spawn_agent_validated: (args, { callCore, callerAgentId }) =>
       callCore("spawn_agent_validated", {
         profileId: args.profileId,
@@ -113,9 +125,17 @@ export const agents: ToolDomain = {
         parentAgentId: callerAgentId,
         guardrails: args.guardrails || [],
         maxRetries: args.maxRetries,
+        cwd: args.cwd,
+        projectId: args.projectId,
       }),
     zana_oneshot_query: (args, { callCore }) =>
-      callCore("spawn_oneshot", { profileId: args.profileId, prompt: args.prompt, timeout: args.timeout }),
+      callCore("spawn_oneshot", {
+        profileId: args.profileId,
+        prompt: args.prompt,
+        timeout: args.timeout,
+        cwd: args.cwd,
+        projectId: args.projectId,
+      }),
     zana_list_agents: (_args, { callCore }) => callCore("list_agents"),
     zana_agent_status: (args, { callCore }) => callCore("agent_status", { agentId: args.agentId }),
     zana_agent_result: (args, { callCore }) => callCore("agent_result", { agentId: args.agentId }),

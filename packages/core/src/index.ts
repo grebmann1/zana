@@ -76,6 +76,7 @@ module.exports = {
     modelRouter: require("./agents/model-router"),
     terminalRelay: require("./agents/terminal-relay"),
     probeConfig: require("./agents/probe-config"),
+    spawnCwd: require("./agents/spawn-cwd"),
   },
   events: {
     // Flat shape on purpose: bus IS the EventEmitter, EVENTS IS the constants.
