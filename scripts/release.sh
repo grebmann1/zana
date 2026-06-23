@@ -65,6 +65,19 @@ echo "==> Releasing @zana-ai/* @ ${VERSION}"
 for p in "${PKGS[@]}"; do
   echo ""
   echo "==> @zana-ai/${p}"
+
+  # Idempotent skip: npm refuses to republish an existing version (and under
+  # `set -e` that would abort the WHOLE run before later packages publish). If
+  # the local version is already on the registry, skip it — this makes a release
+  # resumable after a mid-run stop, and lets a partially-published line (e.g.
+  # contracts already at the target, the rest behind) finish cleanly.
+  local_v="$(node -e "console.log(require('./packages/${p}/package.json').version)")"
+  published_v="$(npm view "@zana-ai/${p}" version 2>/dev/null || true)"
+  if [ "$local_v" = "$published_v" ]; then
+    echo "    already published at ${local_v} — skipping."
+    continue
+  fi
+
   if [ "$DRY_RUN" = "1" ]; then
     npm publish --workspace="@zana-ai/${p}" --access public --dry-run
   else
