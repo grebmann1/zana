@@ -134,7 +134,7 @@ export const tickets: ToolDomain = {
     {
       name: "zana_ticket_edit",
       description:
-        "Edit a ticket's fields (title, description, priority, labels, type, sprintId). Only specified fields are updated.",
+        "Edit a ticket's fields (title, description, priority, labels, type, sprintId, blockedBy). Only specified fields are updated.",
       inputSchema: {
         type: "object",
         properties: {
@@ -143,6 +143,7 @@ export const tickets: ToolDomain = {
           description: { type: "string", description: "New description (optional)" },
           priority: { type: "string", enum: ["critical", "high", "medium", "low"], description: "New priority (optional)" },
           labels: { type: "array", items: { type: "string" }, description: "New labels array (replaces existing)" },
+          blockedBy: { type: "array", items: { type: "string" }, description: "Dependency ticket IDs (replaces existing). This ticket stays out of the ready/claimable queue until every listed ticket is done/cancelled. Pass [] to clear all dependencies. Rejected if it would introduce a dependency cycle." },
           type: { type: "string", enum: ["bug", "feature", "chore", "spike"], description: "Ticket type (optional)" },
           sprintId: { type: "string", description: "Move to sprint (optional)" },
           parentId: { type: "string", description: "Re-parent under an epic (optional). Pass empty string / null to detach to a top-level ticket." },
@@ -382,6 +383,7 @@ export const tickets: ToolDomain = {
         description: args.description,
         priority: args.priority,
         labels: args.labels,
+        blockedBy: args.blockedBy,
         type: args.type,
         sprintId: args.sprintId,
         parentId: args.parentId,

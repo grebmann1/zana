@@ -136,7 +136,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/agents.ts:86`
+- MCP wrapper: `packages/mcp/src/registrations/agents.ts:92`
 - Handler: `packages/core/src/agents/manager.ts case 'agent_result'`
 
 **Common pitfalls:**
@@ -168,7 +168,7 @@ Looking for end-to-end examples instead of per-tool signatures? See [`RECIPES.md
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/agents.ts:77`
+- MCP wrapper: `packages/mcp/src/registrations/agents.ts:83`
 - Handler: `packages/core/src/agents/manager.ts case 'agent_status'`
 
 ---
@@ -1042,7 +1042,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/agents.ts:95`
+- MCP wrapper: `packages/mcp/src/registrations/agents.ts:101`
 - Handler: `packages/core/src/agents/manager.ts case 'kill_agent'`
 
 ---
@@ -1070,7 +1070,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/agents.ts:72`
+- MCP wrapper: `packages/mcp/src/registrations/agents.ts:78`
 - Handler: `packages/core/src/agents/manager.ts case 'list_agents'`
 
 **Common pitfalls:**
@@ -1372,14 +1372,16 @@ _No input parameters._
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
+| cwd | string | no | Optional working directory, confined to the workspace / projectId root. |
 | profileId | string | yes | Profile ID to use |
+| projectId | string | no | Optional registered-project id to run the query in. |
 | prompt | string | yes | The question or task |
 | timeout | number | no | Timeout in ms (default 60000) |
 
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/agents.ts:58`
+- MCP wrapper: `packages/mcp/src/registrations/agents.ts:62`
 
 ---
 
@@ -1991,13 +1993,15 @@ _No input parameters._
 
 ## zana_spawn_agent
 
-**Description:** Spawn a sub-agent from an available profile. The agent runs in headless mode and works on the current project.
+**Description:** Spawn a sub-agent from an available profile. The agent runs in headless mode. By default it works in the current workspace; pass `projectId` to run it in another registered project, or `cwd` to run it in a specific directory (confined to the workspace / project — paths outside are refused).
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
+| cwd | string | no | Optional working directory. Must resolve to inside the workspace (or the given projectId's root); paths outside are refused. |
 | profileId | string | yes | Profile ID to spawn (use zana_list_profiles to see available) |
+| projectId | string | no | Optional registered-project id to run the agent in (instead of the current workspace). Must be a project already registered with Zana. |
 | prompt | string | yes | Initial task/prompt to give the sub-agent |
 
 **Output shape:**
@@ -2027,15 +2031,17 @@ _No input parameters._
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
+| cwd | string | no | Optional working directory, confined to the workspace / projectId root. |
 | guardrails | array<object> | yes | List of guardrail configs to validate the agent's output |
 | maxRetries | number | no | Maximum retry attempts on validation failure (default: 2) |
 | profileId | string | yes | Profile ID to spawn |
+| projectId | string | no | Optional registered-project id to run the agent in. |
 | prompt | string | yes | Initial task/prompt for the agent |
 
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/agents.ts:25`
+- MCP wrapper: `packages/mcp/src/registrations/agents.ts:27`
 
 ---
 
@@ -2564,7 +2570,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:206`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:207`
 - Handler: `packages/work/src/tickets/service.ts:addTicketToSprint`
 
 ---
@@ -2582,7 +2588,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:228`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:229`
 
 ---
 
@@ -2835,12 +2841,13 @@ _No input parameters._
 
 ## zana_ticket_edit
 
-**Description:** Edit a ticket's fields (title, description, priority, labels, type, sprintId). Only specified fields are updated.
+**Description:** Edit a ticket's fields (title, description, priority, labels, type, sprintId, blockedBy). Only specified fields are updated.
 
 **Input:**
 
 | Field | Type | Required | Enum / Notes |
 |---|---|---|---|
+| blockedBy | array<string> | no | Dependency ticket IDs (replaces existing). This ticket stays out of the ready/claimable queue until every listed ticket is done/cancelled. Pass [] to clear all dependencies. Rejected if it would introduce a dependency cycle. |
 | description | string | no | New description (optional) |
 | labels | array<string> | no | New labels array (replaces existing) |
 | parentId | string | no | Re-parent under an epic (optional). Pass empty string / null to detach to a top-level ticket. |
@@ -3056,7 +3063,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:238`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:239`
 
 ---
 
@@ -3075,7 +3082,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:252`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:253`
 
 ---
 
@@ -3092,7 +3099,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:218`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:219`
 
 ---
 
@@ -3155,7 +3162,7 @@ _No input parameters._
 ```
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:153`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:154`
 - Handler: `packages/core/src/agents/manager.ts case 'ticket_update'`
 
 **Common pitfalls:**
@@ -3245,7 +3252,7 @@ _No input parameters._
 **Output shape:** TODO — not yet documented. Read the handler before guessing field names.
 
 **Source:**
-- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:188`
+- MCP wrapper: `packages/mcp/src/registrations/tickets.ts:189`
 
 ---
 
