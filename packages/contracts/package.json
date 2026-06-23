@@ -1,6 +1,6 @@
 {
   "name": "@zana-ai/contracts",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Dependency-free base layer — workspace-context, config, event bus, logger, lazyRequire. The leaf everyone (incl. core) consumes.",
   "main": "dist/src/index.js",
   "scripts": {

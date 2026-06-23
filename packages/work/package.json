@@ -1,6 +1,6 @@
 {
   "name": "@zana-ai/work",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Work-tracking domains: tickets, scheduling, teams, runs.",
   "main": "dist/src/index.js",
   "scripts": {
@@ -11,13 +11,13 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/core": "0.3.0",
+    "@zana-ai/core": "0.3.1",
     "node-cron": "^3.0.3",
     "yaml": "^2.5.0",
-    "@zana-ai/contracts": "0.3.0"
+    "@zana-ai/contracts": "0.3.1"
   },
   "peerDependencies": {
-    "@zana-ai/extras": "0.3.0"
+    "@zana-ai/extras": "0.3.1"
   },
   "peerDependenciesMeta": {
     "@zana-ai/extras": {

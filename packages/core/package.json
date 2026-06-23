@@ -1,6 +1,6 @@
 {
   "name": "@zana-ai/core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Zana engine — multi-agent orchestration, scheduling, persistence, and module system. Used by @zana-ai/mcp.",
   "main": "dist/src/index.js",
   "bin": {
@@ -16,15 +16,15 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/contracts": "0.3.0",
+    "@zana-ai/contracts": "0.3.1",
     "minimatch": "^10.0.0"
   },
   "peerDependencies": {
-    "@zana-ai/swarm": "0.3.0",
-    "@zana-ai/extras": "0.3.0",
-    "@zana-ai/intelligence": "0.3.0",
-    "@zana-ai/work": "0.3.0",
-    "@zana-ai/server": "0.3.0"
+    "@zana-ai/swarm": "0.3.1",
+    "@zana-ai/extras": "0.3.1",
+    "@zana-ai/intelligence": "0.3.1",
+    "@zana-ai/work": "0.3.1",
+    "@zana-ai/server": "0.3.1"
   },
   "peerDependenciesMeta": {
     "@zana-ai/swarm": {

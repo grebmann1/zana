@@ -1,6 +1,6 @@
 {
   "name": "@zana-ai/server",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Zana HTTP/IPC surface — hook server and REST API.",
   "main": "dist/src/index.js",
   "scripts": {
@@ -11,11 +11,11 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/core": "0.3.0",
-    "@zana-ai/contracts": "0.3.0"
+    "@zana-ai/core": "0.3.1",
+    "@zana-ai/contracts": "0.3.1"
   },
   "peerDependencies": {
-    "@zana-ai/work": "0.3.0"
+    "@zana-ai/work": "0.3.1"
   },
   "peerDependenciesMeta": {
     "@zana-ai/work": {

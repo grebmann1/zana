@@ -1,6 +1,6 @@
 {
   "name": "@zana-ai/intelligence",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Intelligence layer — task router, GOAP planner, vector memory, background workers.",
   "main": "dist/src/index.js",
   "scripts": {
@@ -11,8 +11,8 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@zana-ai/core": "0.3.0",
-    "@zana-ai/contracts": "0.3.0"
+    "@zana-ai/core": "0.3.1",
+    "@zana-ai/contracts": "0.3.1"
   },
   "files": [
     "dist/"
