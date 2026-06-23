@@ -152,7 +152,9 @@ async function handleRequest(req, res) {
     return;
   }
   if (method === "POST" && pathname === "/agents") {
-    const body = await readBody(req);
+    const body = (await readBody(req)) as {
+      profileId?: string; prompt?: string; cwd?: string; projectId?: string;
+    };
     const profile = daemon.profileStore.getProfile(body.profileId);
     if (!profile) { json(res, { error: "profile not found" }, 404); return; }
     // Shared confinement with the in-process dispatch path (core agents.spawnCwd):
